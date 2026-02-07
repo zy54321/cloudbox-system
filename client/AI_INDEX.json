@@ -1,0 +1,17 @@
+{
+  "name": "cloudbox-system",
+  "root": "code",
+  "stack": {
+    "framework": "Vue 3",
+    "bundler": "Vite",
+    "mapEngine": "Cesium 1.137.0"
+  },
+  "routes": [
+    {"path": "/", "page": "StaticHome"},
+    {"path": "/dynamic", "page": "DynamicFlow"}
+  ],
+  "components": ["TopNav", "CesiumViewport"],
+  "notes": [
+    "Cesium 静态资源拷贝到 /public/cesium（TODO: 选用实现方式）"
+  ]
+}
