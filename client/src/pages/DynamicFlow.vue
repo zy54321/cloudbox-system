@@ -14,7 +14,6 @@
       <span class="cb-pill">超级管理员 ▾</span>
     </div>
   </header>
-
   <div class="cb-wrap">
     <!-- 场景选择条（对齐设计稿） -->
     <section class="cb-scene-bar">
