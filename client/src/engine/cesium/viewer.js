@@ -2,7 +2,7 @@
 // 注意：Cesium 静态资源需设置 CESIUM_BASE_URL（否则控件/worker/资源可能404）
 // TODO: 将 Cesium 资源拷贝到 public/cesium，并设置 window.CESIUM_BASE_URL='/cesium/'
 
-export async function createCesiumViewer(el) {
+export async function createCesiumViewer(el, creditContainer) {
   // 必须在 Viewer 创建前设置（资源/Workers/JSON 依赖此路径）
   if (typeof window.CESIUM_BASE_URL === 'undefined') {
     window.CESIUM_BASE_URL = '/cesium/';
@@ -23,11 +23,12 @@ export async function createCesiumViewer(el) {
     sceneModePicker: false,
     geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
     terrainShadows: Cesium.ShadowMode.CAST_AND_RECEIVE,
-    requestRenderMode: false,
+    requestRenderMode: true,
     // 搜索关闭
     geocoder: false,
     // logo关闭
     logo: false,
+    creditContainer: creditContainer || undefined,
     maximumRenderTimeChange: Infinity,
     targetFrameRate: 60,
     depthTest: true,
