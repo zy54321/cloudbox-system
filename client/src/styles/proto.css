@@ -393,12 +393,44 @@ header {
   background: radial-gradient(900px 500px at 30% 30%, rgba(31, 227, 255, .10), transparent 60%), rgba(0, 0, 0, .12);
 }
 
+.cb-viewport .cb-cesium-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
 .cb-overlay-tabs {
   position: absolute;
   left: 14px;
   top: 14px;
   display: flex;
   gap: 10px;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.cb-viewport .cb-overlay-tabs {
+  gap: 10px;
+}
+
+.cb-viewport .cb-overlay-tabs .cb-map-mini {
+  width: 77px;
+  height: 37px;
+  background: rgba(255, 255, 255, 0.01);
+  box-shadow: inset 0px 0px 19px 0px #00C5FF;
+  border-radius: 6px;
+  border: 1px solid #00C5FF;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 37px;
+  font-size: 14px;
+  padding: 0;
+}
+
+.cb-viewport .cb-overlay-tabs .cb-map-mini.active {
+  color: #00FFE5;
 }
 
 .cb-mini {
@@ -421,6 +453,8 @@ header {
   top: 18px;
   font-size: 12px;
   color: rgba(255, 255, 255, .70);
+  z-index: 30;
+  pointer-events: none;
 }
 
 .cb-float {
@@ -432,6 +466,8 @@ header {
   background: linear-gradient(180deg, rgba(0, 182, 255, .15), rgba(0, 0, 0, .18));
   border-radius: 12px;
   overflow: hidden;
+  z-index: 30;
+  pointer-events: auto;
 }
 
 .cb-float-hd {
