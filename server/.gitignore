@@ -1,5 +1,109 @@
-node_modules
-/dist
+# Maven 编译输出
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Spring Boot 生成的文件
+HELP.md
+
+# 输出文件夹（处理后的数据文件）
+output/
+
+# 临时文件和测试文件
+test_conversion.java
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
+
+# 操作系统文件
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+### IDE 配置文件 ###
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse / STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+bin/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# VS Code
+.vscode/
+.history/
+
+### Java 相关 ###
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+### Spring Boot 相关 ###
+spring.log
+application-*.yml
+application-*.yaml
+application-*.properties
+!application.yml
+!application.yaml
+!application.properties
+
+### 数据库文件 ###
+*.db
+*.sqlite
+*.sqlite3
+
+### 备份文件 ###
+*.bak
+*.backup
+*.old
+
+### Node.js (如果有前端组件) ###
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+### 环境变量文件 ###
 .env
-.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+### 部署脚本（包含密码，不要提交）###
+deploy.sh
+env.sh
