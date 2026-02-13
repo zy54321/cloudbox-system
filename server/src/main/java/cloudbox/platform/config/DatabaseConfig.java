@@ -1,4 +1,4 @@
-package io.cloudbox.platform.cloudbox.config;
+package cloudbox.platform.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
