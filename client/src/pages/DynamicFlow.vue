@@ -12,19 +12,26 @@
   </header>
 
   <div class="cb-wrap cb-wrap--dynamic">
-    <section class="cb-scene-bar">
-      <div class="cb-scene-hd">
+    <section class="cb-scene-bar cb-scene-panel">
+      <div class="cb-scene-head">
         <div class="cb-scene-title">
-          <span class="cb-dot"></span>
-          场景选择
+          <img class="cb-scene-title-icon" :src="dvTitleIconLeft" alt="" />
+          <span class="cb-scene-title-text">场景选择</span>
+        </div>
+        <div class="cb-scene-current" :style="{ backgroundImage: `url(${dvTitleBkRight})` }">
+          <span class="cb-scene-current-text">当前：{{ currentScenarioName }}</span>
+        </div>
+        <div class="cb-scene-mode">
+          <img class="cb-scene-mode-icon" :src="dvModeIcon" alt="" />
+          <span class="cb-scene-mode-text">模式：{{ isCompare ? '双屏对比' : '单屏演示' }}</span>
         </div>
       </div>
       <div class="cb-scene-body">
-        <div class="cb-scene-btns">
+        <div class="cb-scene-btns cb-scene-actions">
           <button
             v-for="item in scenarios"
             :key="item.key"
-            class="cb-scene-btn"
+            class="cb-action-btn"
             :class="{ active: activeScenario === item.key }"
             type="button"
             @click="loadScenario(item.key)"
@@ -32,19 +39,20 @@
             {{ item.name }}
           </button>
         </div>
-        <span class="cb-pill">当前：{{ currentScenarioName }}</span>
-        <button class="cb-scene-switch" type="button" @click="toggleCompare">
+        <button class="cb-scene-switch cb-action-btn" :class="{ active: isCompare }" type="button" @click="toggleCompare">
           切换：{{ isCompare ? '双屏' : '单屏' }}
         </button>
-        <span class="cb-pill">模式：{{ isCompare ? '双屏演示' : '单屏演示' }}</span>
       </div>
     </section>
 
     <div class="cb-main">
-      <div class="cb-grid cb-grid--dynamic">
-        <section class="cb-card" style="display:flex;flex-direction:column;min-height:0;">
+      <div class="cb-grid cb-grid--dynamic cb-dv-mainrow">
+        <section class="cb-card cb-dv-viewer" style="display:flex;flex-direction:column;min-height:0;">
           <div class="cb-view-hd">
-            <div class="cb-view-title"><span class="cb-dot"></span>主视图区</div>
+            <div class="cb-dv-title">
+              <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
+              <span class="cb-dv-title-text">主视图区</span>
+            </div>
             <div class="cb-view-title smallnote">当前节点：{{ currentNodeName }}</div>
           </div>
 
@@ -60,9 +68,9 @@
               <div class="cb-viewer-single" v-show="!isCompare">
                 <CesiumViewport ref="vpSingle" :key="'vp-single'" />
                 <div class="cb-symbols cb-symbols--single">
-                  <button class="sym-btn" :class="{ active: activeSymbol === 'plane' }" @click="selectSymbol('plane')">✈️ 飞机</button>
-                  <button class="sym-btn" :class="{ active: activeSymbol === 'flow' }" @click="selectSymbol('flow')">• 信息流</button>
-                  <button class="sym-btn" :class="{ active: activeSymbol === 'control' }" @click="selectSymbol('control')">➜ 控制流</button>
+                  <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'plane' }" @click="selectSymbol('plane')">✈️ 飞机</button>
+                  <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'flow' }" @click="selectSymbol('flow')">• 信息流</button>
+                  <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'control' }" @click="selectSymbol('control')">➜ 控制流</button>
                 </div>
                 <div class="plane-symbol" :class="planeStateYesClass">✈</div>
                 <div class="cb-overlay-plane" v-show="activeSymbol === 'plane'"></div>
@@ -224,31 +232,66 @@
           </div>
         </section>
 
-        <aside class="cb-card cb-panel">
+        <aside class="cb-card cb-panel cb-dv-panel">
           <div class="cb-card-hd">
-            <div class="cb-card-title"><span class="cb-dot"></span>信息面板</div>
+            <div class="cb-dv-title">
+              <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
+              <span class="cb-dv-title-text">信息面板</span>
+            </div>
           </div>
           <div class="cb-panel-tabs tabs">
-            <button class="cb-chip tab" :class="{ active: rightTab === 'info' }" type="button" @click="toggleRightTab('info')">信息</button>
-            <button class="cb-chip tab" :class="{ active: rightTab === 'steps' }" type="button" @click="toggleRightTab('steps')">处置卡片</button>
+            <button
+              class="cb-msg-tab"
+              :class="{ active: rightTab === 'info' }"
+              :style="{ backgroundImage: `url(${rightTab === 'info' ? dvMsgTabSelected : dvMsgTabSelect})` }"
+              type="button"
+              @click="toggleRightTab('info')"
+            >
+              <span>信息</span>
+            </button>
+            <button
+              class="cb-msg-tab"
+              :class="{ active: rightTab === 'steps' }"
+              :style="{ backgroundImage: `url(${rightTab === 'steps' ? dvMsgTabSelected : dvMsgTabSelect})` }"
+              type="button"
+              @click="toggleRightTab('steps')"
+            >
+              <span>处置卡片</span>
+            </button>
           </div>
           <div class="cb-panel-body">
             <div class="tabpanel" :class="{ active: rightTab === 'info' }" data-panel="info">
               <div class="scroll">
-                <div class="small">字段与原型一致（示意）</div>
-                <div class="kv">
-                  <div class="k">航班号：</div><div id="f_no">{{ infoFields.f_no }}</div>
-                  <div class="k">机型：</div><div id="f_type">{{ infoFields.f_type }}</div>
-                  <div class="k">航路：</div><div id="f_route">{{ infoFields.f_route }}</div>
-                  <div class="k">关键时间：</div><div id="f_time">{{ infoFields.f_time }}</div>
-                  <div class="k">处置状态：</div><div id="f_state">{{ infoFields.f_state }}</div>
-                  <div class="k">当前节点：</div><div id="nodeName">{{ infoFields.f_node }}</div>
+                <div class="cb-info-box">
+                  <div class="cb-info-row">
+                    <span class="cb-info-k">航班号</span>
+                    <span id="f_no" class="cb-info-v">{{ infoFields.f_no }}</span>
+                  </div>
+                  <div class="cb-info-row">
+                    <span class="cb-info-k">机型</span>
+                    <span id="f_type" class="cb-info-v">{{ infoFields.f_type }}</span>
+                  </div>
+                  <div class="cb-info-row">
+                    <span class="cb-info-k">航路</span>
+                    <span id="f_route" class="cb-info-v">{{ infoFields.f_route }}</span>
+                  </div>
+                  <div class="cb-info-row">
+                    <span class="cb-info-k">关键时间</span>
+                    <span id="f_time" class="cb-info-v">{{ infoFields.f_time }}</span>
+                  </div>
+                  <div class="cb-info-row">
+                    <span class="cb-info-k">处置状态</span>
+                    <span id="f_state" class="cb-info-v">{{ infoFields.f_state }}</span>
+                  </div>
+                  <div class="cb-info-row">
+                    <span class="cb-info-k">当前节点</span>
+                    <span id="nodeName" class="cb-info-v">{{ infoFields.f_node }}</span>
+                  </div>
                 </div>
               </div>
             </div>
             <div class="tabpanel" :class="{ active: rightTab === 'steps' }" data-panel="steps">
               <div class="scroll">
-                <div class="small">处置卡片列表（点击可跳转时间点）</div>
                 <div class="list" id="stepList" ref="stepListEl">
                   <div
                     class="item"
@@ -256,15 +299,14 @@
                     v-for="card in disposalCards"
                     :key="card.nodeId"
                     :data-node-id="card.nodeId"
-                    @click="jumpTo(isCompare ? card.t_yes : card.t_no)"
                   >
-                    <b>{{ card.phase }} · {{ card.title }}</b>
-                    <div class="meta">T+{{ card.t }} | {{ card.state }}</div>
+                    <b class="cb-card-title">{{ card.phase }} · {{ card.title }}</b>
+                    <div class="meta cb-card-sub">T+{{ card.t }} | {{ card.state }}</div>
                     <div class="small" style="margin-top:6px;">{{ card.summary }}</div>
                     <div class="card-node-info" v-if="card.events && card.events.length">
                       <div class="card-section-title">本节点信息（示意）</div>
                       <ul class="card-info-list">
-                        <li v-for="(ev, idx) in card.events.slice(0, 5)" :key="idx">{{ ev }}</li>
+                        <li v-for="(ev, idx) in card.events.slice(0, 5)" :key="idx" class="cb-card-item">{{ ev }}</li>
                       </ul>
                     </div>
                     <div class="compare-content" v-if="isCompare">
@@ -292,7 +334,7 @@
                     </div>
                   </div>
                 </div>
-                <hr />
+                <!-- <hr /> -->
                 <div class="small" v-show="isCompare">对比模式：左右两套进度随同一时间轴同步更新（示意）。</div>
                 <div class="list compare-steps-table" v-show="isCompare">
                   <div class="item" :class="{ highlight: i === idxNo || i === idxYes }" v-for="(s, i) in steps" :key="s.nodeId">
@@ -306,8 +348,11 @@
         </aside>
       </div>
 
-      <section class="cb-time-dock">
-        <div class="cb-time-title"><span class="cb-dot"></span>时间轴（T+ 回放）</div>
+      <section class="cb-time-dock cb-dv-timeline">
+        <div class="cb-dv-title">
+          <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
+          <span class="cb-dv-title-text cb-dv-timeline-title">时间轴（T+ 回放）</span>
+        </div>
         <div class="cb-time-actions">
           <button class="cb-time-btn" type="button" @click="togglePlay">{{ playing ? '⏸ 暂停' : '▶ 播放' }}</button>
           <button class="cb-time-btn ghost" type="button" @click="onReset">⟲ 复位</button>
@@ -343,6 +388,12 @@
 import { computed, nextTick, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import CesiumViewport from '../components/CesiumViewport.vue';
+
+const dvTitleIconLeft = new URL('../assets/dynamicViewport/title_icon_left.png', import.meta.url).href;
+const dvTitleBkRight = new URL('../assets/dynamicViewport/title_bk_right.png', import.meta.url).href;
+const dvModeIcon = new URL('../assets/dynamicViewport/title_icon2.png', import.meta.url).href;
+const dvMsgTabSelect = new URL('../assets/dynamicViewport/msgpage_button_select.png', import.meta.url).href;
+const dvMsgTabSelected = new URL('../assets/dynamicViewport/msgpage_button_selected.png', import.meta.url).href;
 
 const vpSingle = ref(null);
 const vpNo = ref(null);
@@ -421,10 +472,7 @@ const infoFields = ref({
 
 const firedAlerts = reactive(new Set());
 
-const currentScenarioName = computed(() => {
-  const item = scenarios.find((s) => s.key === activeScenario.value);
-  return item ? item.name : '';
-});
+const currentScenarioName = computed(() => scenarios.find((s) => s.key === activeScenario.value)?.name || '单发失效');
 
 const currentTimeLabel = computed(() => t.value);
 

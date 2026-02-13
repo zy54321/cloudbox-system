@@ -829,6 +829,43 @@ header {
   pointer-events: none;
 }
 
+.cb-wrap--dynamic .cb-symbols--single {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: auto;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  z-index: 30;
+}
+
+.cb-wrap--dynamic .cb-dv-symbtn {
+  width: 99px;
+  height: 32px;
+  background: rgba(6, 147, 228, 0.25);
+  border-radius: 5px;
+  border: 1px solid #2C73CB;
+  color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 32px;
+  box-sizing: border-box;
+}
+
+.cb-wrap--dynamic .cb-dv-symbtn.active {
+  width: 77px;
+  height: 32px;
+  background: #0693E4;
+  border: 0;
+  border-radius: 5px;
+  color: #FFFFFF;
+}
+
 .cb-wrap--dynamic .cb-symbols--compare .sym {
   padding: 8px 10px;
   border-radius: 10px;
@@ -1331,6 +1368,353 @@ body {
 }
 
 /* ===== 动态交互（单屏）目标稿 ===== */
+.cb-wrap--dynamic .cb-scene-panel {
+  width: 1880px;
+  height: 88px;
+  background: #0E2C7B;
+  /* border: 1px solid #2A74C9; */
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  gap: 8px;
+}
+
+.cb-wrap--dynamic .cb-scene-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 32px;
+}
+
+.cb-wrap--dynamic .cb-scene-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cb-wrap--dynamic .cb-scene-title-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.cb-wrap--dynamic .cb-scene-title-text {
+  width: 88px;
+  height: 32px;
+  font-family: 'Source Han Sans';
+  font-weight: 700;
+  font-size: 22px;
+  color: #FFFFFF;
+  line-height: 32px;
+  text-shadow: 0px 0px 6px #00AFFF;
+  text-align: left;
+}
+
+.cb-wrap--dynamic .cb-scene-current {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  border-radius: 6px;
+}
+
+.cb-wrap--dynamic .cb-scene-current-text {
+  height: 23px;
+  font-family: 'Source Han Sans';
+  font-weight: 500;
+  font-size: 16px;
+  color: #FFFFFF;
+  line-height: 23px;
+  text-shadow: 0px 0px 6px #00AFFF;
+  white-space: nowrap;
+}
+
+.cb-wrap--dynamic .cb-scene-mode {
+  margin-left: auto;
+  width: 171px;
+  height: 32px;
+  background: #0693E4;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+.cb-wrap--dynamic .cb-scene-mode-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.cb-wrap--dynamic .cb-scene-mode-text {
+  height: 23px;
+  font-family: 'Source Han Sans';
+  font-weight: 400;
+  font-size: 16px;
+  color: #FFFFFF;
+  line-height: 23px;
+  white-space: nowrap;
+}
+
+.cb-wrap--dynamic .cb-action-btn {
+  width: 77px;
+  height: 37px;
+  background: rgba(255, 255, 255, 0.01);
+  box-shadow: inset 0px 0px 19px 0px #00C5FF;
+  border-radius: 6px;
+  border: 1px solid #00C5FF;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 37px;
+  font-size: 14px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.cb-wrap--dynamic .cb-action-btn.active {
+  color: #00FFE5;
+}
+
+.cb-wrap--dynamic .cb-scene-panel .cb-action-btn {
+  height: 30px;
+  min-width: 90px;
+  width: auto;
+  padding: 0 10px;
+  line-height: 30px;
+  font-size: 14px;
+  box-shadow: inset 0px 0px 14px 0px #00C5FF;
+  border-radius: 6px;
+  border: 1px solid #00C5FF;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.cb-wrap--dynamic .cb-scene-panel .cb-scene-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.cb-wrap--dynamic .cb-dv-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cb-wrap--dynamic .cb-dv-title-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.cb-wrap--dynamic .cb-dv-title-text {
+  width: 88px;
+  height: 32px;
+  font-family: 'Source Han Sans';
+  font-weight: 700;
+  font-size: 22px;
+  color: #FFFFFF;
+  line-height: 32px;
+  text-shadow: 0px 0px 6px #00AFFF;
+  text-align: left;
+}
+
+.cb-wrap--dynamic .cb-dv-timeline-title {
+  width: 186px;
+}
+
+.cb-wrap--dynamic .cb-dv-viewer {
+  width: 1367px;
+  height: 648px;
+  background: #0E2C7B;
+  border-radius: 6px;
+  box-sizing: border-box;
+  flex: 0 0 1367px;
+}
+
+.cb-wrap--dynamic .cb-dv-panel {
+  width: 493px;
+  height: 648px;
+  background: #0E2C7B;
+  border-radius: 6px;
+  box-sizing: border-box;
+  flex: 0 0 493px;
+}
+
+.cb-wrap--dynamic .cb-dv-timeline {
+  background: #0E2C7B;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.cb-wrap--dynamic .cb-msg-tab {
+  width: 110px;
+  height: 37px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  color: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cb-wrap--dynamic .cb-msg-tab span {
+  font-family: 'Source Han Sans CN';
+  font-size: 16px;
+  line-height: 37px;
+  font-weight: 500;
+  text-shadow: 0px 2px 5px rgba(30, 160, 224, 0.81);
+  background: linear-gradient(25.699734396547747deg, #FFFFFF 0%, #4BD8F9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.cb-wrap--dynamic .cb-popup-text {
+  height: 16px;
+  font-family: 'Source Han Sans CN';
+  font-weight: 400;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cb-wrap--dynamic .cb-popup-textwrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cb-wrap--dynamic .cb-info-box {
+  width: 442px;
+  height: 262px;
+  background: rgba(18, 72, 155, 0.6);
+  border-radius: 6px;
+  border: 1px solid #2A74C9;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.cb-wrap--dynamic .cb-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.cb-wrap--dynamic .cb-info-k {
+  width: 64px;
+  height: 23px;
+  font-family: 'Source Han Sans CN';
+  font-weight: 400;
+  font-size: 16px;
+  color: #FFFFFF;
+  line-height: 23px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cb-wrap--dynamic .cb-info-v {
+  min-width: 62px;
+  height: 23px;
+  font-family: 'Source Han Sans CN';
+  font-weight: 500;
+  font-size: 16px;
+  color: #14F7FD;
+  line-height: 23px;
+  text-align: left;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.cb-wrap--dynamic .cb-card-title {
+  width: 150px;
+  height: 23px;
+  font-family: 'Source Han Sans CN';
+  font-weight: 700;
+  font-size: 16px;
+  color: #DDB71B;
+  line-height: 23px;
+  text-align: left;
+}
+
+.cb-wrap--dynamic .cb-card-sub {
+  width: 150px;
+  height: 23px;
+  font-family: 'Source Han Sans CN';
+  font-weight: 700;
+  font-size: 16px;
+  color: #DDB71B;
+  line-height: 23px;
+  text-align: left;
+}
+
+.cb-wrap--dynamic .cb-card-item {
+  width: 144px;
+  height: 23px;
+  font-family: 'Source Han Sans CN';
+  font-weight: 400;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 23px;
+  text-align: left;
+}
+
+.cb-wrap--dynamic .card-node-info .cb-card-item {
+  color: #FF2E2E;
+}
+
+.cb-wrap--dynamic .card-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cb-wrap--dynamic .cb-panel-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(35, 101, 180, 0.83) transparent;
+}
+
+.cb-wrap--dynamic .cb-panel-body::-webkit-scrollbar {
+  width: 7px;
+}
+
+.cb-wrap--dynamic .cb-panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cb-wrap--dynamic .cb-panel-body::-webkit-scrollbar-thumb {
+  background: rgba(35, 101, 180, 0.83);
+  border-radius: 100px;
+  min-height: 108px;
+}
+
+.cb-wrap--dynamic .cb-dv-mainrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
 .cb-scene-bar {
   border: 1px solid rgba(255, 255, 255, .10);
   background: rgba(0, 0, 0, .14);
@@ -1367,7 +1751,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
+  /* padding: 12px 14px; */
 }
 
 .cb-scene-btns {
