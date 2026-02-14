@@ -866,6 +866,40 @@ header {
   color: #FFFFFF;
 }
 
+.cb-wrap--dynamic .cb-dv-infobox {
+  position: absolute;
+  top: 64px;
+  right: 14px;
+  left: auto;
+  max-height: 500px;
+  min-width: 260px;
+  max-width: 420px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 30;
+  background: rgba(18, 72, 155, 0.6);
+  border: 1px solid #2A74C9;
+  border-radius: 6px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+}
+
+.cb-wrap--dynamic .cb-dv-infobox * {
+  box-sizing: border-box;
+}
+
+.cb-wrap--dynamic .cb-dv-infobox .cb-info-row,
+.cb-wrap--dynamic .cb-dv-infobox .cb-popup-textwrap {
+  max-width: 100%;
+}
+
+.cb-wrap--dynamic .cb-dv-infobox .cb-popup-text,
+.cb-wrap--dynamic .cb-dv-infobox .cb-info-v {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .cb-wrap--dynamic .cb-symbols--compare .sym {
   padding: 8px 10px;
   border-radius: 10px;

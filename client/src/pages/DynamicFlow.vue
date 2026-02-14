@@ -211,7 +211,7 @@
                 </div>
               </div>
 
-              <div class="cb-infobox" v-show="infoBoxVisible">
+              <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
                 <div class="hd">
                   <div class="title">{{ infoBoxTitle }}</div>
                   <button class="btn-icon" type="button" @click="hideInfoBox">×</button>
