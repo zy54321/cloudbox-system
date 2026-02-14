@@ -1,6 +1,6 @@
-package io.cloudbox.platform.cloudbox.mapper;
+package cloudbox.platform.mapper;
 
-import io.cloudbox.platform.cloudbox.entity.User;
+import cloudbox.platform.entity.User;
 import org.apache.ibatis.annotations.*;
 
 import java.util.List;

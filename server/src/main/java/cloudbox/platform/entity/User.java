@@ -1,4 +1,4 @@
-package io.cloudbox.platform.cloudbox.entity;
+package cloudbox.platform.entity;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

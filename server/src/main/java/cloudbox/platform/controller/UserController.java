@@ -1,7 +1,7 @@
-package io.cloudbox.platform.cloudbox.controller;
+package cloudbox.platform.controller;
 
-import io.cloudbox.platform.cloudbox.entity.User;
-import io.cloudbox.platform.cloudbox.service.UserService;
+import cloudbox.platform.entity.User;
+import cloudbox.platform.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

@@ -20,7 +20,7 @@ spring:
   # MyBatis 配置
   mybatis:
     # 实体类包路径（用于类型别名）
-    type-aliases-package: io.cloudbox.platform.cloudbox.entity
+    type-aliases-package: cloudbox.platform.entity
     # MyBatis 配置
     configuration:
       # 开启驼峰命名转换
@@ -38,6 +38,6 @@ server:
 logging:
   level:
     root: INFO
-    io.cloudbox.platform.cloudbox: DEBUG
+    cloudbox.platform: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

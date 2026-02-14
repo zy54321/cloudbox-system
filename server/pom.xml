@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
@@ -12,7 +12,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>io.cloudbox</groupId>
+    <groupId>cloudbox.platform</groupId>
     <artifactId>platform-cloudbox</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>platform-cloudbox</name>
@@ -31,40 +31,60 @@
             <id>aliyun</id>
             <name>Aliyun Maven Repository</name>
             <url>https://maven.aliyun.com/repository/public</url>
-            <snapshots><enabled>true</enabled></snapshots>
-            <releases><enabled>true</enabled></releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
         </repository>
         <!-- 华为云镜像 -->
         <repository>
             <id>huawei</id>
             <name>Huawei Maven Repository</name>
             <url>https://repo.huaweicloud.com/repository/maven/</url>
-            <snapshots><enabled>true</enabled></snapshots>
-            <releases><enabled>true</enabled></releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
         </repository>
         <!-- 腾讯云镜像 -->
         <repository>
             <id>tencent</id>
             <name>Tencent Maven Repository</name>
             <url>https://mirrors.cloud.tencent.com/nexus/repository/maven-public/</url>
-            <snapshots><enabled>true</enabled></snapshots>
-            <releases><enabled>true</enabled></releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
         </repository>
         <!-- OSGeo 仓库 -->
         <repository>
             <id>osgeo</id>
             <name>OSGeo Release Repository</name>
             <url>https://repo.osgeo.org/repository/release/</url>
-            <snapshots><enabled>false</enabled></snapshots>
-            <releases><enabled>true</enabled></releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
         </repository>
         <!-- Unidata 仓库 -->
         <repository>
             <id>unidata</id>
             <name>Unidata Release Repository</name>
             <url>https://artifacts.unidata.ucar.edu/repository/unidata-all/</url>
-            <snapshots><enabled>false</enabled></snapshots>
-            <releases><enabled>true</enabled></releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
         </repository>
     </repositories>
 

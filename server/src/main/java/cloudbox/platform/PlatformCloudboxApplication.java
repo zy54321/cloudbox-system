@@ -1,4 +1,4 @@
-package io.cloudbox.platform.cloudbox;
+package cloudbox.platform;
 
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
@@ -10,7 +10,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @author CloudBox Team
  */
 @SpringBootApplication
-@MapperScan("io.cloudbox.platform.cloudbox.mapper")
+@MapperScan("cloudbox.platform.mapper")
 public class PlatformCloudboxApplication {
 
     public static void main(String[] args) {

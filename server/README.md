@@ -77,6 +77,6 @@ mvn spring-boot:run -Dspring-boot.run.profiles=prod
 
 ## 开发规范
 
-- 包结构：`io.cloudbox.platform.cloudbox.{module}`
+- 包结构：`cloudbox.platform.{module}`
 - 代码风格：遵循 Java 编码规范
 - 提交信息：使用中文

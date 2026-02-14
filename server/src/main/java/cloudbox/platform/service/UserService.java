@@ -1,7 +1,7 @@
-package io.cloudbox.platform.cloudbox.service;
+package cloudbox.platform.service;
 
-import io.cloudbox.platform.cloudbox.entity.User;
-import io.cloudbox.platform.cloudbox.mapper.UserMapper;
+import cloudbox.platform.entity.User;
+import cloudbox.platform.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
