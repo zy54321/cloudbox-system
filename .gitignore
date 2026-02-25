@@ -5,3 +5,4 @@ node_modules
 .env.*
 
 .idea
+cloudbox_proto_v5
