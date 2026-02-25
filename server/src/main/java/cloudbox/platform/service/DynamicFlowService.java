@@ -1,6 +1,5 @@
 package cloudbox.platform.service;
 
-import cloudbox.platform.dto.dynamic.*;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -26,8 +25,9 @@ public class DynamicFlowService {
         return new ArrayList<>(SCENARIOS);
     }
 
-    public Map<String, Object> getScenarioSteps(ScenarioStepsRequest req) {
-        String key = req.getScenarioKey() != null ? req.getScenarioKey() : "engine";
+    public Map<String, Object> getScenarioSteps(Map<String, Object> requestBody) {
+        String key = (String) requestBody.get("scenarioKey");
+        if (key == null) key = "engine";
         List<Map<String, Object>> baseSteps = buildBaseSteps(key);
         List<Map<String, Object>> steps = new ArrayList<>();
         for (int i = 0; i < baseSteps.size(); i++) {
@@ -164,8 +164,9 @@ public class DynamicFlowService {
         return m;
     }
 
-    public Map<String, Object> getFlightInfo(FlightInfoRequest req) {
-        String key = req.getScenarioKey() != null ? req.getScenarioKey() : "engine";
+    public Map<String, Object> getFlightInfo(Map<String, Object> requestBody) {
+        final String key = requestBody != null && requestBody.get("scenarioKey") != null
+                ? (String) requestBody.get("scenarioKey") : "engine";
         String name = SCENARIOS.stream()
                 .filter(s -> key.equals(s.get("key")))
                 .map(s -> (String) s.get("name"))
@@ -183,13 +184,15 @@ public class DynamicFlowService {
         );
     }
 
-    public List<Map<String, Object>> getEvents(EventsRequest req) {
-        ScenarioStepsRequest sr = new ScenarioStepsRequest();
-        sr.setScenarioKey(req.getScenarioKey());
-        Map<String, Object> data = getScenarioSteps(sr);
+    public List<Map<String, Object>> getEvents(Map<String, Object> requestBody) {
+        Map<String, Object> data = getScenarioSteps(requestBody);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> steps = (List<Map<String, Object>>) data.get("steps");
-        int currentTime = req.getCurrentTime() != null ? req.getCurrentTime() : 0;
+        int currentTime = 0;
+        if (requestBody != null && requestBody.get("currentTime") != null) {
+            Object v = requestBody.get("currentTime");
+            currentTime = v instanceof Number ? ((Number) v).intValue() : 0;
+        }
         List<Map<String, Object>> events = new ArrayList<>();
         for (Map<String, Object> s : steps) {
             int tNo = ((Number) s.get("t_no")).intValue();
@@ -210,8 +213,9 @@ public class DynamicFlowService {
         return events;
     }
 
-    public Map<String, Object> getRiskKpi(RiskKpiRequest req) {
-        String key = req.getScenarioKey() != null ? req.getScenarioKey() : "engine";
+    public Map<String, Object> getRiskKpi(Map<String, Object> requestBody) {
+        final String key = requestBody != null && requestBody.get("scenarioKey") != null
+                ? (String) requestBody.get("scenarioKey") : "engine";
         String name = SCENARIOS.stream()
                 .filter(s -> key.equals(s.get("key")))
                 .map(s -> (String) s.get("name"))
@@ -236,10 +240,10 @@ public class DynamicFlowService {
         );
     }
 
-    public List<Map<String, Object>> getHistory(HistoryRequest req) {
-        EventsRequest er = new EventsRequest();
-        er.setScenarioKey(req.getScenarioKey());
-        er.setCurrentTime(100);
-        return getEvents(er);
+    public List<Map<String, Object>> getHistory(Map<String, Object> requestBody) {
+        Map<String, Object> body = requestBody != null ? new HashMap<>(requestBody) : new HashMap<>();
+        body.put("currentTime", 100);
+        return getEvents(body);
     }
+
 }

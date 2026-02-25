@@ -1,15 +1,21 @@
 package cloudbox.platform.service;
 
-import cloudbox.platform.dto.staticarch.*;
+import cloudbox.platform.entity.SpatialFacility;
+import cloudbox.platform.mapper.SpatialFacilityMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * 静态架构数据服务（教学演示用，内存数据）
+ * 静态架构数据服务（仪表等为内存数据；地面/卫星通过 Mapper 从表 spatial_facility 读取）
  */
 @Service
 public class StaticArchService {
+
+    @Autowired
+    private SpatialFacilityMapper spatialFacilityMapper;
 
     private static final Map<String, Map<String, String>> STAGE_INSTRUMENT = Map.of(
             "takeoff", Map.of(
@@ -29,9 +35,63 @@ public class StaticArchService {
                     "temp", "18 ℃", "press", "92000 Pa", "wind", "4 m/s")
     );
 
-    public Map<String, String> getInstrument(InstrumentRequest req) {
-        String stage = req.getStage() != null ? req.getStage() : "cruise";
-        return new HashMap<>(STAGE_INSTRUMENT.getOrDefault(stage, STAGE_INSTRUMENT.get("cruise")));
+    /** 阶段中文名、目标高度、下一航点/ETA */
+    private static final Map<String, String[]> STAGE_EXTRA = Map.of(
+            "takeoff", new String[]{"起飞", "6,000 m", "WPT-2 / 08:15"},
+            "climb", new String[]{"爬升", "10,000 m", "WPT-3 / 08:28"},
+            "cruise", new String[]{"巡航", "10,000 m", "WPT-4 / 08:45"},
+            "approach", new String[]{"进近", "3,000 m", "WPT-5 / 09:02"},
+            "landing", new String[]{"着陆", "0 m", "本场 / 09:15"}
+    );
+
+    /** 各阶段飞机位置（经度、纬度），示意京沪航线 */
+    private static final Map<String, double[]> STAGE_POSITION = Map.of(
+            "takeoff", new double[]{116.584, 40.080},
+            "climb", new double[]{116.90, 39.60},
+            "cruise", new double[]{118.20, 35.50},
+            "approach", new double[]{121.40, 31.30},
+            "landing", new double[]{121.805, 31.144}
+    );
+
+    /**
+     * 从 "2,000 m" 形式解析出高度数值（米）
+     */
+    private static int parseAltitudeMeters(String altStr) {
+        if (altStr == null) return 0;
+        String num = altStr.replaceAll("[^0-9]", "");
+        return num.isEmpty() ? 0 : Integer.parseInt(num);
+    }
+
+    /**
+     * 根据当前高度（米）动态生成层级：地面 / 低空 / 中空 / 高空
+     */
+    private static String levelFromAltitude(int altMeters) {
+        if (altMeters < 100) return "地面";
+        if (altMeters < 3000) return "低空";
+        if (altMeters < 6000) return "中空";
+        return "高空";
+    }
+
+    public Map<String, Object> getInstrument(Map<String, Object> requestBody) {
+        String stage = (String) requestBody.get("stage");
+        if (stage == null) stage = "cruise";
+        Map<String, String> base = STAGE_INSTRUMENT.getOrDefault(stage, STAGE_INSTRUMENT.get("cruise"));
+        String currentAltStr = base.get("alt");
+        int altMeters = parseAltitudeMeters(currentAltStr);
+        String[] extra = STAGE_EXTRA.getOrDefault(stage, STAGE_EXTRA.get("cruise"));
+
+        Map<String, Object> result = new HashMap<>(base);
+        result.remove("alt");
+        result.put("flightNo", "MU0001");
+        result.put("currentAlt", currentAltStr);
+        result.put("targetAlt", extra[1]);
+        result.put("nextWptEta", extra[2]);
+        result.put("stageCn", extra[0]);
+        result.put("level", levelFromAltitude(altMeters));
+        double[] pos = STAGE_POSITION.getOrDefault(stage, STAGE_POSITION.get("cruise"));
+        result.put("longitude", pos[0]);
+        result.put("latitude", pos[1]);
+        return result;
     }
 
     public List<Map<String, Object>> getUnits() {
@@ -43,8 +103,9 @@ public class StaticArchService {
         );
     }
 
-    public Map<String, Object> getUnitDetail(UnitDetailRequest req) {
-        String type = req.getType() != null ? req.getType() : "星基";
+    public Map<String, Object> getUnitDetail(Map<String, Object> requestBody) { 
+        String type = (String) requestBody.get("type");
+        if (type == null) type = "星基";
         Map<String, Object> detail = new HashMap<>();
         detail.put("name", type + "元素");
         detail.put("type", type);
@@ -88,79 +149,54 @@ public class StaticArchService {
         return detail;
     }
 
-    public List<Map<String, Object>> getRelations() {
-        return List.of(
-                Map.<String, Object>of("type", "信息流", "from", "星基", "to", "链路", "desc", "卫星通过通信链路传输数据"),
-                Map.<String, Object>of("type", "信息流", "from", "机载", "to", "链路", "desc", "机载设备通过链路传输数据"),
-                Map.<String, Object>of("type", "信息流", "from", "链路", "to", "地面", "desc", "链路将数据传送到地面系统"),
-                Map.<String, Object>of("type", "控制流", "from", "地面", "to", "链路", "desc", "地面系统通过链路发送控制指令"),
-                Map.<String, Object>of("type", "控制流", "from", "链路", "to", "机载", "desc", "链路将控制指令传送到机载设备"),
-                Map.<String, Object>of("type", "信息流", "from", "星基", "to", "机载", "desc", "卫星直接向机载设备传输信息"),
-                Map.<String, Object>of("type", "控制流", "from", "地面", "to", "星基", "desc", "地面系统控制卫星资源")
-        );
-    }
+    private static final String[] MODULE_OVERVIEWS = {
+            "数据采集系统是云匣子体系的基础模块，负责从多个数据源采集飞行相关的各类数据。",
+            "通感算一体机载感知预警系统集成了通信、感知、计算功能，实现机载端的智能感知和预警。",
+            "HTS/5G ATG通信系统提供高速、可靠的通信链路，确保空中与地面之间的信息畅通。",
+            "地面飞行场景实时重构系统基于多源数据，实时重构和展示飞行场景，为决策提供可视化支持。",
+            "地面运营控制中心应急专家组系统整合应急专家资源，提供专业的应急决策支持。",
+            "体系应急决策推演系统基于场景数据和专家知识，进行应急决策的推演和优化。",
+            "应急处置系统是体系的执行端，负责将决策方案转化为具体的处置指令并监督执行。"
+    };
 
-    public Map<String, Object> getRelationDetail(RelationDetailRequest req) {
-        List<Map<String, Object>> list = getRelations();
-        int idx = 0;
-        if (req.getRelationId() != null) {
-            try {
-                idx = Math.min(Integer.parseInt(req.getRelationId()), list.size() - 1);
-            } catch (NumberFormatException ignored) {}
-        }
-        Map<String, Object> rel = new HashMap<>(list.get(Math.max(0, idx)));
-        String[] details = {
-                "高通量卫星和低轨通信卫星通过卫星通信链路（星-地/星-机）传输飞行数据、状态信息等。",
-                "黑匣子、通感算一体机载感知预警设备通过卫星通信链路或5G ATG链路向地面传输飞行数据和预警信息。",
-                "卫星通信链路和5G ATG链路将机载和星基的数据传送到地面飞行场景实时重构系统、应急专家组系统等。",
-                "运行控制中心、应急决策推演系统通过通信链路向机载设备发送控制指令和决策信息。",
-                "通信链路将地面系统的控制指令、应急处置方案等传送到机载设备，指导机组执行。",
-                "卫星直接向机载设备提供定位、导航、通信等服务，支持飞行操作和应急处置。",
-                "地面系统可以调度和控制卫星资源，优化通信链路和传输路径。"
-        };
-        rel.put("detail", details[Math.min(idx, details.length - 1)]);
-        return rel;
-    }
-
-    public List<Map<String, String>> getModules() {
-        return List.of(
-                Map.of("key", "m1", "title", "模块一：数据采集系统"),
-                Map.of("key", "m2", "title", "模块二：通感算一体机载感知预警系统"),
-                Map.of("key", "m3", "title", "模块三：HTS/5G ATG通信系统"),
-                Map.of("key", "m4", "title", "模块四：地面飞行场景实时重构系统"),
-                Map.of("key", "m5", "title", "模块五：地面运营控制中心应急专家组系统"),
-                Map.of("key", "m6", "title", "模块六：体系应急决策推演系统"),
-                Map.of("key", "m7", "title", "模块七：应急处置系统")
-        );
-    }
-
-    public Map<String, Object> getModuleDetail(ModuleDetailRequest req) {
-        String key = req.getModuleKey() != null ? req.getModuleKey() : "m1";
-        Map<String, Object> detail = new HashMap<>();
-        String[] names = {
+    public List<Map<String, Object>> getModules() {
+        String[] titles = {
                 "模块一：数据采集系统", "模块二：通感算一体机载感知预警系统", "模块三：HTS/5G ATG通信系统",
                 "模块四：地面飞行场景实时重构系统", "模块五：地面运营控制中心应急专家组系统",
                 "模块六：体系应急决策推演系统", "模块七：应急处置系统"
         };
-        String[] overviews = {
-                "数据采集系统是云匣子体系的基础模块，负责从多个数据源采集飞行相关的各类数据。",
-                "通感算一体机载感知预警系统集成了通信、感知、计算功能，实现机载端的智能感知和预警。",
-                "HTS/5G ATG通信系统提供高速、可靠的通信链路，确保空中与地面之间的信息畅通。",
-                "地面飞行场景实时重构系统基于多源数据，实时重构和展示飞行场景，为决策提供可视化支持。",
-                "地面运营控制中心应急专家组系统整合应急专家资源，提供专业的应急决策支持。",
-                "体系应急决策推演系统基于场景数据和专家知识，进行应急决策的推演和优化。",
-                "应急处置系统是体系的执行端，负责将决策方案转化为具体的处置指令并监督执行。"
-        };
-        int i = key.startsWith("m") && key.length() >= 2
-                ? Math.min(Character.digit(key.charAt(1), 10) - 1, 6)
-                : 0;
-        if (i < 0) i = 0;
-        detail.put("name", names[i]);
-        detail.put("overview", overviews[i]);
-        detail.put("functions", List.of("功能项1（示意）", "功能项2（示意）"));
-        detail.put("features", List.of("技术特点1（示意）", "技术特点2（示意）"));
-        detail.put("role", "在体系中的作用（示意）");
-        detail.put("relations", "与其他模块的关系（示意）");
-        return detail;
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("title", titles[i]);
+            m.put("content", MODULE_OVERVIEWS[i]);
+            list.add(m);
+        }
+        return list;
+    }
+
+    /**
+     * 空间设施数据（地面/卫星合一）：入参 category 为 ground 或 satellite，从 spatial_facility 按大类型查询并按 type 分组返回（不包含地面类型/卫星类型 key）。
+     */
+    public Map<String, Object> getSpatialData(String category) {
+        List<SpatialFacility> list = spatialFacilityMapper.selectByCategory(category);
+        Map<String, List<Map<String, Object>>> byType = list.stream()
+                .collect(Collectors.groupingBy(SpatialFacility::getType,
+                        LinkedHashMap::new,
+                        Collectors.mapping(StaticArchService::toItem, Collectors.toList())));
+        Map<String, Object> result = new LinkedHashMap<>();
+        byType.forEach(result::put);
+        return result;
+    }
+
+    /** 实体转接口项：id 使用 code（业务 id），与原有接口一致 */
+    private static Map<String, Object> toItem(SpatialFacility e) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", e.getCode());
+        m.put("longitude", e.getLongitude());
+        m.put("latitude", e.getLatitude());
+        m.put("name", e.getName());
+        m.put("remark", e.getRemark());
+        return m;
     }
 }
