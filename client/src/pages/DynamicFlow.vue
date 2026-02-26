@@ -1,4 +1,4 @@
-﻿
+
 <template>
   <header class="cb-topbar">
     <div class="cb-brand">
@@ -47,339 +47,197 @@
 
     <div class="cb-main">
       <div class="cb-grid cb-grid--dynamic cb-dv-mainrow">
-        <section class="cb-card cb-dv-viewer" style="display:flex;flex-direction:column;min-height:0;">
-          <div class="cb-view-hd">
-            <div class="cb-dv-title">
-              <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
-              <span class="cb-dv-title-text">主视图区</span>
+        <ViewerStage
+          :isCompare="isCompare"
+          :bindVpSingle="bindVpSingle"
+          :bindVpCompare="bindVpCompare"
+          :model-url="boeingModelUrl"
+          :left-model-url="boeingModelUrl"
+          :right-model-url="boeingModelUrl"
+          :split-position="0.5"
+          :readonly="false"
+          :auto-focus="true"
+        >
+          <template #header>
+            <div class="cb-view-hd">
+              <div class="cb-dv-title">
+                <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
+                <span class="cb-dv-title-text">主视图区</span>
+              </div>
+              <div class="cb-view-title smallnote">当前节点：{{ currentNodeName }}</div>
             </div>
-            <div class="cb-view-title smallnote">当前节点：{{ currentNodeName }}</div>
-          </div>
+          </template>
 
-          <div style="flex:1;min-height:0;padding:14px;">
-            <div class="cb-viewport">
-              <div class="cb-togglebar">
-                <button class="cb-toggle" :class="{ active: activeSymbol === 'plane' }" type="button" @click="selectSymbol('plane')">✈ 飞机</button>
-                <button class="cb-toggle" :class="{ active: activeSymbol === 'flow' }" type="button" @click="selectSymbol('flow')">▦ 信息流</button>
-                <button class="cb-toggle" :class="{ active: activeSymbol === 'control' }" type="button" @click="selectSymbol('control')">⌁ 控制流</button>
+          <template #single-overlays>
+            <div class="cb-togglebar">
+              <button class="cb-toggle" :class="{ active: activeSymbol === 'plane' }" type="button" @click="selectSymbol('plane')">✈ 飞机</button>
+              <button class="cb-toggle" :class="{ active: activeSymbol === 'flow' }" type="button" @click="selectSymbol('flow')">▦ 信息流</button>
+              <button class="cb-toggle" :class="{ active: activeSymbol === 'control' }" type="button" @click="selectSymbol('control')">⌁ 控制流</button>
+            </div>
+            <div class="cb-overlay-note">* 单屏/双屏可切换，时间轴同步驱动</div>
+            <div class="cb-symbols cb-symbols--single">
+              <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'plane' }" @click="selectSymbol('plane')">✈️ 飞机</button>
+              <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'flow' }" @click="selectSymbol('flow')">• 信息流</button>
+              <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'control' }" @click="selectSymbol('control')">➜ 控制流</button>
+            </div>
+            <div class="plane-symbol" :class="planeStateYesClass">✈</div>
+            <div class="cb-overlay-plane" v-show="activeSymbol === 'plane'"></div>
+            <div class="cb-overlay-flow" v-show="activeSymbol === 'flow'"></div>
+            <div class="cb-overlay-control" v-show="activeSymbol === 'control'"></div>
+            <FloatingCard
+              id="disposalFloatingCard"
+              :card="currentCardYes"
+              :collapsed="floatingCardCollapsed"
+              :detailsOpen="detailsOpen"
+              keyPrefix=""
+              @toggle-collapsed="floatingCardCollapsed = !floatingCardCollapsed"
+              @toggle-details="detailsOpen = !detailsOpen"
+            />
+            <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
+              <div class="hd">
+                <div class="title">{{ infoBoxTitle }}</div>
+                <button class="btn-icon" type="button" @click="hideInfoBox">×</button>
               </div>
-              <div class="cb-overlay-note">* 单屏/双屏可切换，时间轴同步驱动</div>
-
-              <div class="cb-viewer-single" v-show="!isCompare">
-                <CesiumViewport ref="vpSingle" :key="'vp-single'" />
-                <div class="cb-symbols cb-symbols--single">
-                  <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'plane' }" @click="selectSymbol('plane')">✈️ 飞机</button>
-                  <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'flow' }" @click="selectSymbol('flow')">• 信息流</button>
-                  <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'control' }" @click="selectSymbol('control')">➜ 控制流</button>
-                </div>
-                <div class="plane-symbol" :class="planeStateYesClass">✈</div>
-                <div class="cb-overlay-plane" v-show="activeSymbol === 'plane'"></div>
-                <div class="cb-overlay-flow" v-show="activeSymbol === 'flow'"></div>
-                <div class="cb-overlay-control" v-show="activeSymbol === 'control'"></div>
-
-                <div id="disposalFloatingCard" class="floating-card" :class="{ 'is-collapsed': floatingCardCollapsed }">
-                  <div class="floating-card-header">
-                    <span>{{ currentCardYes.phase }} · {{ currentCardYes.title }}</span>
-                    <button class="btn-icon" type="button" @click="floatingCardCollapsed = !floatingCardCollapsed">
-                      {{ floatingCardCollapsed ? '展开' : '收起' }}
-                    </button>
-                  </div>
-                  <div class="floating-card-body" v-show="!floatingCardCollapsed">
-                    <div class="card-summary">{{ currentCardYes.summary }}</div>
-                    <div class="card-details" v-show="detailsOpen">
-                      <div class="card-section-title">证据/依据</div>
-                      <ul class="card-info-list">
-                        <li v-for="(item, idx) in currentCardYes.evidence.slice(0, 5)" :key="'e' + idx">{{ item }}</li>
-                      </ul>
-                      <div class="card-section-title">处置动作</div>
-                      <ul class="card-info-list">
-                        <li v-for="(item, idx) in currentCardYes.actions.slice(0, 5)" :key="'a' + idx">{{ item }}</li>
-                      </ul>
-                      <div class="card-section-title">本节点信息（示意）</div>
-                      <ul class="card-info-list">
-                        <li v-for="(ev, idx) in currentCardYes.events.slice(0, 5)" :key="'n' + idx">{{ ev }}</li>
-                      </ul>
-                    </div>
-                    <button class="btn-small" type="button" @click="detailsOpen = !detailsOpen">
-                      {{ detailsOpen ? '收起详情' : '展开详情' }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="cb-viewer-split" v-show="isCompare">
-                <div class="cb-split-col">
-                  <div class="cb-split-hint">双屏对比（有/无云匣子）｜左右同时间轴同步驱动</div>
-                  <CesiumViewport ref="vpNo" :key="'vp-no'" />
-                  <div class="cb-symbols cb-symbols--compare">
-                    <div class="sym" :class="planeStateNoClass">✈️</div>
-                    <div class="sym sym-text flow-no">{{ noFlowText }}</div>
-                    <div class="sym sym-text">➜ 控制流</div>
-                    <div class="sym sym-text">{{ noNodeText }}</div>
-                  </div>
-
-                  <div id="disposalFloatingCardNo" class="floating-card" :class="{ 'is-collapsed': floatingCardNoCollapsed }">
-                    <div class="floating-card-header">
-                      <span>{{ currentCardNo.phase }} · {{ currentCardNo.title }}</span>
-                      <button class="btn-icon" type="button" @click="floatingCardNoCollapsed = !floatingCardNoCollapsed">
-                        {{ floatingCardNoCollapsed ? '展开' : '收起' }}
-                      </button>
-                    </div>
-                    <div class="floating-card-body" v-show="!floatingCardNoCollapsed">
-                      <div class="card-summary">{{ currentCardNo.summary }}</div>
-                      <div class="card-details" v-show="detailsOpenNo">
-                        <div class="card-section-title">证据/依据</div>
-                        <ul class="card-info-list">
-                          <li v-for="(item, idx) in currentCardNo.evidence.slice(0, 5)" :key="'eno' + idx">{{ item }}</li>
-                        </ul>
-                        <div class="card-section-title">处置动作</div>
-                        <ul class="card-info-list">
-                          <li v-for="(item, idx) in currentCardNo.actions.slice(0, 5)" :key="'ano' + idx">{{ item }}</li>
-                        </ul>
-                        <div class="card-section-title">本节点信息（示意）</div>
-                        <ul class="card-info-list">
-                          <li v-for="(ev, idx) in currentCardNo.events.slice(0, 5)" :key="'nno' + idx">{{ ev }}</li>
-                        </ul>
-                      </div>
-                      <button class="btn-small" type="button" @click="detailsOpenNo = !detailsOpenNo">
-                        {{ detailsOpenNo ? '收起详情' : '展开详情' }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div class="cb-split-col">
-                  <CesiumViewport ref="vpYes" :key="'vp-yes'" />
-                  <div class="cb-symbols cb-symbols--compare">
-                    <div class="sym" :class="planeStateYesClass">✈️</div>
-                    <div class="sym sym-text flow-yes">{{ yesFlowText }}</div>
-                    <div class="sym sym-text">➜ 控制流</div>
-                    <div class="sym sym-text">{{ yesNodeText }}</div>
-                    <div class="sym sym-badge">{{ deltaBadgeText }}</div>
-                  </div>
-
-                  <div id="disposalFloatingCardYes" class="floating-card" :class="{ 'is-collapsed': floatingCardYesCollapsed }">
-                    <div class="floating-card-header">
-                      <span>{{ currentCardYes.phase }} · {{ currentCardYes.title }}</span>
-                      <button class="btn-icon" type="button" @click="floatingCardYesCollapsed = !floatingCardYesCollapsed">
-                        {{ floatingCardYesCollapsed ? '展开' : '收起' }}
-                      </button>
-                    </div>
-                    <div class="floating-card-body" v-show="!floatingCardYesCollapsed">
-                      <div class="card-summary">{{ currentCardYes.summary }}</div>
-                      <div class="card-details" v-show="detailsOpenYes">
-                        <div class="card-section-title">证据/依据</div>
-                        <ul class="card-info-list">
-                          <li v-for="(item, idx) in currentCardYes.evidence.slice(0, 5)" :key="'eyes' + idx">{{ item }}</li>
-                        </ul>
-                        <div class="card-section-title">处置动作</div>
-                        <ul class="card-info-list">
-                          <li v-for="(item, idx) in currentCardYes.actions.slice(0, 5)" :key="'ayes' + idx">{{ item }}</li>
-                        </ul>
-                        <div class="card-section-title">本节点信息（示意）</div>
-                        <ul class="card-info-list">
-                          <li v-for="(ev, idx) in currentCardYes.events.slice(0, 5)" :key="'nyes' + idx">{{ ev }}</li>
-                        </ul>
-                        <div class="card-section-title">对比结论（示意）</div>
-                        <div class="compare-content">
-                          <div class="compare-data-row">
-                            <span class="compare-data-label">T_no / T_yes</span>
-                            <span class="compare-data-value">{{ currentCompareMeta.t_no }} / {{ currentCompareMeta.t_yes }}</span>
-                          </div>
-                          <div class="compare-data-row">
-                            <span class="compare-data-label">Δt</span>
-                            <span class="compare-data-value compare-delta">{{ currentCompareMeta.dt }}</span>
-                          </div>
-                          <div class="compare-data-row">
-                            <span class="compare-data-label">hops_no / hops_yes</span>
-                            <span class="compare-data-value">{{ currentCompareMeta.hops_no }} / {{ currentCompareMeta.hops_yes }}</span>
-                          </div>
-                          <div class="compare-data-row">
-                            <span class="compare-data-label">Δhops</span>
-                            <span class="compare-data-value compare-delta">{{ currentCompareMeta.dhops }}</span>
-                          </div>
-                          <div class="compare-path">
-                            <div class="compare-hint">路径（示意）</div>
-                            <div>{{ currentCompareMeta.path_no }}</div>
-                            <div>{{ currentCompareMeta.path_yes }}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <button class="btn-small" type="button" @click="detailsOpenYes = !detailsOpenYes">
-                        {{ detailsOpenYes ? '收起详情' : '展开详情' }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
-                <div class="hd">
-                  <div class="title">{{ infoBoxTitle }}</div>
-                  <button class="btn-icon" type="button" @click="hideInfoBox">×</button>
-                </div>
-                <div class="bd">
+              <div class="bd">
+                <ul>
+                  <li v-for="(x, i) in infoBoxLines" :key="i">{{ x }}</li>
+                </ul>
+                <div class="compare" v-if="isCompare && infoBoxCompareLines.length">
+                  <div class="small">对比信息（示意）</div>
                   <ul>
-                    <li v-for="(x, i) in infoBoxLines" :key="i">{{ x }}</li>
+                    <li v-for="(x, i) in infoBoxCompareLines" :key="i">{{ x }}</li>
                   </ul>
-                  <div class="compare" v-if="isCompare && infoBoxCompareLines.length">
-                    <div class="small">对比信息（示意）</div>
-                    <ul>
-                      <li v-for="(x, i) in infoBoxCompareLines" :key="i">{{ x }}</li>
-                    </ul>
-                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </template>
 
-        <aside class="cb-card cb-panel cb-dv-panel">
-          <div class="cb-card-hd">
-            <div class="cb-dv-title">
-              <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
-              <span class="cb-dv-title-text">信息面板</span>
-            </div>
-          </div>
-          <div class="cb-panel-tabs tabs">
-            <button
-              class="cb-msg-tab"
-              :class="{ active: rightTab === 'info' }"
-              :style="{ backgroundImage: `url(${rightTab === 'info' ? dvMsgTabSelected : dvMsgTabSelect})` }"
-              type="button"
-              @click="toggleRightTab('info')"
-            >
-              <span>信息</span>
-            </button>
-            <button
-              class="cb-msg-tab"
-              :class="{ active: rightTab === 'steps' }"
-              :style="{ backgroundImage: `url(${rightTab === 'steps' ? dvMsgTabSelected : dvMsgTabSelect})` }"
-              type="button"
-              @click="toggleRightTab('steps')"
-            >
-              <span>处置卡片</span>
-            </button>
-          </div>
-          <div class="cb-panel-body">
-            <div class="tabpanel" :class="{ active: rightTab === 'info' }" data-panel="info">
-              <div class="scroll">
-                <div class="cb-info-box">
-                  <div class="cb-info-row">
-                    <span class="cb-info-k">航班号</span>
-                    <span id="f_no" class="cb-info-v">{{ infoFields.f_no }}</span>
-                  </div>
-                  <div class="cb-info-row">
-                    <span class="cb-info-k">机型</span>
-                    <span id="f_type" class="cb-info-v">{{ infoFields.f_type }}</span>
-                  </div>
-                  <div class="cb-info-row">
-                    <span class="cb-info-k">航路</span>
-                    <span id="f_route" class="cb-info-v">{{ infoFields.f_route }}</span>
-                  </div>
-                  <div class="cb-info-row">
-                    <span class="cb-info-k">关键时间</span>
-                    <span id="f_time" class="cb-info-v">{{ infoFields.f_time }}</span>
-                  </div>
-                  <div class="cb-info-row">
-                    <span class="cb-info-k">处置状态</span>
-                    <span id="f_state" class="cb-info-v">{{ infoFields.f_state }}</span>
-                  </div>
-                  <div class="cb-info-row">
-                    <span class="cb-info-k">当前节点</span>
-                    <span id="nodeName" class="cb-info-v">{{ infoFields.f_node }}</span>
-                  </div>
-                </div>
+          <template #compare-overlays>
+            <div class="cb-split-col">
+              <div class="cb-split-hint">双屏对比（有/无云匣子）｜左右同时间轴同步驱动</div>
+              <div class="cb-symbols cb-symbols--compare">
+                <div class="sym" :class="planeStateNoClass">✈️</div>
+                <div class="sym sym-text flow-no">{{ noFlowText }}</div>
+                <div class="sym sym-text">➜ 控制流</div>
+                <div class="sym sym-text">{{ noNodeText }}</div>
               </div>
+              <FloatingCard
+                id="disposalFloatingCardNo"
+                :card="currentCardNo"
+                :collapsed="floatingCardNoCollapsed"
+                :detailsOpen="detailsOpenNo"
+                keyPrefix="no-"
+                @toggle-collapsed="floatingCardNoCollapsed = !floatingCardNoCollapsed"
+                @toggle-details="detailsOpenNo = !detailsOpenNo"
+              />
             </div>
-            <div class="tabpanel" :class="{ active: rightTab === 'steps' }" data-panel="steps">
-              <div class="scroll">
-                <div class="list" id="stepList" ref="stepListEl">
-                  <div
-                    class="item"
-                    :class="{ highlight: card.nodeId === currentNodeId, 'is-current': card.nodeId === currentNodeId }"
-                    v-for="card in disposalCards"
-                    :key="card.nodeId"
-                    :data-node-id="card.nodeId"
-                  >
-                    <b class="cb-card-title">{{ card.phase }} · {{ card.title }}</b>
-                    <div class="meta cb-card-sub">T+{{ card.t }} | {{ card.state }}</div>
-                    <div class="small" style="margin-top:6px;">{{ card.summary }}</div>
-                    <div class="card-node-info" v-if="card.events && card.events.length">
-                      <div class="card-section-title">本节点信息（示意）</div>
-                      <ul class="card-info-list">
-                        <li v-for="(ev, idx) in card.events.slice(0, 5)" :key="idx" class="cb-card-item">{{ ev }}</li>
-                      </ul>
+            <div class="cb-split-col">
+              <div class="cb-symbols cb-symbols--compare">
+                <div class="sym" :class="planeStateYesClass">✈️</div>
+                <div class="sym sym-text flow-yes">{{ yesFlowText }}</div>
+                <div class="sym sym-text">➜ 控制流</div>
+                <div class="sym sym-text">{{ yesNodeText }}</div>
+                <div class="sym sym-badge">{{ deltaBadgeText }}</div>
+              </div>
+              <FloatingCard
+                id="disposalFloatingCardYes"
+                :card="currentCardYes"
+                :collapsed="floatingCardYesCollapsed"
+                :detailsOpen="detailsOpenYes"
+                keyPrefix="yes-"
+                @toggle-collapsed="floatingCardYesCollapsed = !floatingCardYesCollapsed"
+                @toggle-details="detailsOpenYes = !detailsOpenYes"
+              >
+                <template #extra>
+                  <div class="card-section-title">对比结论（示意）</div>
+                  <div class="compare-content">
+                    <div class="compare-data-row">
+                      <span class="compare-data-label">T_no / T_yes</span>
+                      <span class="compare-data-value">{{ currentCompareMeta.t_no }} / {{ currentCompareMeta.t_yes }}</span>
                     </div>
-                    <div class="compare-content" v-if="isCompare">
-                      <div class="compare-data-row">
-                        <span class="compare-data-label">T_no / T_yes</span>
-                        <span class="compare-data-value">{{ card.compare.t_no }} / {{ card.compare.t_yes }}</span>
-                      </div>
-                      <div class="compare-data-row">
-                        <span class="compare-data-label">Δt</span>
-                        <span class="compare-data-value compare-delta">{{ card.compare.dt }}</span>
-                      </div>
-                      <div class="compare-data-row">
-                        <span class="compare-data-label">hops_no / hops_yes</span>
-                        <span class="compare-data-value">{{ card.compare.hops_no }} / {{ card.compare.hops_yes }}</span>
-                      </div>
-                      <div class="compare-data-row">
-                        <span class="compare-data-label">Δhops</span>
-                        <span class="compare-data-value compare-delta">{{ card.compare.dhops }}</span>
-                      </div>
-                      <div class="compare-path">
-                        <div class="compare-hint">路径（示意）</div>
-                        <div>{{ card.compare.path_no }}</div>
-                        <div>{{ card.compare.path_yes }}</div>
-                      </div>
+                    <div class="compare-data-row">
+                      <span class="compare-data-label">Δt</span>
+                      <span class="compare-data-value compare-delta">{{ currentCompareMeta.dt }}</span>
+                    </div>
+                    <div class="compare-data-row">
+                      <span class="compare-data-label">hops_no / hops_yes</span>
+                      <span class="compare-data-value">{{ currentCompareMeta.hops_no }} / {{ currentCompareMeta.hops_yes }}</span>
+                    </div>
+                    <div class="compare-data-row">
+                      <span class="compare-data-label">Δhops</span>
+                      <span class="compare-data-value compare-delta">{{ currentCompareMeta.dhops }}</span>
+                    </div>
+                    <div class="compare-path">
+                      <div class="compare-hint">路径（示意）</div>
+                      <div>{{ currentCompareMeta.path_no }}</div>
+                      <div>{{ currentCompareMeta.path_yes }}</div>
                     </div>
                   </div>
-                </div>
-                <!-- <hr /> -->
-                <div class="small" v-show="isCompare">对比模式：左右两套进度随同一时间轴同步更新（示意）。</div>
-                <div class="list compare-steps-table" v-show="isCompare">
-                  <div class="item" :class="{ highlight: i === idxNo || i === idxYes }" v-for="(s, i) in steps" :key="s.nodeId">
-                    <b>{{ s.name }}</b>
-                    <div class="meta">无云匣子：{{ i <= idxNo ? '已到达' : '未到达' }}（T+{{ s.t_no }}s） ｜ 有云匣子：{{ i <= idxYes ? '已到达' : '未到达' }}（T+{{ s.t_yes }}s）</div>
-                  </div>
+                </template>
+              </FloatingCard>
+            </div>
+            <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
+              <div class="hd">
+                <div class="title">{{ infoBoxTitle }}</div>
+                <button class="btn-icon" type="button" @click="hideInfoBox">×</button>
+              </div>
+              <div class="bd">
+                <ul>
+                  <li v-for="(x, i) in infoBoxLines" :key="i">{{ x }}</li>
+                </ul>
+                <div class="compare" v-if="isCompare && infoBoxCompareLines.length">
+                  <div class="small">对比信息（示意）</div>
+                  <ul>
+                    <li v-for="(x, i) in infoBoxCompareLines" :key="i">{{ x }}</li>
+                  </ul>
                 </div>
               </div>
             </div>
-          </div>
-        </aside>
+          </template>
+        </ViewerStage>
+
+        <RightPanel
+          :dvTitleIconLeft="dvTitleIconLeft"
+          :dvMsgTabSelected="dvMsgTabSelected"
+          :dvMsgTabSelect="dvMsgTabSelect"
+          :rightTab="rightTab"
+          :toggleRightTab="toggleRightTab"
+          :infoFields="infoFields"
+          :disposalCards="disposalCards"
+          :currentNodeId="currentNodeId"
+          :isCompare="isCompare"
+          :steps="steps"
+          :idxNo="idxNo"
+          :idxYes="idxYes"
+          @stepListReady="onStepListReady"
+        />
       </div>
 
-      <section class="cb-time-dock cb-dv-timeline">
-        <div class="cb-dv-title">
-          <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
-          <span class="cb-dv-title-text cb-dv-timeline-title">时间轴（T+ 回放）</span>
-        </div>
-        <div class="cb-time-actions">
-          <button class="cb-time-btn" type="button" @click="togglePlay">{{ playing ? '⏸ 暂停' : '▶ 播放' }}</button>
-          <button class="cb-time-btn ghost" type="button" @click="onReset">⟲ 复位</button>
-          <button class="cb-time-btn ghost" type="button">T+ {{ currentTimeLabel }}</button>
-        </div>
-        <div class="cb-time-slider" style="position:relative;">
-          <div class="compare-markers" v-show="isCompare" ref="compareMarkersEl">
-            <div class="compare-marker marker-no" :class="`align-${markerNoAlign}`" :style="{ left: markerNoLeft + '%' }" :title="markerNoTitle">
-              <span class="marker-label">{{ markerNoLabel }}</span>
-            </div>
-            <div class="compare-marker marker-yes" :class="`align-${markerYesAlign}`" :style="{ left: markerYesLeft + '%' }" :title="markerYesTitle">
-              <span class="marker-label">{{ markerYesLabel }}</span>
-            </div>
-          </div>
-          <input type="range" min="0" max="100" v-model.number="t" @input="onScrub(t)" @change="onScrub(t)" />
-        </div>
-        <div class="cb-time-hint">拖动后联动：视图区 / 处置步骤 / 事件列表 / 告警</div>
-      </section>
+      <TimelineDock
+        v-model.number="t"
+        :dvTitleIconLeft="dvTitleIconLeft"
+        :playing="playing"
+        :currentTimeLabel="currentTimeLabel"
+        :isCompare="isCompare"
+        :markerNoAlign="markerNoAlign"
+        :markerNoLeft="markerNoLeft"
+        :markerNoTitle="markerNoTitle"
+        :markerNoLabel="markerNoLabel"
+        :markerYesAlign="markerYesAlign"
+        :markerYesLeft="markerYesLeft"
+        :markerYesTitle="markerYesTitle"
+        :markerYesLabel="markerYesLabel"
+        @togglePlay="togglePlay"
+        @reset="onReset"
+        @scrub="onScrub"
+      />
 
-      <div id="globalAlertToast" class="alert-toast" :class="{ hidden: !alertToastVisible }">
-        <div class="alert-icon">⚠️</div>
-        <div class="alert-content">
-          <div id="alertTitle" class="alert-title">{{ alertTitle }}</div>
-          <div id="alertBody" class="alert-body">{{ alertBody }}</div>
-        </div>
-        <button class="alert-close" type="button" @click="hideAlertToast">×</button>
-      </div>
+      <AlertToast
+        :visible="alertToastVisible"
+        :title="alertTitle"
+        :body="alertBody"
+        @close="hideAlertToast"
+      />
     </div>
   </div>
 </template>
@@ -387,8 +245,13 @@
 <script setup>
 import { computed, nextTick, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import CesiumViewport from '../components/CesiumViewport.vue';
+import ViewerStage from '../components/ViewerStage.vue';
+import FloatingCard from '../components/FloatingCard.vue';
+import AlertToast from '../components/AlertToast.vue';
+import TimelineDock from '../components/TimelineDock.vue';
+import RightPanel from '../components/RightPanel.vue';
 
+const boeingModelUrl = new URL('../assets/model/boeing_737.glb', import.meta.url).href;
 const dvTitleIconLeft = new URL('../assets/dynamicViewport/title_icon_left.png', import.meta.url).href;
 const dvTitleBkRight = new URL('../assets/dynamicViewport/title_bk_right.png', import.meta.url).href;
 const dvModeIcon = new URL('../assets/dynamicViewport/title_icon2.png', import.meta.url).href;
@@ -396,11 +259,14 @@ const dvMsgTabSelect = new URL('../assets/dynamicViewport/msgpage_button_select.
 const dvMsgTabSelected = new URL('../assets/dynamicViewport/msgpage_button_selected.png', import.meta.url).href;
 
 const vpSingle = ref(null);
-const vpNo = ref(null);
-const vpYes = ref(null);
-const viewStateNo = ref(null);
+const vpCompare = ref(null);
+const bindVpSingle = (el) => { vpSingle.value = el; };
+const bindVpCompare = (el) => { vpCompare.value = el; };
 const compareMarkersEl = ref(null);
 const stepListEl = ref(null);
+const onStepListReady = (el) => {
+  stepListEl.value = el;
+};
 
 const scenarios = [
   { key: 'engine', name: '单发失效' },
@@ -873,20 +739,13 @@ const loadScenario = (key) => {
 };
 
 const toggleCompare = () => {
-  if (isCompare.value) {
-    viewStateNo.value = vpNo.value?.getViewState?.();
-    vpNo.value?.requestRender?.();
-    vpYes.value?.requestRender?.();
-  } else {
-    vpSingle.value?.requestRender?.();
-  }
   isCompare.value = !isCompare.value;
   if (isCompare.value) {
     hideInfoBox();
   }
   nextTick(() => {
-    [vpSingle.value, vpNo.value, vpYes.value].forEach((v) => v?.resize?.());
-    [vpSingle.value, vpNo.value, vpYes.value].forEach((v) => v?.requestRender?.());
+    [vpSingle.value, vpCompare.value].forEach((v) => v?.resize?.());
+    [vpSingle.value, vpCompare.value].forEach((v) => v?.requestRender?.());
     updateCompareMarkers();
     refreshAll(t.value);
   });

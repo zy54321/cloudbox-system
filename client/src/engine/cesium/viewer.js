@@ -22,7 +22,8 @@ export async function createCesiumViewer(el, creditContainer) {
     homeButton: false,
     sceneModePicker: false,
     geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
-    terrainShadows: Cesium.ShadowMode.CAST_AND_RECEIVE,
+    terrainShadows: Cesium.ShadowMode.DISABLED,
+    shadows: false,
     requestRenderMode: true,
     // 搜索关闭
     geocoder: false,
@@ -35,6 +36,8 @@ export async function createCesiumViewer(el, creditContainer) {
     // 启用抗锯齿
     fxaa: true,
   });
+
+  viewer.scene.shadowMap.enabled = false;
 
   // 设置相机初始位置（北京）
   viewer.camera.setView({

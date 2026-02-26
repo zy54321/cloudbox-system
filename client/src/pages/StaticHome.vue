@@ -199,7 +199,8 @@ const showWarn = ref(false);
 const onTool = (name) => {
   activeTool.value = name;
   console.log('[StaticTool]', name);
-  showWarn.value = name === '巡航故障';
+  showWarn.value = false;
+  if (name === '巡航故障') showWarn.value = true;
 };
 
 const onMapMode = (m) => {
@@ -207,3 +208,4 @@ const onMapMode = (m) => {
   console.log('[StaticMapMode]', m);
 };
 </script>
+

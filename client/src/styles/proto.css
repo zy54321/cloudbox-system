@@ -621,7 +621,7 @@ header {
 }
 .cb-wrap--dynamic .cb-grid--dynamic {
   display: grid;
-  grid-template-columns: 1fr 420px;
+  grid-template-columns: minmax(0, 1fr) 490px;
   gap: 14px;
   flex: 1;
   min-height: 0;
@@ -676,6 +676,7 @@ header {
   left: 50%;
   transform: translateX(-50%);
   bottom: 20px;
+  z-index: 40;
   width: 1236px;
   height: 71px;
   background: rgba(202, 116, 12, 0.32);
@@ -769,6 +770,8 @@ header {
 }
 
 .cb-wrap--dynamic .cb-viewer--split .cb-split-col {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -776,21 +779,106 @@ header {
 }
 
 .cb-wrap--dynamic .cb-viewer-single {
+  display: flex;
+  flex-direction: column;
   position: relative;
   height: 100%;
 }
 
+/* 双屏容器：稳定两列布局 */
 .cb-wrap--dynamic .cb-viewer-split {
+  position: relative;
   display: flex;
   gap: 10px;
   height: 100%;
+  min-height: 0;
 }
 
+.cb-wrap--dynamic .cb-viewer-split::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-viewport--split-full {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-viewport--split-full + .cb-split-col,
+.cb-wrap--dynamic .cb-viewer-split .cb-viewport--split-full ~ .cb-split-col {
+  position: relative;
+  z-index: 1;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col,
 .cb-wrap--dynamic .cb-split-col {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
   height: 100%;
   position: relative;
+}
+
+/* 每一列：成为独立“世界”，裁剪并隔离层叠/命中 */
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;   /* 关键：防止 canvas 越界覆盖另一列 */
+  isolation: isolate; /* 关键：隔离合成层/层叠上下文 */
+  touch-action: none; /* 防止默认手势干扰缩放拖拽 */
+  pointer-events: none;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card,
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .cb-symbols,
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .cb-split-hint {
+  pointer-events: auto;
+}
+
+/* 让 CesiumViewport 在列中稳定占满剩余高度（不改 DOM 结构） */
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col > .cesium-container,
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col > .cb-viewport,
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col > :has(> .cesium-container) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cb-wrap--dynamic .cb-dv-cesium {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* [已注释] DynamicFlow 固定地图高度，改由文件末尾自适应规则控制
+.cb-dv-main .cb-viewport { height: 580px; }
+.cb-dv-main .cb-viewport--single, .cb-dv-main .cb-viewport--split-full { height: 580px; }
+.cb-dv-main .cb-viewport canvas, .cesium-container, .cesium-widget, .cesium-widget canvas { height: 100% !important; }
+*/
+
+/* DynamicFlow: 信息面板 body/scroll 由末尾自适应块控制 */
+.cb-dv-panel .cb-panel-body {
+  flex: 1;
+  min-height: 0; /* 关键：允许内部滚动而不撑高 */
+  overflow: hidden;
+}
+
+.cb-dv-panel .cb-panel-body .tabpanel {
+  height: 100%;
+}
+
+.cb-dv-panel .cb-panel-body .scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .cb-wrap--dynamic .cb-symbols {
@@ -926,6 +1014,7 @@ header {
 }
 
 .cb-wrap--dynamic .cb-split-hint {
+  flex: 0 0 auto;
   position: absolute;
   left: 12px;
   top: 12px;
@@ -1144,16 +1233,6 @@ header {
   box-shadow: inset 0 0 60px rgba(243, 153, 43, 0.08);
 }
 
-.cb-wrap--dynamic .cb-overlay-flow,
-.cb-wrap--dynamic .cb-overlay-control {
-  animation: cbPulse 1.8s ease-in-out infinite;
-}
-
-@keyframes cbPulse {
-  0%, 100% { opacity: .65; }
-  50% { opacity: 1; }
-}
-
 .cb-wrap--dynamic .compare-view {
   position: absolute;
   left: 12px;
@@ -1192,7 +1271,7 @@ header {
 
 .cb-wrap--dynamic .plane-symbol.flash,
 .cb-wrap--dynamic .cb-symbols .sym.flash {
-  animation: planeFlash 0.8s ease-in-out infinite;
+  animation: none;
 }
 
 @keyframes planeFlash {
@@ -1565,23 +1644,22 @@ body {
   width: 186px;
 }
 
+/* [已注释] 旧固定尺寸，会撑开主视图区，改由末尾自适应规则
 .cb-wrap--dynamic .cb-dv-viewer {
-  width: 1367px;
-  height: 648px;
-  background: #0E2C7B;
-  border-radius: 6px;
-  box-sizing: border-box;
+  width: 1367px; height: 648px;
+  background: #0E2C7B; border-radius: 6px; box-sizing: border-box;
   flex: 0 0 1367px;
 }
+*/
 
 .cb-wrap--dynamic .cb-dv-panel {
-  width: 493px;
-  height: 648px;
+  display: flex;
+  flex-direction: column;
   background: #0E2C7B;
   border-radius: 6px;
   box-sizing: border-box;
-  flex: 0 0 493px;
 }
+/* 固定宽高已移除，由末尾自适应块设置 height:100%; width:100%; */
 
 .cb-wrap--dynamic .cb-dv-timeline {
   background: #0E2C7B;
@@ -1635,7 +1713,7 @@ body {
 }
 
 .cb-wrap--dynamic .cb-info-box {
-  width: 442px;
+  width: 440px;
   height: 262px;
   background: rgba(18, 72, 155, 0.6);
   border-radius: 6px;
@@ -2014,4 +2092,62 @@ body {
   color: rgba(255, 255, 255, .70);
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* DynamicFlow layout fix: main viewer + right panel auto-fit remaining height (no fixed px) */
+.cb-wrap--dynamic .cb-dv-mainrow {
+  flex: 1;
+  min-height: 0;
+}
+
+/* left (ViewerStage) and right panel stretch and align */
+.cb-wrap--dynamic .cb-dv-main,
+.cb-wrap--dynamic .cb-dv-panel {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.cb-wrap--dynamic .cb-dv-panel {
+  width: 490px;
+  min-width: 490px;
+  max-width: 490px;
+  justify-self: stretch;
+}
+
+/* viewport fills its card */
+.cb-wrap--dynamic .cb-dv-main .cb-viewport,
+.cb-wrap--dynamic .cb-dv-main .cb-viewport--single,
+.cb-wrap--dynamic .cb-dv-main .cb-viewer-split,
+.cb-wrap--dynamic .cb-dv-main .cb-viewport--split-full,
+.cb-wrap--dynamic .cb-dv-main .cb-cesium-layer {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Cesium canvas fill */
+.cb-wrap--dynamic .cb-dv-main .cb-viewport canvas,
+.cb-wrap--dynamic .cb-dv-main .cb-viewport .cesium-container,
+.cb-wrap--dynamic .cb-dv-main .cb-viewport .cesium-widget,
+.cb-wrap--dynamic .cb-dv-main .cb-viewport .cesium-widget canvas {
+  height: 100% !important;
+}
+
+/* Right panel internal scroll without changing outer height */
+.cb-wrap--dynamic .cb-dv-panel {
+  display: flex;
+  flex-direction: column;
+}
+.cb-wrap--dynamic .cb-dv-panel .cb-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.cb-wrap--dynamic .cb-dv-panel .cb-panel-body .tabpanel {
+  height: 100%;
+}
+.cb-wrap--dynamic .cb-dv-panel .cb-panel-body .scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }

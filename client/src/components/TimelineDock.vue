@@ -1,0 +1,61 @@
+<template>
+  <section class="cb-time-dock cb-dv-timeline">
+    <div class="cb-dv-title">
+      <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
+      <span class="cb-dv-title-text cb-dv-timeline-title">时间轴（T+ 回放）</span>
+    </div>
+
+    <div class="cb-time-actions">
+      <button class="cb-time-btn" type="button" @click="$emit('togglePlay')">{{ playing ? '⏸ 暂停' : '▶ 播放' }}</button>
+      <button class="cb-time-btn ghost" type="button" @click="$emit('reset')">⟲ 复位</button>
+      <button class="cb-time-btn ghost" type="button">T+ {{ currentTimeLabel }}</button>
+    </div>
+
+    <div class="cb-time-slider" style="position:relative;">
+      <div class="compare-markers" v-show="isCompare" ref="compareMarkersEl">
+        <div class="compare-marker marker-no" :class="`align-${markerNoAlign}`" :style="{ left: markerNoLeft + '%' }" :title="markerNoTitle">
+          <span class="marker-label">{{ markerNoLabel }}</span>
+        </div>
+        <div class="compare-marker marker-yes" :class="`align-${markerYesAlign}`" :style="{ left: markerYesLeft + '%' }" :title="markerYesTitle">
+          <span class="marker-label">{{ markerYesLabel }}</span>
+        </div>
+      </div>
+
+      <!-- 保持 v-model 语义：用 modelValue + update:modelValue 来承接 v-model.number -->
+      <input
+        type="range"
+        min="0"
+        max="100"
+        :value="modelValue"
+        @input="$emit('update:modelValue', Number($event.target.value)); $emit('scrub', Number($event.target.value))"
+        @change="$emit('scrub', Number($event.target.value))"
+      />
+    </div>
+
+    <div class="cb-time-hint">拖动后联动：视图区 / 处置步骤 / 事件列表 / 告警</div>
+  </section>
+</template>
+
+<script setup>
+import { ref } from 'vue';
+
+const compareMarkersEl = ref(null);
+
+defineProps({
+  dvTitleIconLeft: { type: String, required: true },
+  playing: { type: Boolean, required: true },
+  currentTimeLabel: { type: String, required: true },
+  isCompare: { type: Boolean, required: true },
+  markerNoAlign: { type: String, required: true },
+  markerNoLeft: { type: Number, required: true },
+  markerNoTitle: { type: String, required: true },
+  markerNoLabel: { type: String, required: true },
+  markerYesAlign: { type: String, required: true },
+  markerYesLeft: { type: Number, required: true },
+  markerYesTitle: { type: String, required: true },
+  markerYesLabel: { type: String, required: true },
+  modelValue: { type: Number, required: true }
+});
+
+defineEmits(['togglePlay', 'reset', 'scrub', 'update:modelValue']);
+</script>
