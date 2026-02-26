@@ -35,7 +35,9 @@ public class StaticArchService {
                     "temp", "18 ℃", "press", "92000 Pa", "wind", "4 m/s")
     );
 
-    /** 阶段中文名、目标高度、下一航点/ETA */
+    /**
+     * 阶段中文名、目标高度、下一航点/ETA
+     */
     private static final Map<String, String[]> STAGE_EXTRA = Map.of(
             "takeoff", new String[]{"起飞", "6,000 m", "WPT-2 / 08:15"},
             "climb", new String[]{"爬升", "10,000 m", "WPT-3 / 08:28"},
@@ -44,7 +46,9 @@ public class StaticArchService {
             "landing", new String[]{"着陆", "0 m", "本场 / 09:15"}
     );
 
-    /** 各阶段飞机位置（经度、纬度），示意京沪航线 */
+    /**
+     * 各阶段飞机位置（经度、纬度），示意京沪航线
+     */
     private static final Map<String, double[]> STAGE_POSITION = Map.of(
             "takeoff", new double[]{116.584, 40.080},
             "climb", new double[]{116.90, 39.60},
@@ -103,7 +107,7 @@ public class StaticArchService {
         );
     }
 
-    public Map<String, Object> getUnitDetail(Map<String, Object> requestBody) { 
+    public Map<String, Object> getUnitDetail(Map<String, Object> requestBody) {
         String type = (String) requestBody.get("type");
         if (type == null) type = "星基";
         Map<String, Object> detail = new HashMap<>();
@@ -150,20 +154,24 @@ public class StaticArchService {
     }
 
     private static final String[] MODULE_OVERVIEWS = {
-            "数据采集系统是云匣子体系的基础模块，负责从多个数据源采集飞行相关的各类数据。",
-            "通感算一体机载感知预警系统集成了通信、感知、计算功能，实现机载端的智能感知和预警。",
-            "HTS/5G ATG通信系统提供高速、可靠的通信链路，确保空中与地面之间的信息畅通。",
-            "地面飞行场景实时重构系统基于多源数据，实时重构和展示飞行场景，为决策提供可视化支持。",
-            "地面运营控制中心应急专家组系统整合应急专家资源，提供专业的应急决策支持。",
-            "体系应急决策推演系统基于场景数据和专家知识，进行应急决策的推演和优化。",
-            "应急处置系统是体系的执行端，负责将决策方案转化为具体的处置指令并监督执行。"
+            "此模块由飞行数据记录仪（FDR）和驾驶舱话音记录仪（CVR）构成。其中，FDR负责记录民用航空器飞行过程中的各类数据，即飞行过程中的各种参数，如飞行的时间、速度、高度、飞机倾斜度、发动机的转速及温度；CVR负责记录舱音数据，即驾驶舱内发生的所有对话数据。黑匣子确保了机上数据安全无损坏，为安全飞行以及维护维修工作提供了依据。该系统与通感算一体机载感知预警系统相关联。",
+            "该模块融合了通信与感知功能，借助电磁波探测获取精确的位置和轨迹信息，识别典型突发紧急场景，并发布突发紧急场景下的告警信息。同时，通过算法加持能够过滤噪声，保障数据的准确性与及时性。机载一体化设计充分确保了数据的真实完整和时效性。",
+            "该系统主要通过两类媒介，高通量通信卫星系统和5G地空通信，实现飞机数据与地面数据的同步传输。主要链接通感算系统与地面的各个系统。",
+            "该系统基于民用航空器飞行数据和舱音数据，分析下传数据的变化趋势。此外，该模块重建的数据将与专家组模块和决策模块共享，实现了高效的数据传输。",
+            "该系统着重从专家视角对飞机运行过程中的各项问题进行多方位分析，对来自通感算一体的机载感知预警设备以及地面飞行场景实时重构系统的告警信息进行认定。经专家组讨论，可直接制定应急处置方案，或根据体系应急决策推演系统提供的建议方案确定最优方案。同时，专家的决策也会提供给其他模块，最终通过通信系统反馈给驾驶员。",
+            "此系统通过处理前两个系统的信息和建议，依据航空器风险状态，生成多个动态决策方案，在体系运行仿真场景中开展平行推演，模拟处置过程并提供推演结果，辅助地面端专家组制定应急处置方案，并支持将方案分发至机组、航司、空管、机场等应急部门，以便快速处置风险。",
+            "该系统根据推演系统的结果反馈，联系各相关组织或部门，即协调机组、航司、空管、机场等应急部门的各个分支，从而实现紧急事态的下达和通知。"
     };
 
     public List<Map<String, Object>> getModules() {
         String[] titles = {
-                "模块一：数据采集系统", "模块二：通感算一体机载感知预警系统", "模块三：HTS/5G ATG通信系统",
-                "模块四：地面飞行场景实时重构系统", "模块五：地面运营控制中心应急专家组系统",
-                "模块六：体系应急决策推演系统", "模块七：应急处置系统"
+                "模块一：数据采集系统",
+                "模块二：通感算一体机载感知预警系统",
+                "模块三：HTS/5G ATG通信系统",
+                "模块四：地面飞行场景实时重构系统",
+                "模块五：地面运营控制中心应急专家组系统",
+                "模块六：体系应急决策推演系统",
+                "模块七：应急处置系统"
         };
         List<Map<String, Object>> list = new ArrayList<>();
         for (int i = 0; i < 7; i++) {
@@ -189,7 +197,9 @@ public class StaticArchService {
         return result;
     }
 
-    /** 实体转接口项：id 使用 code（业务 id），与原有接口一致 */
+    /**
+     * 实体转接口项：id 使用 code（业务 id），与原有接口一致
+     */
     private static Map<String, Object> toItem(SpatialFacility e) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", e.getCode());
@@ -198,5 +208,95 @@ public class StaticArchService {
         m.put("name", e.getName());
         m.put("remark", e.getRemark());
         return m;
+    }
+
+    /** 链路拓扑：from/to 英文 satellite|aircraft|ground，type 英文 one_to_one|one_to_many|many_to_one|many_to_many */
+    public List<Map<String, Object>> getLinkTopology(Map<String, Object> requestBody) {
+        String from = requestBody != null && requestBody.get("from") != null ? (String) requestBody.get("from") : "satellite";
+        String to = requestBody != null && requestBody.get("to") != null ? (String) requestBody.get("to") : "ground";
+        String type = requestBody != null && requestBody.get("type") != null ? (String) requestBody.get("type") : "one_to_many";
+        Double aircraftLng = null;
+        Double aircraftLat = null;
+        if (requestBody != null && requestBody.get("aircraftLongitude") != null) {
+            Object v = requestBody.get("aircraftLongitude");
+            if (v instanceof Number) aircraftLng = ((Number) v).doubleValue();
+        }
+        if (requestBody != null && requestBody.get("aircraftLatitude") != null) {
+            Object v = requestBody.get("aircraftLatitude");
+            if (v instanceof Number) aircraftLat = ((Number) v).doubleValue();
+        }
+
+        List<Map<String, Object>> fromNodes = resolveNodes(from, aircraftLng, aircraftLat);
+        List<Map<String, Object>> toNodes = resolveNodes(to, aircraftLng, aircraftLat);
+        String linkName = linkName(from, to);
+
+        // type: one_to_one, one_to_many, many_to_one, many_to_many
+        boolean oneFrom = "one_to_one".equals(type) || "one_to_many".equals(type);
+        boolean oneTo = "one_to_one".equals(type) || "many_to_one".equals(type);
+        List<Map<String, Object>> fromList = oneFrom && !fromNodes.isEmpty() ? List.of(fromNodes.get(0)) : fromNodes;
+        List<Map<String, Object>> toList = oneTo && !toNodes.isEmpty() ? List.of(toNodes.get(0)) : toNodes;
+
+        List<Map<String, Object>> roots = new ArrayList<>();
+        for (int i = 0; i < fromList.size(); i++) {
+            Map<String, Object> fromNode = new LinkedHashMap<>(fromList.get(i));
+            List<Map<String, Object>> linkChildren = new ArrayList<>();
+            Map<String, Object> linkNode = new LinkedHashMap<>();
+            linkNode.put("id", "link-" + fromNode.get("id") + "-" + i);
+            linkNode.put("name", linkName);
+            linkNode.put("type", "link");
+            linkNode.put("children", toList);
+            linkChildren.add(linkNode);
+            fromNode.put("children", linkChildren);
+            roots.add(fromNode);
+        }
+        return roots;
+    }
+
+    private List<Map<String, Object>> resolveNodes(String role, Double aircraftLng, Double aircraftLat) {
+        if ("satellite".equalsIgnoreCase(role)) {
+            List<SpatialFacility> list = spatialFacilityMapper.selectByCategory("satellite");
+            return list.stream().map(f -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", f.getCode());
+                m.put("name", f.getName());
+                m.put("type", "satellite");
+                m.put("longitude", f.getLongitude());
+                m.put("latitude", f.getLatitude());
+                m.put("children", Collections.emptyList());
+                return m;
+            }).collect(Collectors.toList());
+        }
+        if ("aircraft".equalsIgnoreCase(role)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", "aircraft-1");
+            m.put("name", "当前航班");
+            m.put("type", "aircraft");
+            m.put("longitude", aircraftLng);
+            m.put("latitude", aircraftLat);
+            m.put("children", Collections.emptyList());
+            return List.of(m);
+        }
+        if ("ground".equalsIgnoreCase(role)) {
+            List<SpatialFacility> list = spatialFacilityMapper.selectByCategory("ground");
+            return list.stream().map(f -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", f.getCode());
+                m.put("name", f.getName());
+                m.put("type", "ground");
+                m.put("longitude", f.getLongitude());
+                m.put("latitude", f.getLatitude());
+                m.put("children", Collections.emptyList());
+                return m;
+            }).collect(Collectors.toList());
+        }
+        return Collections.emptyList();
+    }
+
+    private static String linkName(String from, String to) {
+        boolean hasSat = "satellite".equalsIgnoreCase(from) || "satellite".equalsIgnoreCase(to);
+        boolean hasAir = "aircraft".equalsIgnoreCase(from) || "aircraft".equalsIgnoreCase(to);
+        if (hasSat && hasAir) return "卫星链路";
+        if (hasAir) return "5G ATG链路";
+        return "卫星链路";
     }
 }

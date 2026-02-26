@@ -64,9 +64,21 @@ public class StaticController {
      */
     @PostMapping("/spatial")
     public ResponseEntity<Map<String, Object>> spatial(@RequestBody(required = false) Map<String, Object> requestBody) {
-        String category = (String) requestBody.get("category");
+        String category = requestBody != null && requestBody.get("category") != null
+                ? (String) requestBody.get("category") : "ground";
         category = "satellite".equalsIgnoreCase(category) ? "satellite" : "ground";
         Map<String, Object> data = staticArchService.getSpatialData(category);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    /**
+     * 链路拓扑（树状结构）
+     * 入参：from（satellite|aircraft|ground）、to（satellite|aircraft|ground）、type（one_to_one|one_to_many|many_to_one|many_to_many）
+     * 可选：aircraftLongitude、aircraftLatitude
+     */
+    @PostMapping("/link")
+    public ResponseEntity<Map<String, Object>> link(@RequestBody(required = false) Map<String, Object> requestBody) {
+        List<Map<String, Object>> data = staticArchService.getLinkTopology(requestBody);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 }
