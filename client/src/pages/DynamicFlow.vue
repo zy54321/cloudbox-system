@@ -57,26 +57,24 @@
           :split-position="0.5"
           :readonly="false"
           :auto-focus="true"
+          :path-points="flightRouteXA_BJDX"
+          :path-progress="planeProgress"
+          :follow-path="true"
         >
           <template #header>
             <div class="cb-view-hd">
               <div class="cb-dv-title">
                 <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
-                <span class="cb-dv-title-text">主视图区</span>
+                <span class="cb-dv-title-text">主视图区</span><span class="cb-title-hint">（单屏/双屏可切换，时间轴同步驱动）</span>
               </div>
               <div class="cb-view-title smallnote">当前节点：{{ currentNodeName }}</div>
             </div>
           </template>
 
           <template #single-overlays>
-            <div class="cb-togglebar">
-              <button class="cb-toggle" :class="{ active: activeSymbol === 'plane' }" type="button" @click="selectSymbol('plane')">✈ 飞机</button>
-              <button class="cb-toggle" :class="{ active: activeSymbol === 'flow' }" type="button" @click="selectSymbol('flow')">▦ 信息流</button>
-              <button class="cb-toggle" :class="{ active: activeSymbol === 'control' }" type="button" @click="selectSymbol('control')">⌁ 控制流</button>
-            </div>
-            <div class="cb-overlay-note">* 单屏/双屏可切换，时间轴同步驱动</div>
             <div class="cb-symbols cb-symbols--single">
               <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'plane' }" @click="selectSymbol('plane')">✈️ 飞机</button>
+              <button class="cb-dv-symbtn ghost" type="button" @click.stop="togglePlanePath">{{ planePathEnabled ? '停止沿线' : '沿线运动' }}</button>
               <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'flow' }" @click="selectSymbol('flow')">• 信息流</button>
               <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'control' }" @click="selectSymbol('control')">➜ 控制流</button>
             </div>
@@ -245,6 +243,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import * as Cesium from 'cesium';
 import ViewerStage from '../components/ViewerStage.vue';
 import FloatingCard from '../components/FloatingCard.vue';
 import AlertToast from '../components/AlertToast.vue';
@@ -260,8 +259,253 @@ const dvMsgTabSelected = new URL('../assets/dynamicViewport/msgpage_button_selec
 
 const vpSingle = ref(null);
 const vpCompare = ref(null);
-const bindVpSingle = (el) => { vpSingle.value = el; };
-const bindVpCompare = (el) => { vpCompare.value = el; };
+
+const planeMoveEnabled = ref(false);
+const planeProgress = ref(0);
+let _planeMoveRaf = 0;
+
+const planePathEnabled = ref(false);
+let _dynTickUnsub1 = null;
+let _dynTickUnsub2 = null;
+
+// --- Flight route: Xi'an (XIY) -> Beijing Daxing (PKX) ---
+const flightRouteXA_BJDX = [
+  { phase: 'takeoff',  lon: 108.751, lat: 34.447, alt:    0 },
+  { phase: 'climb',    lon: 109.250, lat: 34.900, alt: 2500 },
+  { phase: 'climb',    lon: 110.300, lat: 35.650, alt: 8200 },
+  { phase: 'cruise',   lon: 111.800, lat: 36.650, alt: 10500 },
+  { phase: 'cruise',   lon: 113.400, lat: 37.500, alt: 10700 },
+  { phase: 'cruise',   lon: 114.900, lat: 38.300, alt: 10600 },
+  { phase: 'approach', lon: 115.750, lat: 39.050, alt:  3200 },
+  { phase: 'approach', lon: 116.200, lat: 39.350, alt:   900 },
+  { phase: 'landing',  lon: 116.410, lat: 39.510, alt:    0 },
+];
+
+const ROUTE_ENTITY_ID = 'flightRouteXA_BJDX';
+const ROUTE_SAMPLES = 120;
+
+const sampleCatmullRom = (route, samplesPerSeg = 30) => {
+  const cps = route.map(p => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
+  if (cps.length < 2) return cps;
+  const times = cps.map((_, i) => i);
+  const spline = new Cesium.CatmullRomSpline({ times, points: cps });
+  const out = [];
+  const maxT = times[times.length - 1];
+  const dt = 1 / samplesPerSeg;
+  for (let t = 0; t <= maxT; t += dt) out.push(spline.evaluate(t));
+  out.push(cps[cps.length - 1]);
+  for (let i = 0; i < out.length; i++) {
+    const c = Cesium.Cartographic.fromCartesian(out[i]);
+    const h = Math.max(0, c.height || 0);
+    out[i] = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, h);
+  }
+  return out;
+};
+
+let _routePositionsCache = null;
+const getRoutePositions = () => {
+  if (_routePositionsCache) return _routePositionsCache;
+  _routePositionsCache = sampleCatmullRom(flightRouteXA_BJDX, ROUTE_SAMPLES);
+  return _routePositionsCache;
+};
+
+const buildSampledPosition = (viewer, positions, secondsTotal = 300) => {
+  const prop = new Cesium.SampledPositionProperty();
+  const start = Cesium.JulianDate.now();
+  const n = positions.length;
+  const dt = secondsTotal / Math.max(1, n - 1);
+  for (let i = 0; i < n; i++) {
+    const t = Cesium.JulianDate.addSeconds(start, i * dt, new Cesium.JulianDate());
+    prop.addSample(t, positions[i]);
+  }
+  prop.setInterpolationOptions({
+    interpolationDegree: 1,
+    interpolationAlgorithm: Cesium.LinearApproximation
+  });
+  return {
+    prop,
+    start,
+    stop: Cesium.JulianDate.addSeconds(start, secondsTotal, new Cesium.JulianDate())
+  };
+};
+
+const startClock = (viewer, start, stop) => {
+  viewer.clock.startTime = start;
+  viewer.clock.stopTime = stop;
+  viewer.clock.currentTime = start;
+  viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+  viewer.clock.multiplier = 1;
+  viewer.clock.shouldAnimate = true;
+};
+
+// --- Flowing trail material for polyline ---
+const ensureTrailMaterial = (() => {
+  const type = 'PolylineTrail';
+  const source = `
+    czm_material czm_getMaterial(czm_materialInput materialInput)
+    {
+      czm_material material = czm_getDefaultMaterial(materialInput);
+      vec2 st = materialInput.st;
+      float t = fract(st.s - time);
+      float a = smoothstep(0.0, 0.15, t) * (1.0 - smoothstep(0.75, 1.0, t));
+      material.diffuse = color.rgb;
+      material.alpha = a * color.a;
+      return material;
+    }
+  `;
+
+  return () => {
+    // Cesium 里材质缓存是全局的，注册一次即可
+    const cache = Cesium.Material._materialCache;
+    if (!cache.getMaterial(type)) {
+      cache.addMaterial(type, {
+        fabric: {
+          type,
+          uniforms: {
+            color: new Cesium.Color(0.35, 0.9, 1.0, 0.95),
+            time: 0.0,
+          },
+          source,
+        },
+        translucent: () => true,
+      });
+    }
+    return type;
+  };
+})();
+
+class TrailMaterialProperty {
+  constructor(options = {}) {
+    this._definitionChanged = new Cesium.Event();
+    this.color = options.color ?? new Cesium.Color(0.35, 0.9, 1.0, 0.95);
+    this.speed = options.speed ?? 0.8;
+    this._start = performance.now();
+  }
+  get isConstant() { return false; }
+  get definitionChanged() { return this._definitionChanged; }
+  getType(time) { return ensureTrailMaterial(); }
+  getValue(time, result) {
+    if (!result) result = {};
+    const t = ((performance.now() - this._start) / 1000) * this.speed;
+    result.color = this.color;
+    result.time = t;
+    return result;
+  }
+  equals(other) { return this === other; }
+}
+
+const drawFlightRoute = (viewer) => {
+  if (!viewer) return;
+  if (viewer.entities?.getById?.(ROUTE_ENTITY_ID)) return;
+
+  const positions = getRoutePositions();
+  viewer.entities.add({
+    id: ROUTE_ENTITY_ID,
+    polyline: {
+      positions,
+      width: 2,
+      clampToGround: false,
+      material: new TrailMaterialProperty({
+        color: new Cesium.Color(0.35, 0.9, 1.0, 0.95),
+        speed: 0.8
+      })
+    }
+  });
+  viewer.scene?.requestRender?.();
+};
+
+const applyPlanePathToVp = (vp, unsubRefSetter) => {
+  const viewer = vp?.getViewer?.();
+  if (!viewer) return;
+
+  if (!planePathEnabled.value) {
+    viewer.clock.shouldAnimate = false;
+    vp?.applyPathAnimation?.(null);
+    if (unsubRefSetter.current) {
+      unsubRefSetter.current();
+      unsubRefSetter.current = null;
+    }
+    viewer.trackedEntity = undefined;
+    viewer.scene?.requestRender?.();
+    return;
+  }
+
+  const positions = getRoutePositions();
+  const secondsTotal = 300 * 5;
+  const { prop, start, stop } = buildSampledPosition(viewer, positions, secondsTotal);
+  vp?.applyPathAnimation?.(prop, { trailSeconds: 12 / 40 });
+  startClock(viewer, start, stop);
+
+  const plane = vp?.getPlaneEntity?.();
+  if (plane) viewer.trackedEntity = plane;
+
+  const onTick = () => viewer.scene?.requestRender?.();
+  viewer.clock.onTick.addEventListener(onTick);
+  unsubRefSetter.current = () => viewer.clock.onTick.removeEventListener(onTick);
+};
+
+const _unsub1 = { current: null };
+const _unsub2 = { current: null };
+
+const togglePlanePath = () => {
+  planePathEnabled.value = !planePathEnabled.value;
+  applyPlanePathToVp(vpSingle.value, _unsub1);
+  applyPlanePathToVp(vpCompare.value, _unsub2);
+};
+
+// 全局渲染驱动：单屏/双屏都持续刷新航线流动纹理
+let _routeRafStarted = false;
+const startRouteRenderLoop = () => {
+  if (_routeRafStarted) return;
+  _routeRafStarted = true;
+
+  const loop = () => {
+    // 单屏 viewer
+    const v1 = vpSingle.value?.getViewer?.();
+    if (v1 && v1.entities?.getById?.(ROUTE_ENTITY_ID)) {
+      v1.scene?.requestRender?.();
+    }
+
+    // 双屏 viewer
+    const v2 = vpCompare.value?.getViewer?.();
+    if (v2 && v2.entities?.getById?.(ROUTE_ENTITY_ID)) {
+      v2.scene?.requestRender?.();
+    }
+
+    requestAnimationFrame(loop);
+  };
+
+  requestAnimationFrame(loop);
+};
+
+const whenViewerReady = (vpEl, cb, maxFrames = 120) => {
+  let n = 0;
+  const tick = () => {
+    const viewer = vpEl?.getViewer?.();
+    if (viewer) { cb(viewer); return; }
+    if (++n > maxFrames) return; // ~2s@60fps，避免死循环
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+
+const bindVpSingle = (el) => {
+  vpSingle.value = el;
+  whenViewerReady(el, (viewer) => {
+    drawFlightRoute(viewer);
+    startRouteRenderLoop();
+    if (planePathEnabled.value) applyPlanePathToVp(el, _unsub1);
+  });
+};
+
+const bindVpCompare = (el) => {
+  vpCompare.value = el;
+  whenViewerReady(el, (viewer) => {
+    drawFlightRoute(viewer);
+    startRouteRenderLoop();
+    if (planePathEnabled.value) applyPlanePathToVp(el, _unsub2);
+  });
+};
 const compareMarkersEl = ref(null);
 const stepListEl = ref(null);
 const onStepListReady = (el) => {

@@ -2151,3 +2151,10 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
 }
+
+.cb-title-hint {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-left: 8px;
+  white-space: nowrap;
+}

@@ -11,6 +11,9 @@
             :model-url="modelUrl"
             :auto-focus="autoFocus"
             :split-mode="false"
+            :path-points="pathPoints"
+            :path-progress="pathProgress"
+            :follow-path="followPath"
           />
           <slot name="single-overlays" />
         </div>
@@ -26,6 +29,9 @@
                 :split-position="splitPosition"
                 :readonly="readonly"
                 :auto-focus="autoFocus"
+                :path-points="pathPoints"
+                :path-progress="pathProgress"
+                :follow-path="followPath"
               />
             </div>
           </div>
@@ -48,7 +54,10 @@ const props = defineProps({
   rightModelUrl: { type: String, default: '' },
   splitPosition: { type: Number, default: 0.5 },
   readonly: { type: Boolean, default: false },
-  autoFocus: { type: Boolean, default: true }
+  autoFocus: { type: Boolean, default: true },
+  pathPoints: { type: Array, default: null },
+  pathProgress: { type: Number, default: 0 },
+  followPath: { type: Boolean, default: false }
 });
 
 const vpSingleRef = (el) => {

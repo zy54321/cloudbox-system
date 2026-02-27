@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <header class="cb-topbar">
     <div class="cb-brand">
       <img class="cb-top-icon" src="../assets/staticPage/top_left_icon.png" alt="logo" />
@@ -34,6 +34,7 @@
             <button class="cb-btn ghost" :class="{ active: activeTool === '放大' }" type="button" @click="onTool('放大')">放大</button>
             <button class="cb-btn ghost" :class="{ active: activeTool === '缩小' }" type="button" @click="onTool('缩小')">缩小</button>
             <button class="cb-btn ghost" :class="{ active: activeTool === '巡航故障' }" type="button" @click="onTool('巡航故障')">巡航故障</button>
+            <button class="cb-btn ghost" :class="{ active: activeTool === '沿线飞行' }" type="button" @click="onTool('沿线飞行')">沿线飞行</button>
           </div>
 
           <div style="flex:1;min-height:0;padding:0 14px 14px;">
@@ -42,10 +43,10 @@
                 <button class="cb-mini cb-map-mini" :class="{ active: mapMode === 'plane' }" type="button" @click="onMapMode('plane')">飞机</button>
                 <button class="cb-mini cb-map-mini" :class="{ active: mapMode === 'ground' }" type="button" @click="onMapMode('ground')">地面</button>
               </div>
-              <div class="cb-stage">阶段：降落 ｜ 层级：太空 ｜ 缩放级别：4</div>
+              <div class="cb-stage">阶段：{{ phaseText }} ｜ 层级：{{ levelText }} ｜ 缩放级别：4</div>
 
               <!-- Cesium 视口 -->
-              <div class="cb-cesium-layer"><CesiumViewport :model-url="boeingModelUrl" :auto-focus="true" /></div>
+              <div class="cb-cesium-layer"><CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="flightRouteXA_BJDX" :path-progress="planeProgress" :follow-path="true" /></div>
 
               <!-- 右上角悬浮信息 -->
               <div v-if="mapMode === 'plane'" class="cb-float cb-map-popup" :style="{ backgroundImage: `url(${mapPopup})` }">
@@ -184,8 +185,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
+import * as Cesium from 'cesium';
 import CesiumViewport from '../components/CesiumViewport.vue';
 import mapPopup from '../assets/staticPage/map_popup.png';
 import warnIcon from '../assets/staticPage/map_warnicon.png';
@@ -195,17 +197,440 @@ const activeTab = ref('base');
 const activeTool = ref('');
 const mapMode = ref('plane');
 const showWarn = ref(false);
+const vpStatic = ref(null);
+const phaseText = ref('起飞');
+const levelText = ref('机场级');
+const planeMoveEnabled = ref(false);
+const planeProgress = ref(0);
+let _planeMoveRaf = 0;
+const planePathEnabled = ref(false);
+let _tickUnsub = null;
+
+const FOLLOW_RANGE_M = 400;
+const FOLLOW_UP_M = 60;
+let _camPos = null;
+
+const lerpCartesian = (a, b, t) => {
+  return Cesium.Cartesian3.add(
+    Cesium.Cartesian3.multiplyByScalar(a, 1 - t, new Cesium.Cartesian3()),
+    Cesium.Cartesian3.multiplyByScalar(b, t, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+};
+
+const followPlaneOnce = () => {
+  const viewer = vpStatic.value?.getViewer?.();
+  const plane = vpStatic.value?.getPlaneEntity?.();
+  if (!viewer || !plane) return;
+
+  const time = viewer.clock.currentTime;
+  const p = plane.position?.getValue?.(time);
+  const q = plane.orientation?.getValue?.(time);
+  if (!p || !q) return;
+
+  const m3 = Cesium.Matrix3.fromQuaternion(q);
+  const forwardWC = Cesium.Matrix3.multiplyByVector(m3, Cesium.Cartesian3.UNIT_X, new Cesium.Cartesian3());
+  Cesium.Cartesian3.normalize(forwardWC, forwardWC);
+
+  const back = Cesium.Cartesian3.multiplyByScalar(forwardWC, -FOLLOW_RANGE_M, new Cesium.Cartesian3());
+  const up = Cesium.Cartesian3.multiplyByScalar(
+    Cesium.Cartesian3.normalize(p, new Cesium.Cartesian3()),
+    FOLLOW_UP_M,
+    new Cesium.Cartesian3()
+  );
+  const desired = Cesium.Cartesian3.add(
+    Cesium.Cartesian3.add(p, back, new Cesium.Cartesian3()),
+    up,
+    new Cesium.Cartesian3()
+  );
+
+  if (!_camPos) _camPos = desired;
+  _camPos = lerpCartesian(_camPos, desired, 0.12);
+
+  const dir = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(p, _camPos, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+  const right = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(dir, Cesium.Cartesian3.UNIT_Z, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+  const upWC = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(right, dir, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+
+  viewer.camera.setView({
+    destination: _camPos,
+    orientation: { direction: dir, up: upWC }
+  });
+};
+
+const togglePlanePath = () => {
+  const viewer = vpStatic.value?.getViewer?.();
+  if (!viewer) return;
+
+  planePathEnabled.value = !planePathEnabled.value;
+
+  if (!planePathEnabled.value) {
+    viewer.clock.shouldAnimate = false;
+    vpStatic.value?.applyPathAnimation?.(null);
+    if (_tickUnsub) {
+      _tickUnsub();
+      _tickUnsub = null;
+    }
+    viewer.trackedEntity = undefined;
+    viewer.scene?.requestRender?.();
+    return;
+  }
+
+  const positions = getRoutePositions();
+  const baseSeconds = 60 * 5;
+  const secondsTotal = baseSeconds * 5;
+  const { prop, start, stop } = buildSampledPosition(viewer, positions, secondsTotal);
+
+  vpStatic.value?.applyPathAnimation?.(prop, { trailSeconds: 12 / 50 });
+
+  viewer.clock.startTime = start;
+  viewer.clock.stopTime = stop;
+  viewer.clock.currentTime = start;
+  viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+  viewer.clock.multiplier = 1;
+  viewer.clock.shouldAnimate = true;
+
+  const plane = vpStatic.value?.getPlaneEntity?.();
+  if (plane) viewer.trackedEntity = plane;
+
+  const onTick = () => viewer.scene?.requestRender?.();
+  viewer.clock.onTick.addEventListener(onTick);
+  _tickUnsub = () => viewer.clock.onTick.removeEventListener(onTick);
+};
+
+const togglePlaneMove = () => {
+  planeMoveEnabled.value = !planeMoveEnabled.value;
+  if (!planeMoveEnabled.value) {
+    if (_planeMoveRaf) cancelAnimationFrame(_planeMoveRaf);
+    _planeMoveRaf = 0;
+    return;
+  }
+  const start = performance.now();
+  const durationMs = 60000 * 5; // 更慢速度跑完全程
+  const tick = () => {
+    if (!planeMoveEnabled.value) return;
+    const u = ((performance.now() - start) % durationMs) / durationMs;
+    planeProgress.value = u;
+    followPlaneOnce();
+    _planeMoveRaf = requestAnimationFrame(tick);
+  };
+  _planeMoveRaf = requestAnimationFrame(tick);
+};
+
+let _trailTickBound = false;
+let _trailTickViewer = null;
+
+const ROUTE_SAMPLES = 120;
+
+const flightRouteXA_BJDX = [
+  { phase: 'takeoff',  lon: 108.751, lat: 34.447, alt:    0 },
+  { phase: 'climb',    lon: 109.250, lat: 34.900, alt: 2500 },
+  { phase: 'climb',    lon: 110.300, lat: 35.650, alt: 8200 },
+  { phase: 'cruise',   lon: 111.800, lat: 36.650, alt: 10500 },
+  { phase: 'cruise',   lon: 113.400, lat: 37.500, alt: 10700 },
+  { phase: 'cruise',   lon: 114.900, lat: 38.300, alt: 10600 },
+  { phase: 'approach', lon: 115.750, lat: 39.050, alt:  3200 },
+  { phase: 'approach', lon: 116.200, lat: 39.350, alt:   900 },
+  { phase: 'landing',  lon: 116.410, lat: 39.510, alt:    0 },
+];
+
+const phaseConfig = {
+  takeoff:  { name: '起飞', level: '机场级' },
+  climb:    { name: '爬升', level: '区域级' },
+  cruise:   { name: '巡航', level: '航路级' },
+  approach: { name: '进近', level: '城市级' },
+  landing:  { name: '降落', level: '机场级' }
+};
+
+const sampleCatmullRom = (route, samplesPerSeg = 28) => {
+  const cps = route.map(p => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
+  if (cps.length < 2) return cps;
+  const times = cps.map((_, i) => i);
+  const spline = new Cesium.CatmullRomSpline({ times, points: cps });
+
+  const out = [];
+  const maxT = times[times.length - 1];
+  const dt = 1 / samplesPerSeg;
+  for (let t = 0; t <= maxT; t += dt) out.push(spline.evaluate(t));
+  out.push(cps[cps.length - 1]);
+  // clamp height >= 0 to avoid spline overshoot below ground
+  for (let i = 0; i < out.length; i++) {
+    const c = Cesium.Cartographic.fromCartesian(out[i]);
+    const h = Math.max(0, c.height || 0);
+    out[i] = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, h);
+  }
+  return out;
+};
+
+let _routePositionsCache = null;
+const getRoutePositions = () => {
+  if (_routePositionsCache) return _routePositionsCache;
+  _routePositionsCache = sampleCatmullRom(flightRouteXA_BJDX, ROUTE_SAMPLES);
+  return _routePositionsCache;
+};
+
+const buildSampledPosition = (viewer, positions, secondsTotal = 60) => {
+  const prop = new Cesium.SampledPositionProperty();
+  const start = Cesium.JulianDate.now();
+  const n = positions.length;
+  const dt = secondsTotal / Math.max(1, n - 1);
+  for (let i = 0; i < n; i++) {
+    const t = Cesium.JulianDate.addSeconds(start, i * dt, new Cesium.JulianDate());
+    prop.addSample(t, positions[i]);
+  }
+  prop.setInterpolationOptions({
+    interpolationDegree: 1,
+    interpolationAlgorithm: Cesium.LinearApproximation
+  });
+  return {
+    prop,
+    start,
+    stop: Cesium.JulianDate.addSeconds(start, secondsTotal, new Cesium.JulianDate())
+  };
+};
+
+// --- Trail material for polyline (flowing texture) ---
+const PolylineTrailMaterial = (() => {
+  const type = 'PolylineTrail';
+
+  const source = `
+    czm_material czm_getMaterial(czm_materialInput materialInput)
+    {
+      czm_material material = czm_getDefaultMaterial(materialInput);
+      vec2 st = materialInput.st;
+      // st.s : along the line [0..1]
+      float t = fract(st.s - time);
+      // soft head-tail
+      float a = smoothstep(0.0, 0.15, t) * (1.0 - smoothstep(0.75, 1.0, t));
+      material.diffuse = color.rgb;
+      material.alpha = a * color.a;
+      return material;
+    }
+  `;
+
+  if (!Cesium.Material._materialCache.getMaterial(type)) {
+    Cesium.Material._materialCache.addMaterial(type, {
+      fabric: {
+        type,
+        uniforms: {
+          color: new Cesium.Color(0.2, 0.8, 1.0, 0.9),
+          time: 0.0,
+        },
+        source,
+      },
+      translucent: () => true,
+    });
+  }
+
+  return { type };
+})();
+
+class TrailMaterialProperty {
+  constructor(options = {}) {
+    this._definitionChanged = new Cesium.Event();
+    this.color = options.color ?? new Cesium.Color(0.35, 0.9, 1.0, 0.95);
+    this.speed = options.speed ?? 0.8;
+    this._start = performance.now();
+  }
+
+  get isConstant() { return false; }
+  get definitionChanged() { return this._definitionChanged; }
+
+  getType(time) { return PolylineTrailMaterial.type; }
+
+  getValue(time, result) {
+    if (!result) result = {};
+    const t = ((performance.now() - this._start) / 1000) * this.speed;
+    result.color = this.color;
+    result.time = t;
+    return result;
+  }
+
+  equals(other) {
+    return this === other;
+  }
+}
+
+const createTrailMaterialProperty = (opts = {}) => new TrailMaterialProperty(opts);
+
+const ROUTE_ENTITY_ID = 'flightRouteXA_BJDX';
+const drawFlightRoute = (viewer) => {
+  if (!viewer) return;
+  // 已存在则不重复添加
+  const existed = viewer.entities.getById?.(ROUTE_ENTITY_ID);
+  if (existed) return;
+
+  const positions = getRoutePositions();
+  viewer.entities.add({
+    id: ROUTE_ENTITY_ID,
+    polyline: {
+      positions,
+      width: 2,
+      clampToGround: false,
+      material: createTrailMaterialProperty({
+        color: new Cesium.Color(0.35, 0.9, 1.0, 0.95),
+        speed: 0.8
+      })
+    }
+  });
+  viewer.scene?.requestRender?.();
+  // If requestRenderMode is enabled, keep requesting render so animated material updates.
+  if (!_trailTickBound) {
+    _trailTickBound = true;
+    _trailTickViewer = viewer;
+    const tick = () => {
+      // 仅当这条航线实体仍存在时才持续刷新，避免无意义耗电
+      const v = _trailTickViewer;
+      if (!v || v.isDestroyed?.()) return;
+      const alive = v.entities?.getById?.(ROUTE_ENTITY_ID);
+      if (!alive) return;
+      v.scene?.requestRender?.();
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+};
+
+const flyZoom = (dir) => {
+  const viewer = vpStatic.value?.getViewer?.();
+  if (!viewer?.camera) return;
+
+  const cam = viewer.camera;
+  // 当前相机世界坐标
+  const pos = cam.positionWC;
+  // 当前高度用于自适应步长
+  const carto = Cesium.Cartographic.fromCartesian(pos);
+  const h = Math.max(1, carto.height || 1);
+
+  // 步长：高度越高，一次缩放越大
+  const step = Math.max(80, h * 0.18) * 5;
+
+  // 沿视线方向推进/拉远
+  const dirWC = Cesium.Cartesian3.normalize(cam.directionWC, new Cesium.Cartesian3());
+  const offset = Cesium.Cartesian3.multiplyByScalar(dirWC, dir > 0 ? step : -step, new Cesium.Cartesian3());
+  const dest = Cesium.Cartesian3.add(pos, offset, new Cesium.Cartesian3());
+
+  cam.flyTo({
+    destination: dest,
+    orientation: {
+      heading: cam.heading,
+      pitch: cam.pitch,
+      roll: cam.roll
+    },
+    duration: 0.6,
+    easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+  });
+};
+
+const setPhase = (phaseKey) => {
+  const cfg = phaseConfig[phaseKey];
+  if (!cfg) return;
+  phaseText.value = cfg.name;
+  levelText.value = cfg.level;
+};
+
+const focusPlane = () => {
+  const viewer = vpStatic.value?.getViewer?.();
+  if (!viewer) return;
+  const plane = viewer.entities.getById('planeEntity');
+  if (!plane) return;
+  viewer.flyTo(plane, {
+    duration: 0.8,
+    offset: new Cesium.HeadingPitchRange(
+      viewer.camera.heading,
+      Cesium.Math.toRadians(-25),
+      2500
+    )
+  });
+};
+
+const viewChina = () => {
+  const viewer = vpStatic.value?.getViewer?.();
+  if (!viewer) return;
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(105.0, 35.0, 6500000.0),
+    orientation: {
+      heading: Cesium.Math.toRadians(0),
+      pitch: Cesium.Math.toRadians(-90),
+      roll: 0
+    },
+    duration: 1.0,
+    easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+  });
+};
 
 const onTool = (name) => {
   activeTool.value = name;
   console.log('[StaticTool]', name);
   showWarn.value = false;
+  if (name === '起飞') setPhase('takeoff');
+  if (name === '爬升') setPhase('climb');
+  if (name === '巡航') setPhase('cruise');
+  if (name === '进近') setPhase('approach');
+  if (name === '降落') setPhase('landing');
   if (name === '巡航故障') showWarn.value = true;
+  if (name === '放大') flyZoom(1);
+  if (name === '缩小') flyZoom(-1);
+  if (name === '飞机') focusPlane();
+  if (name === '地面') viewChina();
+  if (name === '沿线飞行') togglePlanePath();
 };
 
 const onMapMode = (m) => {
   mapMode.value = m;
   console.log('[StaticMapMode]', m);
+
+  if (m === 'plane') {
+    const viewer = vpStatic.value?.getViewer?.();
+    const plane = vpStatic.value?.getPlaneEntity?.();
+    if (viewer && plane) {
+      viewer.flyTo(plane, {
+        duration: 0.8,
+        offset: new Cesium.HeadingPitchRange(
+          viewer.camera.heading,
+          Cesium.Math.toRadians(-25),
+          200
+        )
+      });
+    }
+  }
+
+  if (m === 'ground') {
+    const viewer = vpStatic.value?.getViewer?.();
+    if (viewer) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(105.0, 35.0, 6500000.0),
+        orientation: {
+          heading: Cesium.Math.toRadians(0),
+          pitch: Cesium.Math.toRadians(-90),
+          roll: 0
+        },
+        duration: 1.0,
+        easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+      });
+    }
+  }
 };
+
+onMounted(() => {
+  // CesiumViewport 内部 onMounted 才创建 viewer，这里用 raf 等待一次就绪
+  const tick = () => {
+    const viewer = vpStatic.value?.getViewer?.();
+    if (viewer) {
+      drawFlightRoute(viewer);
+      return;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+});
 </script>
 
