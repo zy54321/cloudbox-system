@@ -1,4 +1,4 @@
-
+﻿
 <template>
   <header class="cb-topbar">
     <div class="cb-brand">
@@ -57,9 +57,11 @@
           :split-position="0.5"
           :readonly="false"
           :auto-focus="true"
-          :path-points="flightRouteXA_BJDX"
+          :path-points="pathPointsForViewer"
           :path-progress="planeProgress"
           :follow-path="true"
+          @marker-click="onMarkerClick"
+          @marker-move="onMarkerMove"
         >
           <template #header>
             <div class="cb-view-hd">
@@ -194,6 +196,20 @@
           </template>
         </ViewerStage>
 
+        <!-- 标点弹窗（与静态页一致） -->
+        <div v-if="activePopup" class="marker-popup" :style="popupStyle">
+          <div class="marker-popup-header">
+            <div class="marker-popup-title">{{ activePopup.meta.name }}</div>
+            <button type="button" class="marker-popup-close" @click="closePopup">×</button>
+          </div>
+          <div class="marker-popup-body">
+            <div>类型：{{ activePopup.meta.type }}</div>
+            <div>经度：{{ activePopup.meta.lon.toFixed(6) }}</div>
+            <div>纬度：{{ activePopup.meta.lat.toFixed(6) }}</div>
+            <div>高度：{{ activePopup.meta.alt_m }} m</div>
+          </div>
+        </div>
+
         <RightPanel
           :dvTitleIconLeft="dvTitleIconLeft"
           :dvMsgTabSelected="dvMsgTabSelected"
@@ -244,6 +260,7 @@
 import { computed, nextTick, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
+import { buildFlightPathFromRunways, buildSampledPositionFromPath } from '../utils/flightPath';
 import ViewerStage from '../components/ViewerStage.vue';
 import FloatingCard from '../components/FloatingCard.vue';
 import AlertToast from '../components/AlertToast.vue';
@@ -265,76 +282,43 @@ const planeProgress = ref(0);
 let _planeMoveRaf = 0;
 
 const planePathEnabled = ref(false);
+const activePopup = ref(null);
+
+function onMarkerClick(payload) {
+  activePopup.value = payload;
+}
+function onMarkerMove(p) {
+  if (activePopup.value) activePopup.value.screen = { x: p.x, y: p.y };
+}
+function closePopup() {
+  activePopup.value = null;
+  vpSingle.value?.clearActiveMarker?.();
+  vpCompare.value?.clearActiveMarker?.();
+}
+const popupStyle = computed(() => {
+  const s = activePopup.value?.screen;
+  if (!s) return { position: 'fixed', right: '16px', top: '80px' };
+  return { position: 'fixed', left: `${s.x + 12}px`, top: `${s.y - 12}px` };
+});
+
 let _dynTickUnsub1 = null;
 let _dynTickUnsub2 = null;
 
-// --- Flight route: Xi'an (XIY) -> Beijing Daxing (PKX) ---
-const flightRouteXA_BJDX = [
-  { phase: 'takeoff',  lon: 108.751, lat: 34.447, alt:    0 },
-  { phase: 'climb',    lon: 109.250, lat: 34.900, alt: 2500 },
-  { phase: 'climb',    lon: 110.300, lat: 35.650, alt: 8200 },
-  { phase: 'cruise',   lon: 111.800, lat: 36.650, alt: 10500 },
-  { phase: 'cruise',   lon: 113.400, lat: 37.500, alt: 10700 },
-  { phase: 'cruise',   lon: 114.900, lat: 38.300, alt: 10600 },
-  { phase: 'approach', lon: 115.750, lat: 39.050, alt:  3200 },
-  { phase: 'approach', lon: 116.200, lat: 39.350, alt:   900 },
-  { phase: 'landing',  lon: 116.410, lat: 39.510, alt:    0 },
-];
+// --- 与 StaticHome 同一套：跑道贴地 -> buildFlightPathFromRunways ---
+const startRunway = { a: { lon: 108.742455, lat: 34.439922 }, b: { lon: 108.761345, lat: 34.453589 } };
+const endRunway = { a: { lon: 116.430944, lat: 39.473803 }, b: { lon: 116.427175, lat: 39.497722 } };
+
+const flightPath = buildFlightPathFromRunways(startRunway, endRunway, { cruiseAlt: 10000 });
 
 const ROUTE_ENTITY_ID = 'flightRouteXA_BJDX';
-const ROUTE_SAMPLES = 120;
-
-const sampleCatmullRom = (route, samplesPerSeg = 30) => {
-  const cps = route.map(p => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
-  if (cps.length < 2) return cps;
-  const times = cps.map((_, i) => i);
-  const spline = new Cesium.CatmullRomSpline({ times, points: cps });
-  const out = [];
-  const maxT = times[times.length - 1];
-  const dt = 1 / samplesPerSeg;
-  for (let t = 0; t <= maxT; t += dt) out.push(spline.evaluate(t));
-  out.push(cps[cps.length - 1]);
-  for (let i = 0; i < out.length; i++) {
-    const c = Cesium.Cartographic.fromCartesian(out[i]);
-    const h = Math.max(0, c.height || 0);
-    out[i] = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, h);
-  }
-  return out;
-};
-
-let _routePositionsCache = null;
-const getRoutePositions = () => {
-  if (_routePositionsCache) return _routePositionsCache;
-  _routePositionsCache = sampleCatmullRom(flightRouteXA_BJDX, ROUTE_SAMPLES);
-  return _routePositionsCache;
-};
-
-const buildSampledPosition = (viewer, positions, secondsTotal = 300) => {
-  const prop = new Cesium.SampledPositionProperty();
-  const start = Cesium.JulianDate.now();
-  const n = positions.length;
-  const dt = secondsTotal / Math.max(1, n - 1);
-  for (let i = 0; i < n; i++) {
-    const t = Cesium.JulianDate.addSeconds(start, i * dt, new Cesium.JulianDate());
-    prop.addSample(t, positions[i]);
-  }
-  prop.setInterpolationOptions({
-    interpolationDegree: 1,
-    interpolationAlgorithm: Cesium.LinearApproximation
-  });
-  return {
-    prop,
-    start,
-    stop: Cesium.JulianDate.addSeconds(start, secondsTotal, new Cesium.JulianDate())
-  };
-};
+const pathPointsForViewer = flightPath;
 
 const startClock = (viewer, start, stop) => {
   viewer.clock.startTime = start;
   viewer.clock.stopTime = stop;
   viewer.clock.currentTime = start;
   viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-  viewer.clock.multiplier = 1;
+  viewer.clock.multiplier = 1; // 仿真 2 倍速，配合 secondsTotal 减半
   viewer.clock.shouldAnimate = true;
 };
 
@@ -398,7 +382,7 @@ const drawFlightRoute = (viewer) => {
   if (!viewer) return;
   if (viewer.entities?.getById?.(ROUTE_ENTITY_ID)) return;
 
-  const positions = getRoutePositions();
+  const positions = flightPath.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
   viewer.entities.add({
     id: ROUTE_ENTITY_ID,
     polyline: {
@@ -430,9 +414,7 @@ const applyPlanePathToVp = (vp, unsubRefSetter) => {
     return;
   }
 
-  const positions = getRoutePositions();
-  const secondsTotal = 300 * 5;
-  const { prop, start, stop } = buildSampledPosition(viewer, positions, secondsTotal);
+  const { prop, start, stop } = buildSampledPositionFromPath(flightPath, 300);
   vp?.applyPathAnimation?.(prop, { trailSeconds: 12 / 40 });
   startClock(viewer, start, stop);
 
@@ -998,3 +980,40 @@ const toggleCompare = () => {
 
 loadScenario(activeScenario.value);
 </script>
+
+<style scoped>
+.marker-popup {
+  z-index: 100;
+  min-width: 200px;
+  padding: 0;
+  background: rgba(0, 20, 40, 0.95);
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #e0f0ff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.marker-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.marker-popup-title { font-weight: 600; }
+.marker-popup-close {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.marker-popup-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+</style>

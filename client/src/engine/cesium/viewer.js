@@ -21,6 +21,8 @@ export async function createCesiumViewer(el, creditContainer) {
     navigationHelpButton: false,
     homeButton: false,
     sceneModePicker: false,
+    selectionIndicator: false,
+    infoBox: false,
     geocoder: Cesium.IonGeocodeProviderType.GOOGLE,
     terrainShadows: Cesium.ShadowMode.DISABLED,
     shadows: false,

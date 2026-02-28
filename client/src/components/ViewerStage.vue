@@ -14,6 +14,8 @@
             :path-points="pathPoints"
             :path-progress="pathProgress"
             :follow-path="followPath"
+            @marker-click="$emit('marker-click', $event)"
+            @marker-move="$emit('marker-move', $event)"
           />
           <slot name="single-overlays" />
         </div>
@@ -32,6 +34,8 @@
                 :path-points="pathPoints"
                 :path-progress="pathProgress"
                 :follow-path="followPath"
+                @marker-click="$emit('marker-click', $event)"
+                @marker-move="$emit('marker-move', $event)"
               />
             </div>
           </div>

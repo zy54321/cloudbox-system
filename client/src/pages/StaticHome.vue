@@ -45,8 +45,37 @@
               </div>
               <div class="cb-stage">阶段：{{ phaseText }} ｜ 层级：{{ levelText }} ｜ 缩放级别：4</div>
 
-              <!-- Cesium 视口 -->
-              <div class="cb-cesium-layer"><CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="flightRouteXA_BJDX" :path-progress="planeProgress" :follow-path="true" /></div>
+              <!-- Cesium 视口 + 飞机跟随 popup（相机高度≤阈值时显示） -->
+              <div class="cb-cesium-layer cb-cesium-layer--with-popup">
+                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" />
+                <div
+                  v-if="showPlanePopup && planeScreenInfo"
+                  class="cb-plane-follow-popup"
+                  :style="planePopupStyle"
+                >
+                  <div class="cb-plane-follow-popup-hd">飞机</div>
+                  <div class="cb-plane-follow-popup-bd">
+                    <div class="cb-plane-follow-row">高度：{{ planeScreenInfo.alt.toFixed(0) }} m</div>
+                    <div class="cb-plane-follow-row">航向：{{ planeScreenInfo.heading.toFixed(0) }}°</div>
+                    <div class="cb-plane-follow-row">地速：{{ planeScreenInfo.speed }} km/h</div>
+                    <div class="cb-plane-follow-row">状态：{{ planeEnvText }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 标点弹窗（点击地面/星基点位显示，同一时间只一个） -->
+              <div v-if="activePopup" class="marker-popup" :style="popupStyle">
+                <div class="marker-popup-header">
+                  <div class="marker-popup-title">{{ activePopup.meta.name }}</div>
+                  <button type="button" class="marker-popup-close" @click="closePopup">×</button>
+                </div>
+                <div class="marker-popup-body">
+                  <div>类型：{{ activePopup.meta.type }}</div>
+                  <div>经度：{{ activePopup.meta.lon.toFixed(6) }}</div>
+                  <div>纬度：{{ activePopup.meta.lat.toFixed(6) }}</div>
+                  <div>高度：{{ activePopup.meta.alt_m }} m</div>
+                </div>
+              </div>
 
               <!-- 右上角悬浮信息 -->
               <div v-if="mapMode === 'plane'" class="cb-float cb-map-popup" :style="{ backgroundImage: `url(${mapPopup})` }">
@@ -78,32 +107,26 @@
                 </div>
               </div>
 
-              <div v-else class="cb-float cb-map-popup" :style="{ backgroundImage: `url(${mapPopup})` }">
-                <div class="cb-float-hd">
-                  <span>地面系统</span>
-                  <span style="opacity:.8;margin-right: 10px;">×</span>
+              <div v-else class="cb-float cb-map-popup cb-map-popup--units">
+                <div class="cb-map-popup-units-hd">
+                  <span>地图标点</span>
+                  <span class="cb-map-popup-units-close">×</span>
                 </div>
-                <div class="cb-float-bd">
-                  <div class="cb-popup-row">
-                    <span class="cb-popup-label">系统名称：</span>
-                    <span class="cb-popup-value">地面站-01</span>
-                  </div>
-                  <div class="cb-popup-row">
-                    <span class="cb-popup-label">站点位置：</span>
-                    <span class="cb-popup-value">济南</span>
-                  </div>
-                  <div class="cb-popup-row">
-                    <span class="cb-popup-label">链路状态：</span>
-                    <span class="cb-popup-value">正常</span>
-                  </div>
-                  <div class="cb-popup-row">
-                    <span class="cb-popup-label">当前负载：</span>
-                    <span class="cb-popup-value">37%</span>
-                  </div>
-                  <div class="cb-popup-row">
-                    <span class="cb-popup-label">最近上报：</span>
-                    <span class="cb-popup-value">12:05</span>
-                  </div>
+                <div class="cb-float-bd cb-units-list-bd">
+                  <template v-if="unitsGroups.length">
+                    <div v-for="grp in unitsGroups" :key="grp.name" class="cb-units-group">
+                      <div class="cb-units-group-title">{{ grp.name }}</div>
+                      <div
+                        v-for="u in grp.units"
+                        :key="u.id"
+                        class="cb-units-item"
+                        @click="flyToUnit(u)"
+                      >
+                        {{ u.name }}
+                      </div>
+                    </div>
+                  </template>
+                  <div v-else class="cb-units-empty">加载中…</div>
                 </div>
               </div>
 
@@ -146,15 +169,15 @@
             <template v-if="activeTab === 'base'">
               <div class="cb-item">
                 <h4><span style="color:#ffd54a;">星基：</span>高通量通信卫星、低轨通信卫星</h4>
-                <p><span class="cb-link">点击查看详细信息</span></p>
+                <p><span class="cb-link" @click="openDetailModal('star')">点击查看详细信息</span></p>
               </div>
               <div class="cb-item">
                 <h4><span style="color:#ffd54a;">地面：</span>飞行场景实时重构、应急专家组、决策推演、运行控制中心、应急处置执行</h4>
-                <p><span class="cb-link">点击查看详细信息</span></p>
+                <p><span class="cb-link" @click="openDetailModal('ground')">点击查看详细信息</span></p>
               </div>
               <div class="cb-item">
                 <h4><span style="color:#ffd54a;">机载：</span>机载监测与云匣子协同终端</h4>
-                <p><span class="cb-link">点击查看详细信息</span></p>
+                <p><span class="cb-link" @click="openDetailModal('airborne')">点击查看详细信息</span></p>
               </div>
             </template>
             <template v-else-if="activeTab === 'relation'">
@@ -182,13 +205,162 @@
       </div>
     </div>
   </div>
+
+  <!-- 单元详情弹窗（基本单元 tab 内点击「点击查看详细信息」） -->
+  <Teleport to="body">
+    <div v-if="detailModalType" class="cb-detail-modal-backdrop" @click.self="closeDetailModal">
+      <div class="cb-detail-modal">
+        <div class="cb-detail-modal-hd">
+          <h2 class="cb-detail-modal-title">{{ detailModalTitle }}</h2>
+          <button type="button" class="cb-detail-modal-close" aria-label="关闭" @click="closeDetailModal">×</button>
+        </div>
+        <div class="cb-detail-modal-bd">
+          <!-- 星基 -->
+          <template v-if="detailModalType === 'star'">
+            <div class="cb-detail-section">
+              <div class="cb-detail-label">单元类型：</div>
+              <div class="cb-detail-value">星基元素</div>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-label">包含元素：</div>
+              <ul class="cb-detail-list cb-detail-list--inline">
+                <li>高通量卫星（HTS）</li>
+                <li>低轨通信卫星（LEO）</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">功能说明：</div>
+              <p class="cb-detail-para">
+                星基元素是“云匣子”体系通信网络的天基层组成部分，面向民航飞行全程提供广域覆盖的数据中继能力，与 5G ATG 宽带链路共同构成空地数据同步传输的关键通道，用于支撑飞行数据下传、态势共享与应急协同处置。
+              </p>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">主要功能：</div>
+              <ul class="cb-detail-list">
+                <li><strong>提供卫星通信链路能力：</strong>支撑“星-机”“星-地”数据传输与转发（地图缩小时以连线+标注示意）</li>
+                <li><strong>承载飞行过程数据下传：</strong>与机载数据采集（FDR/CVR）及通感算一体机载感知预警系统协同，保障飞行时间、速度、高度、姿态、告警等关键数据传输至地面系统</li>
+                <li><strong>保障空地数据同步：</strong>作为 HTS/5G ATG 通信系统的卫星侧媒介之一，实现飞机数据与地面数据的同步传输</li>
+                <li><strong>应急通信支撑：</strong>在通信网络故障/链路异常场景下，为关键业务数据提供可用的广域传输通道（故障类型包含高通量卫星通信故障等）</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">关联关系：</div>
+              <ul class="cb-detail-list">
+                <li><strong>与链路元素连接：</strong>通过卫星通信链路形成“卫星-飞机”“卫星-地面”连接关系（以连线+标注形式体现）</li>
+                <li><strong>与机载元素连接：</strong>承载通感算机载感知预警系统与机载数据采集系统的关键数据上报与告警信息传输</li>
+                <li><strong>与地面元素连接：</strong>向地面飞行场景实时重构系统、专家组、仿真推演与运行控制中心等模块下传数据并支持共享</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">在体系中的作用：</div>
+              <p class="cb-detail-para">
+                星基元素作为空-天-地三层网络中的天基支撑层，为云匣子体系提供跨区域、广覆盖的数据中继与链路保障能力，确保机载感知与地面重构、专家研判、决策推演之间的数据流转连续可靠，是实现“数据采集—感知识别—处置协同”链路闭环的重要基础。
+              </p>
+            </div>
+          </template>
+          <!-- 地面 -->
+          <template v-else-if="detailModalType === 'ground'">
+            <div class="cb-detail-section">
+              <div class="cb-detail-label">单元类型：</div>
+              <div class="cb-detail-value">地面元素</div>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-label">包含元素：</div>
+              <ul class="cb-detail-list">
+                <li>地面飞行场景实时重构系统</li>
+                <li>地面运营控制中心应急专家组系统</li>
+                <li>体系应急决策推演系统</li>
+                <li>地面运行控制中心</li>
+                <li>应急处置执行 / 应急处置系统</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">功能说明：</div>
+              <p class="cb-detail-para">
+                地面元素是云匣子体系的“态势获取—专家研判—推演决策—协同指挥—处置执行”闭环核心，负责接收机载数据与告警，完成飞行场景重构与风险识别，组织专家组研讨并借助推演系统生成处置方案，最终协调各相关部门执行落地。
+              </p>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">主要功能：</div>
+              <ul class="cb-detail-list">
+                <li><strong>1）飞行场景实时重构：</strong>地面侧快速完成飞行态势数字化重构，为突发紧急场景下获取航空器安全态势提供分析手段与风险识别能力。</li>
+                <li><strong>2）应急专家组研判：</strong>基于告警与态势信息组织讨论，直接制定应急处置方案并提出处置意见。</li>
+                <li><strong>3）应急决策推演：</strong>依据航空器风险状态生成多个动态决策方案，在仿真场景中开展平行推演，模拟处置过程并输出推演结果，辅助专家组制定最终方案，并支持方案分发至机组、航司、空管、机场等部门。</li>
+                <li><strong>4）运行控制与协同调度：</strong>作为地面侧运行与指挥中枢，承接方案落地过程中的组织协调与资源调度（与空管/机场/航司等联动在动态示例中体现）。</li>
+                <li><strong>5）应急处置执行：</strong>根据推演结果与专家组方案，协调机组、航司、空管、机场等应急部门各分支，完成紧急事态的下达、通知与执行。</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">关联关系：</div>
+              <ul class="cb-detail-list">
+                <li><strong>与链路元素连接：</strong>通过 5G ATG / HTS 卫星链路接入空地数据通道，接收告警包与飞行态势数据。</li>
+                <li><strong>与机载元素连接：</strong>接收机载感知预警系统/机载通感算一体设备上报的状态信息与告警数据，并向机组下发处置方案与指令（控制流在动态示例中体现）。</li>
+                <li><strong>地面内部关联：</strong>信息流可从机载感知预警系统进入地面专家组、推演系统；控制流由推演系统回到专家组，再分发至空管、机场、航司等部门执行。</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">在体系中的作用：</div>
+              <p class="cb-detail-para">
+                地面元素是云匣子体系的决策与处置中枢，通过“实时重构 + 专家研判 + 推演决策 + 协同执行”形成可追踪、可闭环的应急处置链条，把机载侧的主动感知预警转化为地面侧可落地的组织调度与处置行动。
+              </p>
+            </div>
+          </template>
+          <!-- 机载 -->
+          <template v-else-if="detailModalType === 'airborne'">
+            <div class="cb-detail-section">
+              <div class="cb-detail-label">单元类型：</div>
+              <div class="cb-detail-value">机载元素</div>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-label">包含元素：</div>
+              <ul class="cb-detail-list">
+                <li>机载监测与云匣子协同终端（统称：机载侧协同能力）</li>
+                <li>关联设备/系统（文档定义的机载端）：黑匣子（FDR/CVR）、通感算一体机载感知预警设备、机组</li>
+                <li>数据采集系统（FDR/CVR）与通感算一体机载感知预警系统（模块表）</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">功能说明：</div>
+              <p class="cb-detail-para">
+                机载监测与云匣子协同终端是云匣子体系的空中侧“数据采集—态势感知—告警上报—指令协同”的入口单元：一方面采集并记录飞行数据与舱音数据，另一方面通过通感算一体机载感知预警能力融合通信与感知获取航空器位置与轨迹信息，并在异常发生时将告警包经空地链路快速传递至地面系统，支撑后续研判与处置。
+              </p>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">主要功能：</div>
+              <ul class="cb-detail-list">
+                <li><strong>1）机载数据采集与留存：</strong>由 FDR/CVR 记录飞行过程中的关键参数（时间、速度、高度、飞机倾斜度、发动机参数等）与驾驶舱话音数据，确保机上数据安全留存。</li>
+                <li><strong>2）机载主动感知预警：</strong>通感算一体机载感知预警系统融合通信与感知能力，获取航空器位置与轨迹信息，并在异常场景触发预警（动态示例中以节点高亮/拖尾表现）。</li>
+                <li><strong>3）告警与状态上报：</strong>将机载侧告警与状态信息通过 5G ATG / HTS 卫星链路快速同步到地面专家组与推演系统，支撑地面实时重构与决策推演启动。</li>
+                <li><strong>4）协同处置承接：</strong>接收地面专家组/推演系统形成的处置方案与指令，在机组侧执行/确认并反馈，形成处置闭环（控制流在动态示例中体现）。</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">关联关系：</div>
+              <ul class="cb-detail-list">
+                <li><strong>与链路元素连接：</strong>通过 5G ATG 链路与 HTS 卫星链路实现空地双向同步传输（动态示例明确出现“5G ATG/HTS”链路）。</li>
+                <li><strong>与地面元素连接：</strong>上行数据流进入地面专家组与体系推演系统；下行控制流由地面系统分发到相关部门并回到机组侧执行。</li>
+                <li><strong>与星基元素连接：</strong>在卫星链路场景下，通过星—机通信完成数据中继与广域覆盖支撑（静态架构中明确卫星-飞机链路关系）。</li>
+              </ul>
+            </div>
+            <div class="cb-detail-section">
+              <div class="cb-detail-sectitle">在体系中的作用：</div>
+              <p class="cb-detail-para">
+                机载监测与云匣子协同终端是云匣子体系“主动预警”的起点：把机载侧的实时监测、感知与告警转化为可传输的数据包，并通过空地链路驱动地面侧的场景重构、专家研判与推演决策，从而实现“感知—识别—处置”的全链条闭环。
+              </p>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import CesiumViewport from '../components/CesiumViewport.vue';
+import { buildFlightPathFromRunways, buildSampledPositionFromPath } from '../utils/flightPath';
 import mapPopup from '../assets/staticPage/map_popup.png';
 import warnIcon from '../assets/staticPage/map_warnicon.png';
 
@@ -205,6 +377,90 @@ const planeProgress = ref(0);
 let _planeMoveRaf = 0;
 const planePathEnabled = ref(false);
 let _tickUnsub = null;
+
+const planeScreenInfo = ref(null);
+const activePopup = ref(null);
+const detailModalType = ref(null); // 'star' | 'ground' | 'airborne' | null
+const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
+
+/** 地图标点配置（来自 units.json），分组后供地面弹窗列表使用 */
+const unitsConfig = ref(null);
+const unitsGroups = computed(() => {
+  const cfg = unitsConfig.value;
+  if (!cfg) return [];
+  const groups = [];
+  const ground = cfg.ground;
+  if (ground?.clusters?.length) {
+    ground.clusters.forEach((c) => {
+      groups.push({ name: c.name, units: c.units || [] });
+    });
+  }
+  const star = cfg.space?.star_based;
+  if (star?.length) {
+    groups.push({ name: '星基元素', units: star });
+  }
+  return groups;
+});
+
+function openDetailModal(kind) {
+  detailModalType.value = kind;
+}
+function closeDetailModal() {
+  detailModalType.value = null;
+}
+const detailModalTitle = computed(() => {
+  const t = detailModalType.value;
+  if (t === 'star') return '星基元素 - 详细信息';
+  if (t === 'ground') return '地面元素 - 详细信息';
+  if (t === 'airborne') return '机载元素 - 详细信息';
+  return '';
+});
+
+function onMarkerClick(payload) {
+  activePopup.value = payload;
+}
+function onMarkerMove(p) {
+  if (activePopup.value) activePopup.value.screen = { x: p.x, y: p.y };
+}
+function closePopup() {
+  activePopup.value = null;
+  vpStatic.value?.clearActiveMarker?.();
+}
+const popupStyle = computed(() => {
+  const s = activePopup.value?.screen;
+  if (!s) return { position: 'fixed', right: '16px', top: '80px' };
+  return { position: 'fixed', left: `${s.x + 12}px`, top: `${s.y - 12}px` };
+}); // 相机高度 > 500km 时隐藏 popup，显示航迹线+起点
+
+function onPlaneScreenInfo(info) {
+  planeScreenInfo.value = info;
+}
+
+const showPlanePopup = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return false;
+  return info.cameraHeight != null && info.cameraHeight <= POPUP_CAMERA_HEIGHT_THRESHOLD;
+});
+
+const planePopupStyle = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return {};
+  const offsetX = 14;
+  const offsetY = 8;
+  return {
+    transform: `translate(${info.x + offsetX}px, ${info.y + offsetY}px)`
+  };
+});
+
+const planeEnvText = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return '—';
+  const h = info.alt;
+  if (h < 100) return '起飞/滑跑';
+  if (h < 3000) return '爬升';
+  if (h < 8000) return '巡航';
+  return '进近/下降';
+});
 
 const FOLLOW_RANGE_M = 400;
 const FOLLOW_UP_M = 60;
@@ -284,10 +540,7 @@ const togglePlanePath = () => {
     return;
   }
 
-  const positions = getRoutePositions();
-  const baseSeconds = 60 * 5;
-  const secondsTotal = baseSeconds * 5;
-  const { prop, start, stop } = buildSampledPosition(viewer, positions, secondsTotal);
+  const { prop, start, stop } = buildSampledPositionFromPath(flightPath, 300);
 
   vpStatic.value?.applyPathAnimation?.(prop, { trailSeconds: 12 / 50 });
 
@@ -295,7 +548,7 @@ const togglePlanePath = () => {
   viewer.clock.stopTime = stop;
   viewer.clock.currentTime = start;
   viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-  viewer.clock.multiplier = 1;
+  viewer.clock.multiplier = 0.1; // 仿真 2 倍速，配合 secondsTotal 减半使动画约一半时间跑完
   viewer.clock.shouldAnimate = true;
 
   const plane = vpStatic.value?.getPlaneEntity?.();
@@ -314,7 +567,7 @@ const togglePlaneMove = () => {
     return;
   }
   const start = performance.now();
-  const durationMs = 60000 * 5; // 更慢速度跑完全程
+  const durationMs = (60000 * 5) / 2; // 总时长减半，动画约 2.5 分钟跑完全程
   const tick = () => {
     if (!planeMoveEnabled.value) return;
     const u = ((performance.now() - start) % durationMs) / durationMs;
@@ -328,74 +581,33 @@ const togglePlaneMove = () => {
 let _trailTickBound = false;
 let _trailTickViewer = null;
 
-const ROUTE_SAMPLES = 120;
+// 跑道贴地点位（唯一数据源 -> buildFlightPathFromRunways）
+const startRunway = { a: { lon: 108.742455, lat: 34.439922 }, b: { lon: 108.761345, lat: 34.453589 } };
+const endRunway = { a: { lon: 116.430944, lat: 39.473803 }, b: { lon: 116.427175, lat: 39.497722 } };
 
-const flightRouteXA_BJDX = [
-  { phase: 'takeoff',  lon: 108.751, lat: 34.447, alt:    0 },
-  { phase: 'climb',    lon: 109.250, lat: 34.900, alt: 2500 },
-  { phase: 'climb',    lon: 110.300, lat: 35.650, alt: 8200 },
-  { phase: 'cruise',   lon: 111.800, lat: 36.650, alt: 10500 },
-  { phase: 'cruise',   lon: 113.400, lat: 37.500, alt: 10700 },
-  { phase: 'cruise',   lon: 114.900, lat: 38.300, alt: 10600 },
-  { phase: 'approach', lon: 115.750, lat: 39.050, alt:  3200 },
-  { phase: 'approach', lon: 116.200, lat: 39.350, alt:   900 },
-  { phase: 'landing',  lon: 116.410, lat: 39.510, alt:    0 },
-];
+const flightPath = buildFlightPathFromRunways(startRunway, endRunway, { cruiseAlt: 10000 });
 
 const phaseConfig = {
   takeoff:  { name: '起飞', level: '机场级' },
   climb:    { name: '爬升', level: '区域级' },
   cruise:   { name: '巡航', level: '航路级' },
+  descent:  { name: '下降', level: '航路级' },
   approach: { name: '进近', level: '城市级' },
   landing:  { name: '降落', level: '机场级' }
 };
 
-const sampleCatmullRom = (route, samplesPerSeg = 28) => {
-  const cps = route.map(p => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
-  if (cps.length < 2) return cps;
-  const times = cps.map((_, i) => i);
-  const spline = new Cesium.CatmullRomSpline({ times, points: cps });
+const pathPointsForViewer = flightPath;
 
-  const out = [];
-  const maxT = times[times.length - 1];
-  const dt = 1 / samplesPerSeg;
-  for (let t = 0; t <= maxT; t += dt) out.push(spline.evaluate(t));
-  out.push(cps[cps.length - 1]);
-  // clamp height >= 0 to avoid spline overshoot below ground
-  for (let i = 0; i < out.length; i++) {
-    const c = Cesium.Cartographic.fromCartesian(out[i]);
-    const h = Math.max(0, c.height || 0);
-    out[i] = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, h);
-  }
-  return out;
-};
-
-let _routePositionsCache = null;
-const getRoutePositions = () => {
-  if (_routePositionsCache) return _routePositionsCache;
-  _routePositionsCache = sampleCatmullRom(flightRouteXA_BJDX, ROUTE_SAMPLES);
-  return _routePositionsCache;
-};
-
-const buildSampledPosition = (viewer, positions, secondsTotal = 60) => {
-  const prop = new Cesium.SampledPositionProperty();
-  const start = Cesium.JulianDate.now();
-  const n = positions.length;
-  const dt = secondsTotal / Math.max(1, n - 1);
-  for (let i = 0; i < n; i++) {
-    const t = Cesium.JulianDate.addSeconds(start, i * dt, new Cesium.JulianDate());
-    prop.addSample(t, positions[i]);
-  }
-  prop.setInterpolationOptions({
-    interpolationDegree: 1,
-    interpolationAlgorithm: Cesium.LinearApproximation
-  });
+const phaseIndexMap = computed(() => {
+  const len = flightPath.length;
   return {
-    prop,
-    start,
-    stop: Cesium.JulianDate.addSeconds(start, secondsTotal, new Cesium.JulianDate())
+    takeoff: 0,
+    climb: Math.floor(len * 0.12),
+    cruise: Math.floor(len * 0.55),
+    approach: Math.floor(len * 0.85),
+    landing: Math.max(0, len - 2)
   };
-};
+});
 
 // --- Trail material for polyline (flowing texture) ---
 const PolylineTrailMaterial = (() => {
@@ -468,7 +680,7 @@ const drawFlightRoute = (viewer) => {
   const existed = viewer.entities.getById?.(ROUTE_ENTITY_ID);
   if (existed) return;
 
-  const positions = getRoutePositions();
+  const positions = flightPath.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt));
   viewer.entities.add({
     id: ROUTE_ENTITY_ID,
     polyline: {
@@ -571,11 +783,16 @@ const onTool = (name) => {
   activeTool.value = name;
   console.log('[StaticTool]', name);
   showWarn.value = false;
-  if (name === '起飞') setPhase('takeoff');
-  if (name === '爬升') setPhase('climb');
-  if (name === '巡航') setPhase('cruise');
-  if (name === '进近') setPhase('approach');
-  if (name === '降落') setPhase('landing');
+  if (name === '起飞') { setPhase('takeoff'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.takeoff); }
+  if (name === '爬升') { setPhase('climb'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.climb); }
+  if (name === '巡航') { setPhase('cruise'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.cruise); }
+  if (name === '进近') { setPhase('approach'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.approach); }
+  if (name === '降落') { setPhase('landing'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.landing); }
+  if (['起飞', '爬升', '巡航', '进近', '降落'].includes(name)) {
+    const v = vpStatic.value?.getViewer?.();
+    const plane = vpStatic.value?.getPlaneEntity?.();
+    if (v && plane) v.flyTo(plane, { duration: 0.6 });
+  }
   if (name === '巡航故障') showWarn.value = true;
   if (name === '放大') flyZoom(1);
   if (name === '缩小') flyZoom(-1);
@@ -583,6 +800,27 @@ const onTool = (name) => {
   if (name === '地面') viewChina();
   if (name === '沿线飞行') togglePlanePath();
 };
+
+/** 相机飞行聚焦到指定标点（地面弹窗列表点击） */
+function flyToUnit(unit) {
+  const viewer = vpStatic.value?.getViewer?.();
+  if (!viewer || !unit) return;
+  const lon = unit.lon;
+  const lat = unit.lat;
+  const alt = unit.alt_m ?? 0;
+  const camHeight = Math.max(alt + 2000, 5000);
+  const destination = Cesium.Cartesian3.fromDegrees(lon, lat, camHeight);
+  viewer.camera.flyTo({
+    destination,
+    orientation: {
+      heading: 0,
+      pitch: Cesium.Math.toRadians(-90),
+      roll: 0
+    },
+    duration: 0.8,
+    easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+  });
+}
 
 const onMapMode = (m) => {
   mapMode.value = m;
@@ -631,6 +869,282 @@ onMounted(() => {
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+
+  // 加载地图标点配置，供地面模式弹窗列表使用
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+  fetch(`${base}/config/units.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (data) unitsConfig.value = data;
+    })
+    .catch(() => {});
+});
+
+onBeforeUnmount(() => {
+  planeScreenInfo.value = null;
 });
 </script>
 
+<style scoped>
+.cb-cesium-layer--with-popup {
+  position: relative;
+}
+.cb-plane-follow-popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  min-width: 140px;
+  padding: 6px 10px;
+  background: rgba(0, 20, 40, 0.92);
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #e0f0ff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.cb-plane-follow-popup-hd {
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+.cb-plane-follow-popup-bd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cb-plane-follow-row {
+  white-space: nowrap;
+}
+.marker-popup {
+  z-index: 100;
+  min-width: 200px;
+  padding: 0;
+  background: rgba(0, 20, 40, 0.95);
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #e0f0ff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.marker-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.marker-popup-title {
+  font-weight: 600;
+}
+.marker-popup-close {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.marker-popup-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 地面模式：地图标点列表弹窗（无背景图，自设计样式） */
+.cb-map-popup--units {
+  background-image: none;
+  background: rgba(0, 24, 48, 0.96);
+  border: 1px solid rgba(100, 180, 255, 0.45);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  min-width: 240px;
+  max-width: 280px;
+}
+.cb-map-popup-units-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+  font-size: 13px;
+  color: #e0f0ff;
+}
+.cb-map-popup-units-close {
+  opacity: 0.75;
+  cursor: default;
+  font-size: 16px;
+}
+.cb-map-popup--units .cb-float-bd.cb-units-list-bd {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px 0;
+  background: transparent;
+}
+.cb-map-popup--units .cb-units-group {
+  margin-bottom: 12px;
+}
+.cb-map-popup--units .cb-units-group:last-child {
+  margin-bottom: 0;
+}
+.cb-map-popup--units .cb-units-group-title {
+  color: #ffd54a;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  padding: 0 12px;
+}
+.cb-map-popup--units .cb-units-item {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #e0f0ff;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.cb-map-popup--units .cb-units-item:hover {
+  background: rgba(100, 180, 255, 0.12);
+  border-left-color: rgba(100, 180, 255, 0.6);
+}
+.cb-map-popup--units .cb-units-empty {
+  padding: 12px 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* 地图标点 + 单元详情弹窗 滚动条统一样式 */
+.cb-map-popup--units .cb-float-bd.cb-units-list-bd,
+.cb-detail-modal-bd {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 180, 255, 0.55) rgba(255, 255, 255, 0.06);
+}
+.cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar,
+.cb-detail-modal-bd::-webkit-scrollbar {
+  width: 6px;
+}
+.cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar-track,
+.cb-detail-modal-bd::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+.cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar-thumb,
+.cb-detail-modal-bd::-webkit-scrollbar-thumb {
+  background: rgba(100, 180, 255, 0.5);
+  border-radius: 3px;
+}
+.cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar-thumb:hover,
+.cb-detail-modal-bd::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 180, 255, 0.75);
+}
+
+/* 单元详情弹窗（与 marker-popup / cb-warn 风格统一） */
+.cb-detail-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.cb-detail-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 20, 40, 0.95);
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #e0f0ff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+.cb-detail-modal-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+.cb-detail-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0f0ff;
+}
+.cb-detail-modal-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+.cb-detail-modal-close:hover {
+  color: #fff;
+}
+.cb-detail-modal-bd {
+  padding: 14px 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cb-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cb-detail-label {
+  color: #ffd54a;
+  font-weight: 600;
+}
+.cb-detail-value {
+  color: #e0f0ff;
+}
+.cb-detail-sectitle {
+  color: #ffd54a;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.cb-detail-para {
+  margin: 0;
+  line-height: 1.6;
+  color: rgba(224, 240, 255, 0.95);
+}
+.cb-detail-list {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.55;
+  color: rgba(224, 240, 255, 0.95);
+}
+.cb-detail-list li {
+  margin-bottom: 6px;
+}
+.cb-detail-list li:last-child {
+  margin-bottom: 0;
+}
+.cb-detail-list li strong {
+  color: #e0f0ff;
+  font-weight: 600;
+}
+.cb-detail-list--inline {
+  list-style: none;
+  padding-left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.cb-detail-list--inline li::before {
+  content: '·';
+  margin-right: 6px;
+  color: #ffd54a;
+}
+</style>
