@@ -47,7 +47,7 @@
 
               <!-- Cesium 视口 + 飞机跟随 popup（相机高度≤阈值时显示） -->
               <div class="cb-cesium-layer cb-cesium-layer--with-popup">
-                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" />
+                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @module-highlight-screen="onModuleHighlightScreen" />
                 <div
                   v-if="showPlanePopup && planeScreenInfo"
                   class="cb-plane-follow-popup"
@@ -60,6 +60,18 @@
                     <div class="cb-plane-follow-row">地速：{{ planeScreenInfo.speed }} km/h</div>
                     <div class="cb-plane-follow-row">状态：{{ planeEnvText }}</div>
                   </div>
+                </div>
+                <!-- 运行模块高亮 popup（与飞机 popup 同层、同定位方式） -->
+                <div
+                  v-if="selectedModuleIndex !== null && moduleHighlightScreen"
+                  class="cb-module-highlight-popup"
+                  :style="moduleHighlightPopupStyle"
+                >
+                  <div class="cb-module-highlight-popup-hd">
+                    <span>{{ moduleHighlightTitle }}</span>
+                    <button type="button" class="cb-module-highlight-popup-close" aria-label="关闭" @click="closeModuleHighlight">×</button>
+                  </div>
+                  <div class="cb-module-highlight-popup-bd">{{ moduleHighlightContent }}</div>
                 </div>
               </div>
 
@@ -190,14 +202,41 @@
                 <p><span class="cb-link">点击查看详细信息</span></p>
               </div>
             </template>
-            <template v-else>
+            <template v-else-if="activeTab === 'modules'">
               <div class="cb-item">
-                <h4><span style="color:#ffd54a;">模块1：</span>运行监控</h4>
-                <p><span class="cb-link">点击查看详细信息</span></p>
+                <h4><span style="color:#ffd54a;">1，数据采集系统：</span></h4>
+                <p>记录民用航空器飞行数据和舱音数据。</p>
+                <p><span class="cb-link" @click="openModuleHighlight(0)">点击查看详细信息</span></p>
               </div>
               <div class="cb-item">
-                <h4><span style="color:#ffd54a;">模块2：</span>协同决策</h4>
-                <p><span class="cb-link">点击查看详细信息</span></p>
+                <h4><span style="color:#ffd54a;">2，通感算一体机载感知预警系统：</span></h4>
+                <p>融合通信和感知能力，获得航空器位置和轨迹信息。</p>
+                <p><span class="cb-link" @click="openModuleHighlight(1)">点击查看详细信息</span></p>
+              </div>
+              <div class="cb-item">
+                <h4><span style="color:#ffd54a;">3，HTS/5G ATG 通信系统：</span></h4>
+                <p>实现飞机数据和地面的双向同步传输。</p>
+                <p><span class="cb-link" @click="openModuleHighlight(2)">点击查看详细信息</span></p>
+              </div>
+              <div class="cb-item">
+                <h4><span style="color:#ffd54a;">4，地面飞行场景实时重构系统：</span></h4>
+                <p>识别潜在安全隐患，为突发紧急场景下地面实时获取航空器安全态势提供数据分析手段。</p>
+                <p><span class="cb-link" @click="openModuleHighlight(3)">点击查看详细信息</span></p>
+              </div>
+              <div class="cb-item">
+                <h4><span style="color:#ffd54a;">5，地面运营控制中心应急专家组系统：</span></h4>
+                <p>专家组讨论直接制定应急处置方案，并提出相关意见。</p>
+                <p><span class="cb-link" @click="openModuleHighlight(4)">点击查看详细信息</span></p>
+              </div>
+              <div class="cb-item">
+                <h4><span style="color:#ffd54a;">6，体系应急决策推演系统：</span></h4>
+                <p>基于航空器风险状态生成动态决策方案，模拟处置过程并提供推演结果。</p>
+                <p><span class="cb-link" @click="openModuleHighlight(5)">点击查看详细信息</span></p>
+              </div>
+              <div class="cb-item">
+                <h4><span style="color:#ffd54a;">7，应急处置系统：</span></h4>
+                <p>协调机组、航司、空管、机场等应急部门，实现紧急事态的下达和通知。</p>
+                <p><span class="cb-link" @click="openModuleHighlight(6)">点击查看详细信息</span></p>
               </div>
             </template>
           </div>
@@ -356,7 +395,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import CesiumViewport from '../components/CesiumViewport.vue';
@@ -382,6 +421,48 @@ const planeScreenInfo = ref(null);
 const activePopup = ref(null);
 const detailModalType = ref(null); // 'star' | 'ground' | 'airborne' | null
 const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
+
+/** 运行模块七大模块标题与说明（点击「点击查看详细信息」时高亮飞机并显示此内容） */
+const MODULE_DESCRIPTIONS = [
+  { title: '1，数据采集系统', content: '记录民用航空器飞行数据和舱音数据。' },
+  { title: '2，通感算一体机载感知预警系统', content: '融合通信和感知能力，获得航空器位置和轨迹信息。' },
+  { title: '3，HTS/5G ATG 通信系统', content: '实现飞机数据和地面的双向同步传输。' },
+  { title: '4，地面飞行场景实时重构系统', content: '识别潜在安全隐患，为突发紧急场景下地面实时获取航空器安全态势提供数据分析手段。' },
+  { title: '5，地面运营控制中心应急专家组系统', content: '专家组讨论直接制定应急处置方案，并提出相关意见。' },
+  { title: '6，体系应急决策推演系统', content: '基于航空器风险状态生成动态决策方案，模拟处置过程并提供推演结果。' },
+  { title: '7，应急处置系统', content: '协调机组、航司、空管、机场等应急部门，实现紧急事态的下达和通知。' }
+];
+const selectedModuleIndex = ref(null);
+const moduleHighlightScreen = ref(null);
+
+function openModuleHighlight(index) {
+  selectedModuleIndex.value = index;
+  vpStatic.value?.setModuleHighlight?.(index);
+  vpStatic.value?.flyToModuleCube?.(20);
+}
+function closeModuleHighlight() {
+  selectedModuleIndex.value = null;
+  moduleHighlightScreen.value = null;
+  vpStatic.value?.setModuleHighlight?.(null);
+}
+function onModuleHighlightScreen(pos) {
+  if (selectedModuleIndex.value !== null) moduleHighlightScreen.value = pos;
+}
+const moduleHighlightPopupStyle = computed(() => {
+  const s = moduleHighlightScreen.value;
+  if (!s) return {};
+  const offsetX = 14;
+  const offsetY = 8;
+  return { transform: `translate(${s.x + offsetX}px, ${s.y + offsetY}px)` };
+});
+const moduleHighlightTitle = computed(() => {
+  const i = selectedModuleIndex.value;
+  return i !== null && MODULE_DESCRIPTIONS[i] ? MODULE_DESCRIPTIONS[i].title : '';
+});
+const moduleHighlightContent = computed(() => {
+  const i = selectedModuleIndex.value;
+  return i !== null && MODULE_DESCRIPTIONS[i] ? MODULE_DESCRIPTIONS[i].content : '';
+});
 
 /** 地图标点配置（来自 units.json），分组后供地面弹窗列表使用 */
 const unitsConfig = ref(null);
@@ -783,6 +864,8 @@ const onTool = (name) => {
   activeTool.value = name;
   console.log('[StaticTool]', name);
   showWarn.value = false;
+  vpStatic.value?.setPlaneFaultFlash?.(false);
+
   if (name === '起飞') { setPhase('takeoff'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.takeoff); }
   if (name === '爬升') { setPhase('climb'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.climb); }
   if (name === '巡航') { setPhase('cruise'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.cruise); }
@@ -793,7 +876,18 @@ const onTool = (name) => {
     const plane = vpStatic.value?.getPlaneEntity?.();
     if (v && plane) v.flyTo(plane, { duration: 0.6 });
   }
-  if (name === '巡航故障') showWarn.value = true;
+  if (name === '巡航故障') {
+    showWarn.value = true;
+    vpStatic.value?.setPlaneFaultFlash?.(true);
+    const v = vpStatic.value?.getViewer?.();
+    const plane = vpStatic.value?.getPlaneEntity?.();
+    if (v && plane) {
+      v.flyTo(plane, {
+        duration: 0.8,
+        offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-25), 200)
+      });
+    }
+  }
   if (name === '放大') flyZoom(1);
   if (name === '缩小') flyZoom(-1);
   if (name === '飞机') focusPlane();
@@ -858,6 +952,10 @@ const onMapMode = (m) => {
   }
 };
 
+watch(activeTab, (tab) => {
+  if (tab !== 'modules') closeModuleHighlight();
+});
+
 onMounted(() => {
   // CesiumViewport 内部 onMounted 才创建 viewer，这里用 raf 等待一次就绪
   const tick = () => {
@@ -886,9 +984,67 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 让 cb-viewport 与地图层铺满可用高度，地图铺满 viewport */
+.cb-viewport {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.cb-viewport .cb-cesium-layer {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  inset: unset;
+}
+.cb-viewport .cb-cesium-layer :deep(.cesium-container) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .cb-cesium-layer--with-popup {
   position: relative;
 }
+.cb-module-highlight-popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 0;
+  background: rgba(0, 24, 48, 0.95);
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #e0f0ff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+.cb-module-highlight-popup-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+}
+.cb-module-highlight-popup-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.cb-module-highlight-popup-bd {
+  padding: 10px 12px;
+  line-height: 1.5;
+  color: rgba(224, 240, 255, 0.95);
+}
+
 .cb-plane-follow-popup {
   position: absolute;
   left: 0;

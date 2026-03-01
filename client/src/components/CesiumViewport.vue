@@ -12,7 +12,7 @@ import { createCesiumViewer, destroyCesiumViewer } from '../engine/cesium/viewer
 const planeBillboardImgUrl = new URL('../assets/img/planeBillBoardImg.png', import.meta.url).href;
 const unitBillboardImgUrl = new URL('../assets/img/planeBillBoardImg2.png', import.meta.url).href;
 
-const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info']);
+const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'module-highlight-screen']);
 
 const props = defineProps({
   modelUrl: { type: String, default: '' },
@@ -39,7 +39,22 @@ let billboardEntity = null;
 let clickHandler = null;
 let pickHandler = null;
 let activeMarkerEntity = null;
+let _planeFaultFlashInterval = null;
+let _moduleHighlightIndex = null;
+let _moduleCubeEntity = null;
+let _moduleCubeFlashInterval = null;
+let _moduleCubeFlashOn = true;
 const DEFAULT_HEADING_OFFSET_RAD = Cesium.Math.PI_OVER_TWO;
+/** 七大模块各自立方体相对飞机的位置（机体系：forward=X, right=Y, up=Z，单位米） */
+const MODULE_CUBE_OFFSETS = [
+  { f: 8, r: 0, u: 2 },
+  { f: 7, r: 2.5, u: 2 },
+  { f: 7, r: -2.5, u: 2 },
+  { f: 6, r: 0, u: 3.5 },
+  { f: 9, r: 1.5, u: 1 },
+  { f: 8.5, r: -2, u: 2.5 },
+  { f: 6.5, r: 2, u: 3 }
+];
 let winRafId = 0;
 
 const UNIT_ENTITY_IDS = new Set();
@@ -434,6 +449,107 @@ const getCameraHeight = () => {
   return carto.height;
 };
 
+/** 飞机模型巡航故障红色闪烁：true 开启，false 关闭 */
+const setPlaneFaultFlash = (enable) => {
+  if (_planeFaultFlashInterval) {
+    clearInterval(_planeFaultFlashInterval);
+    _planeFaultFlashInterval = null;
+  }
+  if (!modelEntity?.model) return;
+  const model = modelEntity.model;
+  if (!enable) {
+    model.silhouetteColor = undefined;
+    model.silhouetteSize = undefined;
+    viewer?.scene?.requestRender?.();
+    return;
+  }
+  model.silhouetteColor = new Cesium.ConstantProperty(Cesium.Color.RED);
+  let flashOn = true;
+  model.silhouetteSize = new Cesium.ConstantProperty(2.5);
+  _planeFaultFlashInterval = setInterval(() => {
+    if (!modelEntity?.model) return;
+    flashOn = !flashOn;
+    modelEntity.model.silhouetteSize = new Cesium.ConstantProperty(flashOn ? 2.5 : 0);
+    viewer?.scene?.requestRender?.();
+  }, 280);
+};
+
+/** 运行模块高亮：飞机半透明 + 相对飞机位置的闪烁立方体，并每帧 emit 立方体屏幕坐标 */
+const setModuleHighlight = (index) => {
+  _moduleHighlightIndex = index !== undefined && index !== null ? index : null;
+
+  if (_moduleCubeFlashInterval) {
+    clearInterval(_moduleCubeFlashInterval);
+    _moduleCubeFlashInterval = null;
+  }
+  if (_moduleCubeEntity && viewer?.entities) {
+    viewer.entities.remove(_moduleCubeEntity);
+    _moduleCubeEntity = null;
+  }
+  if (modelEntity?.model) {
+    modelEntity.model.color = undefined;
+  }
+
+  if (_moduleHighlightIndex === null) return;
+
+  if (!viewer?.entities || !modelEntity) return;
+
+  modelEntity.model.color = new Cesium.ConstantProperty(Cesium.Color.WHITE.withAlpha(0.4));
+
+  const scratchForward = new Cesium.Cartesian3();
+  const scratchRight = new Cesium.Cartesian3();
+  const scratchUp = new Cesium.Cartesian3();
+  const scratchVec = new Cesium.Cartesian3();
+  const cubePosition = new Cesium.CallbackProperty((time, result) => {
+    if (!viewer || !modelEntity) return undefined;
+    const pos = modelEntity.position?.getValue?.(time);
+    const q = modelEntity.orientation?.getValue?.(time);
+    if (!pos || !q) return undefined;
+    const idx = _moduleHighlightIndex ?? 0;
+    const off = MODULE_CUBE_OFFSETS[idx] ?? MODULE_CUBE_OFFSETS[0];
+    const m3 = Cesium.Matrix3.fromQuaternion(q);
+    Cesium.Matrix3.multiplyByVector(m3, Cesium.Cartesian3.UNIT_X, scratchForward);
+    Cesium.Matrix3.multiplyByVector(m3, Cesium.Cartesian3.UNIT_Y, scratchRight);
+    Cesium.Matrix3.multiplyByVector(m3, Cesium.Cartesian3.UNIT_Z, scratchUp);
+    Cesium.Cartesian3.multiplyByScalar(scratchForward, off.f, scratchForward);
+    Cesium.Cartesian3.multiplyByScalar(scratchRight, off.r, scratchRight);
+    Cesium.Cartesian3.multiplyByScalar(scratchUp, off.u, scratchUp);
+    Cesium.Cartesian3.add(scratchForward, scratchRight, scratchVec);
+    Cesium.Cartesian3.add(scratchVec, scratchUp, scratchVec);
+    return Cesium.Cartesian3.add(pos, scratchVec, result || new Cesium.Cartesian3());
+  }, false);
+
+  _moduleCubeFlashOn = true;
+  const cubeOrientation = new Cesium.CallbackProperty((time, result) => {
+    if (!modelEntity?.orientation) return undefined;
+    return modelEntity.orientation.getValue(time, result || new Cesium.Quaternion());
+  }, false);
+  const boxColor = new Cesium.CallbackProperty((time, result) => {
+    return (_moduleCubeFlashOn ? Cesium.Color.CYAN.withAlpha(0.95) : Cesium.Color.YELLOW.withAlpha(0.9)).clone(result);
+  }, false);
+  const boxEntity = viewer.entities.add({
+    position: cubePosition,
+    orientation: cubeOrientation,
+    box: {
+      dimensions: new Cesium.Cartesian3(0.5, 0.5, 0.5),
+      material: new Cesium.ColorMaterialProperty(boxColor),
+      outline: true,
+      outlineColor: Cesium.Color.WHITE,
+      outlineWidth: 1
+    }
+  });
+  _moduleCubeEntity = boxEntity;
+};
+
+/** 相机飞行聚焦到运行模块高亮立方体，distance 为相机与立方体的距离（米） */
+const flyToModuleCube = (distance = 100) => {
+  if (!viewer?.camera || !_moduleCubeEntity) return;
+  viewer.flyTo(_moduleCubeEntity, {
+    duration: 0.8,
+    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-25), distance)
+  });
+};
+
 defineExpose({
   resize,
   requestRender,
@@ -445,6 +561,9 @@ defineExpose({
   setPlanePoseAtIndex,
   getPlaneScreenInfo,
   getCameraHeight,
+  setPlaneFaultFlash,
+  setModuleHighlight,
+  flyToModuleCube,
   clearActiveMarker: () => { activeMarkerEntity = null; }
 });
 
@@ -512,6 +631,19 @@ onMounted(async () => {
   viewer.scene.postRender.addEventListener(() => {
     const info = getPlaneScreenInfo();
     if (info) emit('plane-screen-info', info);
+  });
+
+  const scratchCartesian2Module = new Cesium.Cartesian2();
+  let _moduleHighlightFrameCount = 0;
+  viewer.scene.postRender.addEventListener(() => {
+    if (_moduleHighlightIndex == null || !_moduleCubeEntity) return;
+    _moduleHighlightFrameCount++;
+    _moduleCubeFlashOn = (_moduleHighlightFrameCount % 20) < 10;
+    const pos = _moduleCubeEntity.position?.getValue?.(viewer.clock.currentTime);
+    if (!pos) return;
+    const win = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos, scratchCartesian2Module);
+    if (!win) return;
+    emit('module-highlight-screen', { x: win.x, y: win.y });
   });
 
   if (props.splitMode) {
@@ -630,6 +762,20 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  if (_planeFaultFlashInterval) {
+    clearInterval(_planeFaultFlashInterval);
+    _planeFaultFlashInterval = null;
+  }
+  if (_moduleCubeFlashInterval) {
+    clearInterval(_moduleCubeFlashInterval);
+    _moduleCubeFlashInterval = null;
+  }
+  if (_moduleCubeEntity && viewer?.entities) {
+    viewer.entities.remove(_moduleCubeEntity);
+    _moduleCubeEntity = null;
+  }
+  _moduleHighlightIndex = null;
+  if (modelEntity?.model) modelEntity.model.color = undefined;
   window.removeEventListener('resize', onWindowResize);
   if (winRafId) {
     cancelAnimationFrame(winRafId);
