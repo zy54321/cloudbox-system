@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div ref="container" class="cesium-container">
     <div ref="creditEl" class="cb-cesium-credit"></div>
   </div>
@@ -9,8 +9,11 @@ import { defineExpose, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import * as Cesium from 'cesium';
 import { createCesiumViewer, destroyCesiumViewer } from '../engine/cesium/viewer';
 
-const planeBillboardImgUrl = new URL('../assets/img/planeBillBoardImg.png', import.meta.url).href;
-const unitBillboardImgUrl = new URL('../assets/img/planeBillBoardImg2.png', import.meta.url).href;
+// 所有 billboard 图片统一从 public/img 加载，与 units.json 的 image 路径一致
+const _base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+const _publicImg = (path) => `${typeof window !== 'undefined' ? window.location.origin : ''}${_base ? _base + '/' : '/'}${String(path).replace(/^\//, '')}`;
+const planeBillboardImgUrl = _publicImg('img/planeBillBoardImg2.png');
+const unitBillboardImgUrl = _publicImg('img/planeBillBoardImg.png');
 
 const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'module-highlight-screen']);
 
@@ -48,12 +51,12 @@ const DEFAULT_HEADING_OFFSET_RAD = Cesium.Math.PI_OVER_TWO;
 /** 七大模块各自立方体相对飞机的位置（机体系：forward=X, right=Y, up=Z，单位米） */
 const MODULE_CUBE_OFFSETS = [
   { f: 8, r: 0, u: 2 },
-  { f: 7, r: 2.5, u: 2 },
-  { f: 7, r: -2.5, u: 2 },
-  { f: 6, r: 0, u: 3.5 },
-  { f: 9, r: 1.5, u: 1 },
-  { f: 8.5, r: -2, u: 2.5 },
-  { f: 6.5, r: 2, u: 3 }
+  { f: 8, r: 0, u: 0 },
+  { f: 6, r: 0, u: 0 },
+  { f: 4, r: 0, u: 1.5 },
+  { f: 2, r: 1, u: 1 },
+  { f: 0, r: 0, u: 0 },
+  { f: -2, r: -1, u: 0 }
 ];
 let winRafId = 0;
 
@@ -74,21 +77,23 @@ const updateUnitEntitiesVisibility = () => {
 const loadAndAddUnits = async () => {
   if (!viewer?.entities) return;
   try {
-    const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-    const res = await fetch(`${base}/config/units.json`);
+    const res = await fetch(`${_base ? _base + '/' : '/'}config/units.json`);
     if (!res.ok) return;
     const data = await res.json();
-    const imgUrl = unitBillboardImgUrl;
 
     const addBillboard = (unit, clusterId) => {
       const altM = unit.alt_m ?? 0;
+      const imgUrl = unit.image ? _publicImg(unit.image) : unitBillboardImgUrl;
+      const scale = unit.size != null ? Number(unit.size) : 0.5;
+      const offsetX = unit.offset?.[0] ?? 0;
+      const offsetY = unit.offset?.[1] ?? -28;
       const e = viewer.entities.add({
         id: unit.id,
         position: Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, altM),
         billboard: {
           image: imgUrl,
           show: true,
-          scale: 0.5,
+          scale,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         },
@@ -99,7 +104,7 @@ const loadAndAddUnits = async () => {
               show: true,
               showBackground: true,
               backgroundPadding: new Cesium.Cartesian2(6, 4),
-              pixelOffset: new Cesium.Cartesian2(0, -28),
+              pixelOffset: new Cesium.Cartesian2(offsetX, offsetY),
               horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
               verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
               distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, Number.POSITIVE_INFINITY),

@@ -1,5 +1,4 @@
 {
-  "image": "src/assets/img/planeBillBoardImg2.png",
   "space": {
     "star_based": [
       {
@@ -8,7 +7,10 @@
         "name": "高通量卫星（HTS）",
         "lon": 112.0,
         "lat": 36.0,
-        "alt_m": 1200000
+        "alt_m": 1200000,
+        "image": "img/satelliteIcon.png",
+        "size": 0.3,
+        "offset": [0, 32]
       },
       {
         "id": "sat-leo-01",
@@ -16,7 +18,10 @@
         "name": "低轨通信卫星（LEO）",
         "lon": 114.0,
         "lat": 38.0,
-        "alt_m": 1200000
+        "alt_m": 1200000,
+        "image": "img/satelliteIcon.png",
+        "size": 0.3,
+        "offset": [0, 32]
       }
     ]
   },
@@ -33,7 +38,9 @@
             "name": "地面运行控制中心",
             "lon": 108.7819,
             "lat": 34.466756,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png",
+            "size": 0.5,
+            "offset": [0, -28]
           },
           {
             "id": "dep-reconstruction",
@@ -41,7 +48,7 @@
             "name": "地面飞行场景实时重构系统",
             "lon": 108.7319,
             "lat": 34.461756,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "dep-expert-group",
@@ -49,7 +56,7 @@
             "name": "地面端专家组",
             "lon": 108.7669,
             "lat": 34.426755,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "dep-sim-system",
@@ -57,7 +64,7 @@
             "name": "体系应急动态及仿真推演系统",
             "lon": 108.7269,
             "lat": 34.431756,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "dep-emergency-exec",
@@ -65,7 +72,7 @@
             "name": "应急处置执行",
             "lon": 108.7519,
             "lat": 34.476756,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "dep-atc",
@@ -73,7 +80,7 @@
             "name": "空管（ATC）",
             "lon": 108.7919,
             "lat": 34.441755,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "dep-airline",
@@ -81,7 +88,7 @@
             "name": "航司",
             "lon": 108.7119,
             "lat": 34.446756,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "dep-atg-station",
@@ -89,7 +96,7 @@
             "name": "5G ATG 地面站（示意）",
             "lon": 108.7719,
             "lat": 34.486756,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           }
         ]
       },
@@ -104,7 +111,7 @@
             "name": "地面运行控制中心",
             "lon": 116.459059,
             "lat": 39.505763,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "arr-reconstruction",
@@ -112,7 +119,7 @@
             "name": "地面飞行场景实时重构系统",
             "lon": 116.409059,
             "lat": 39.500763,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "arr-expert-group",
@@ -120,7 +127,7 @@
             "name": "地面端专家组",
             "lon": 116.444059,
             "lat": 39.465762,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "arr-sim-system",
@@ -128,7 +135,7 @@
             "name": "体系应急动态及仿真推演系统",
             "lon": 116.404059,
             "lat": 39.470762,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "arr-emergency-exec",
@@ -136,7 +143,7 @@
             "name": "应急处置执行",
             "lon": 116.429059,
             "lat": 39.515763,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "arr-atc",
@@ -144,7 +151,7 @@
             "name": "空管（ATC）",
             "lon": 116.46906,
             "lat": 39.480762,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "arr-airline",
@@ -152,7 +159,7 @@
             "name": "航司",
             "lon": 116.389059,
             "lat": 39.485762,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           },
           {
             "id": "arr-atg-station",
@@ -160,7 +167,7 @@
             "name": "5G ATG 地面站（示意）",
             "lon": 116.449059,
             "lat": 39.525762,
-            "image": "src/assets/img/planeBillBoardImg2.png"
+            "image": "img/planeBillBoardImg.png"
           }
         ]
       }
