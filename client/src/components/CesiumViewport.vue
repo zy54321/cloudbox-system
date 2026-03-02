@@ -550,7 +550,6 @@ const loadGlbModelEntity = async (uri) => {
       })();
 
   let initOrientation = baseOrientation;
-  console.log('spline', spline);
   if (!spline) {
     const hpr = new Cesium.HeadingPitchRoll(DEFAULT_HEADING_OFFSET_RAD, 0, 0);
     initOrientation = Cesium.Transforms.headingPitchRollQuaternion(basePosition, hpr);
@@ -843,6 +842,13 @@ onMounted(async () => {
 
   await loadAndAddUnits();
 
+  /** 将 canvas 内坐标转为视口坐标，供静态/动态页 marker-popup 统一使用 position:fixed 定位 */
+  const canvasToViewport = (canvasX, canvasY) => {
+    const canvas = viewer.scene.canvas;
+    const rect = canvas.getBoundingClientRect();
+    return { x: rect.left + canvasX, y: rect.top + canvasY };
+  };
+
   pickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   pickHandler.setInputAction((movement) => {
     const picked = viewer.scene.pick(movement.position);
@@ -854,7 +860,8 @@ onMounted(async () => {
     viewer.selectedEntity = undefined;
     const pos = ent.position?.getValue(viewer.clock.currentTime);
     const win = pos ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos) : null;
-    emit('marker-click', { meta, screen: win ? { x: win.x, y: win.y } : null });
+    const screen = win ? canvasToViewport(win.x, win.y) : null;
+    emit('marker-click', { meta, screen });
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   const scratchCartesian2 = new Cesium.Cartesian2();
@@ -864,10 +871,11 @@ onMounted(async () => {
     if (!pos) return;
     const win = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos, scratchCartesian2);
     if (!win) return;
-    emit('marker-move', { x: win.x, y: win.y });
+    const screen = canvasToViewport(win.x, win.y);
+    emit('marker-move', screen);
   });
 
-  // 每帧输出飞机屏幕坐标，供父组件飞机跟随 popup 使用，避免轮询延迟
+  // 输出飞机屏幕坐标，供父组件飞机跟随 popup 使用（仅静态页监听；动态页不监听以免干扰沿线运动）
   viewer.scene.postRender.addEventListener(() => {
     const info = getPlaneScreenInfo();
     if (info) emit('plane-screen-info', info);

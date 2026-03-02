@@ -14,8 +14,10 @@
             :path-points="pathPoints"
             :path-progress="pathProgress"
             :follow-path="followPath"
+            :visible-relation-id="visibleRelationId"
             @marker-click="$emit('marker-click', $event)"
             @marker-move="$emit('marker-move', $event)"
+            @plane-screen-info="$emit('plane-screen-info', $event)"
           />
           <slot name="single-overlays" />
         </div>
@@ -34,6 +36,7 @@
                 :path-points="pathPoints"
                 :path-progress="pathProgress"
                 :follow-path="followPath"
+                :visible-relation-id="visibleRelationId"
                 @marker-click="$emit('marker-click', $event)"
                 @marker-move="$emit('marker-move', $event)"
               />
@@ -61,7 +64,8 @@ const props = defineProps({
   autoFocus: { type: Boolean, default: true },
   pathPoints: { type: Array, default: null },
   pathProgress: { type: Number, default: 0 },
-  followPath: { type: Boolean, default: false }
+  followPath: { type: Boolean, default: false },
+  visibleRelationId: { type: String, default: null }
 });
 
 const vpSingleRef = (el) => {

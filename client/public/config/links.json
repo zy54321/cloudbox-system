@@ -2,6 +2,7 @@
   "relations": [
     {
       "id": "link-sat-ground",
+      "flowLabel": "信息流",
       "name": "卫星链路与地面控制中心",
       "edges": [
         ["dep-airport-ops", "sat-hts-01"],
@@ -10,6 +11,7 @@
     },
     {
       "id": "link-flight-emergency",
+      "flowLabel": "控制流",
       "name": "飞行控制与应急处置执行",
       "edges": [
         ["plane", "dep-emergency-exec"]

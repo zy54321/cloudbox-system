@@ -1,4 +1,4 @@
-﻿
+
 <template>
   <header class="cb-topbar">
     <div class="cb-brand">
@@ -60,8 +60,10 @@
           :path-points="pathPointsForViewer"
           :path-progress="planeProgress"
           :follow-path="true"
+          :visible-relation-id="selectedRelationId"
           @marker-click="onMarkerClick"
           @marker-move="onMarkerMove"
+          @plane-screen-info="onPlaneScreenInfo"
         >
           <template #header>
             <div class="cb-view-hd">
@@ -74,13 +76,28 @@
           </template>
 
           <template #single-overlays>
+            <!-- 与静态架构页完全一致：仅根据 plane-screen-info 刷新 popup，不参与飞机运动逻辑 -->
+            <div class="cb-dv-cesium-layer-with-popup">
+              <div
+                v-if="showPlanePopup && planeScreenInfo"
+                class="cb-plane-follow-popup"
+                :style="planePopupStyle"
+              >
+                <div class="cb-plane-follow-popup-hd">飞机</div>
+                <div class="cb-plane-follow-popup-bd">
+                  <div class="cb-plane-follow-row">高度：{{ planeScreenInfo.alt.toFixed(0) }} m</div>
+                  <div class="cb-plane-follow-row">航向：{{ planeScreenInfo.heading.toFixed(0) }}°</div>
+                  <div class="cb-plane-follow-row">地速：{{ planeScreenInfo.speed }} km/h</div>
+                  <div class="cb-plane-follow-row">状态：{{ planeEnvText }}</div>
+                </div>
+              </div>
+            </div>
             <div class="cb-symbols cb-symbols--single">
-              <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'plane' }" @click="selectSymbol('plane')">✈️ 飞机</button>
+              <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'plane' }" @click="onPlaneButtonClick">飞机</button>
               <button class="cb-dv-symbtn ghost" type="button" @click.stop="togglePlanePath">{{ planePathEnabled ? '停止沿线' : '沿线运动' }}</button>
               <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'flow' }" @click="selectSymbol('flow')">• 信息流</button>
               <button class="cb-dv-symbtn" :class="{ active: activeSymbol === 'control' }" @click="selectSymbol('control')">➜ 控制流</button>
             </div>
-            <div class="plane-symbol" :class="planeStateYesClass">✈</div>
             <div class="cb-overlay-plane" v-show="activeSymbol === 'plane'"></div>
             <div class="cb-overlay-flow" v-show="activeSymbol === 'flow'"></div>
             <div class="cb-overlay-control" v-show="activeSymbol === 'control'"></div>
@@ -257,7 +274,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import { buildFlightPathFromRunways, buildSampledPositionFromPath } from '../utils/flightPath';
@@ -318,7 +335,7 @@ const startClock = (viewer, start, stop) => {
   viewer.clock.stopTime = stop;
   viewer.clock.currentTime = start;
   viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-  viewer.clock.multiplier = 1; // 仿真 2 倍速，配合 secondsTotal 减半
+  viewer.clock.multiplier = 0.1; // 与静态页一致，使动画平滑跑完
   viewer.clock.shouldAnimate = true;
 };
 
@@ -415,7 +432,7 @@ const applyPlanePathToVp = (vp, unsubRefSetter) => {
   }
 
   const { prop, start, stop } = buildSampledPositionFromPath(flightPath, 300);
-  vp?.applyPathAnimation?.(prop, { trailSeconds: 12 / 40 });
+  vp?.applyPathAnimation?.(prop, { trailSeconds: 12 / 50 });
   startClock(viewer, start, stop);
 
   const plane = vp?.getPlaneEntity?.();
@@ -442,18 +459,14 @@ const startRouteRenderLoop = () => {
   _routeRafStarted = true;
 
   const loop = () => {
-    // 单屏 viewer
     const v1 = vpSingle.value?.getViewer?.();
+    const v2 = vpCompare.value?.getViewer?.();
     if (v1 && v1.entities?.getById?.(ROUTE_ENTITY_ID)) {
       v1.scene?.requestRender?.();
     }
-
-    // 双屏 viewer
-    const v2 = vpCompare.value?.getViewer?.();
     if (v2 && v2.entities?.getById?.(ROUTE_ENTITY_ID)) {
       v2.scene?.requestRender?.();
     }
-
     requestAnimationFrame(loop);
   };
 
@@ -472,6 +485,7 @@ const whenViewerReady = (vpEl, cb, maxFrames = 120) => {
 };
 
 const bindVpSingle = (el) => {
+  if (vpSingle.value === el) return;
   vpSingle.value = el;
   whenViewerReady(el, (viewer) => {
     drawFlightRoute(viewer);
@@ -481,6 +495,7 @@ const bindVpSingle = (el) => {
 };
 
 const bindVpCompare = (el) => {
+  if (vpCompare.value === el) return;
   vpCompare.value = el;
   whenViewerReady(el, (viewer) => {
     drawFlightRoute(viewer);
@@ -503,6 +518,36 @@ const scenarios = [
 ];
 
 const isCompare = ref(false);
+// 以下与静态架构页完全一致：仅接收 plane-screen-info 刷新 popup，与沿线运动无耦合
+const planeScreenInfo = ref(null);
+const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
+function onPlaneScreenInfo(info) {
+  planeScreenInfo.value = info;
+}
+const showPlanePopup = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return false;
+  return info.cameraHeight != null && info.cameraHeight <= POPUP_CAMERA_HEIGHT_THRESHOLD;
+});
+const planePopupStyle = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return {};
+  const offsetX = 14;
+  const offsetY = 8;
+  return {
+    transform: `translate(${info.x + offsetX}px, ${info.y + offsetY}px)`
+  };
+});
+const planeEnvText = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return '—';
+  const h = info.alt;
+  if (h < 100) return '起飞/滑跑';
+  if (h < 3000) return '爬升';
+  if (h < 8000) return '巡航';
+  return '进近/下降';
+});
+
 const t = ref(0);
 const lastNodeIdNo = ref(-1);
 const lastNodeIdYes = ref(-1);
@@ -513,6 +558,8 @@ const steps = ref([]);
 const disposalCards = ref([]);
 const playing = ref(false);
 const activeSymbol = ref('plane');
+/** 当前选中的链路关联 id（与静态架构页交互关系「点击查看详细信息」一致，来自 links.json） */
+const selectedRelationId = ref(null);
 const rightTab = ref('info');
 
 const infoBoxVisible = ref(false);
@@ -851,37 +898,45 @@ const hideInfoBox = () => {
 };
 
 const showInfoBox = (type) => {
-  infoBoxVisible.value = true;
+  if (type === 'plane' || type === 'flow' || type === 'control') {
+    infoBoxVisible.value = false;
+    return;
+  }
   const card = currentCardYes.value;
-  if (type === 'plane') {
-    infoBoxTitle.value = '飞机状态（示意）';
-    infoBoxLines.value = [
-      '航班号：MU0001',
-      `阶段：${card.phase}`,
-      `节点：${card.title}`,
-      `状态：${card.state}`
-    ];
-    infoBoxCompareLines.value = [];
-  }
-  if (type === 'flow') {
-    infoBoxTitle.value = '信息流链路（示意）';
-    const meta = isCompare.value ? getCompareMeta(activeScenario.value, card.nodeId) : null;
-    infoBoxLines.value = ['采集 → 汇聚 → 分发', '链路健康：正常（示意）'];
-    infoBoxCompareLines.value = meta
-      ? [`无云匣子 hops：${meta.hops_no}`, `有云匣子 hops：${meta.hops_yes}`, `Δhops：${meta.hops_no - meta.hops_yes}`]
-      : [];
-  }
-  if (type === 'control') {
-    infoBoxTitle.value = '控制流链路（示意）';
-    infoBoxLines.value = ['控制指令：下发中（示意）', '回执：已确认（示意）'];
-    infoBoxCompareLines.value = [];
-  }
+  infoBoxVisible.value = true;
 };
+
+/** links.json 中信息流、控制流对应的 relation.id */
+const RELATION_ID_FLOW = 'link-sat-ground';
+const RELATION_ID_CONTROL = 'link-flight-emergency';
 
 const selectSymbol = (type) => {
   activeSymbol.value = type;
-  console.log('[symbol]', type);
+  if (type === 'flow') {
+    selectedRelationId.value = selectedRelationId.value === RELATION_ID_FLOW ? null : RELATION_ID_FLOW;
+    console.log('[symbol] 信息流', selectedRelationId.value ? '显示链路' : '隐藏链路');
+  } else if (type === 'control') {
+    selectedRelationId.value = selectedRelationId.value === RELATION_ID_CONTROL ? null : RELATION_ID_CONTROL;
+    console.log('[symbol] 控制流', selectedRelationId.value ? '显示链路' : '隐藏链路');
+  }
   showInfoBox(type);
+};
+
+/** 飞机按钮：与静态架构页一致，相机飞行聚焦飞机 */
+const onPlaneButtonClick = () => {
+  activeSymbol.value = 'plane';
+  const v = vpSingle.value?.getViewer?.();
+  const plane = vpSingle.value?.getPlaneEntity?.();
+  if (v && plane) {
+    v.flyTo(plane, {
+      duration: 0.8,
+      offset: new Cesium.HeadingPitchRange(
+        v.camera.heading,
+        Cesium.Math.toRadians(-25),
+        200
+      )
+    });
+  }
 };
 
 const toggleRightTab = (tab) => {
@@ -979,9 +1034,51 @@ const toggleCompare = () => {
 };
 
 loadScenario(activeScenario.value);
+
+onBeforeUnmount(() => {
+  planeScreenInfo.value = null;
+});
 </script>
 
 <style scoped>
+/* 与静态架构页 .cb-cesium-layer--with-popup 内 popup 一致，仅定位层 */
+.cb-dv-cesium-layer-with-popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+.cb-plane-follow-popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  min-width: 140px;
+  padding: 6px 10px;
+  background: rgba(0, 20, 40, 0.92);
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #e0f0ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.cb-plane-follow-popup-hd {
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+.cb-plane-follow-popup-bd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cb-plane-follow-row {
+  white-space: nowrap;
+}
+
 .marker-popup {
   z-index: 100;
   min-width: 200px;

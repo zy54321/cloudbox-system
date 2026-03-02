@@ -194,7 +194,7 @@
             </template>
             <template v-else-if="activeTab === 'relation'">
               <div v-for="rel in (linksConfig?.relations || [])" :key="rel.id" class="cb-item" :class="{ 'cb-item--relation-selected': selectedRelationId === rel.id }">
-                <h4><span style="color:#ffd54a;">关联：</span>{{ rel.name }}</h4>
+                <h4><span style="color:#ffd54a;">{{ rel.flowLabel || '关联' }}：</span>{{ rel.name }}</h4>
                 <p><span class="cb-link" @click="toggleRelationDetail(rel.id)">点击查看详细信息</span></p>
               </div>
             </template>
