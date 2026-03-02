@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div ref="container" class="cesium-container">
     <div ref="creditEl" class="cb-cesium-credit"></div>
   </div>
@@ -30,7 +30,9 @@ const props = defineProps({
   pathProgress: { type: Number, default: 0 },
   followPath: { type: Boolean, default: false },
   showClusterDepAirport: { type: Boolean, default: true },
-  showClusterArrAirport: { type: Boolean, default: true }
+  showClusterArrAirport: { type: Boolean, default: true },
+  /** 当前要显示的关联 id（来自 links.json relation.id），为 null 时所有链路隐藏 */
+  visibleRelationId: { type: String, default: null }
 });
 
 const container = ref(null);
@@ -62,6 +64,58 @@ let winRafId = 0;
 
 const UNIT_ENTITY_IDS = new Set();
 const UNIT_ENTITY_CLUSTER = new Map();
+const LINK_ENTITY_IDS = new Set();
+const LINK_ENTITY_RELATION_IDS = new Map(); // linkEntityId -> relationId
+/** relationId -> { parent, children[] }，用于聚焦时把两端标点纳入视野 */
+const RELATION_UNIT_IDS = new Map();
+/** linkId -> { parentId, childId }，用于阶段切换后按当前端点位置刷新链路（如飞机移动） */
+const LINK_ENTITY_ENDPOINTS = new Map();
+/** 飞机位置变量：起飞/巡航等阶段切换时更新，绘制与飞机连接的链路时用此坐标 */
+let planePositionCartesian = null;
+/** 含端点 "plane" 的关联 id 集合，这些链路在用户点击该关联时再按当前飞机位置重绘 */
+const RELATIONS_WITH_PLANE = new Set();
+
+/** 流动虚线材质（dashPattern 随时间变化形成流动效果） */
+const createFlowDashMaterial = () =>
+  new Cesium.PolylineDashMaterialProperty({
+    color: new Cesium.Color(0.35, 0.75, 1.0, 0.95),
+    gapColor: new Cesium.Color(0.2, 0.5, 0.85, 0.35),
+    dashLength: 22,
+    dashPattern: new Cesium.CallbackProperty((time) => {
+      const sec = time ? Cesium.JulianDate.secondsDifference(time, new Cesium.JulianDate(0)) : 0;
+      const shift = Math.floor(sec * 4) % 16;
+      return ((0xf0f0 >>> shift) | (0xf0f0 << (16 - shift))) >>> 0;
+    }, false)
+  });
+
+/** 根据实体 id 获取当前时刻的笛卡尔位置 */
+const getEntityPosition = (entityId) => {
+  if (!viewer?.entities) return null;
+  const entity = viewer.entities.getById(entityId);
+  if (!entity?.position) return null;
+  const pos = entity.position.getValue(viewer.clock.currentTime);
+  return pos ? Cesium.Cartesian3.clone(pos) : null;
+};
+
+/** 生成弧线点（起点、终点、中间抬升的二次贝塞尔），用于链路曲线 */
+const computeArcPositions = (start, end, numPoints = 24, arcHeightRatio = 0.15) => {
+  const distance = Cesium.Cartesian3.distance(start, end);
+  const mid = Cesium.Cartesian3.midpoint(start, end, new Cesium.Cartesian3());
+  const midNorm = Cesium.Cartesian3.normalize(mid, new Cesium.Cartesian3());
+  const lift = distance * arcHeightRatio;
+  const control = Cesium.Cartesian3.add(mid, Cesium.Cartesian3.multiplyByScalar(midNorm, lift, new Cesium.Cartesian3()), new Cesium.Cartesian3());
+  const points = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const t = i / numPoints;
+    const t1 = 1 - t;
+    const a = Cesium.Cartesian3.multiplyByScalar(start, t1 * t1, new Cesium.Cartesian3());
+    const b = Cesium.Cartesian3.multiplyByScalar(control, 2 * t1 * t, new Cesium.Cartesian3());
+    const c = Cesium.Cartesian3.multiplyByScalar(end, t * t, new Cesium.Cartesian3());
+    points.push(Cesium.Cartesian3.add(Cesium.Cartesian3.add(a, b, new Cesium.Cartesian3()), c, new Cesium.Cartesian3()));
+  }
+  return points;
+};
+
 const updateUnitEntitiesVisibility = () => {
   if (!viewer?.entities) return;
   UNIT_ENTITY_IDS.forEach((id) => {
@@ -144,9 +198,184 @@ const loadAndAddUnits = async () => {
       });
     }
 
+    await loadAndAddLinks();
     updateUnitEntitiesVisibility();
   } catch (e) {
     console.warn('[CesiumViewport] load units.json failed:', e);
+  }
+};
+
+/** 根据 visibleRelationId 更新链路显示/隐藏 */
+const updateLinkVisibility = () => {
+  if (!viewer?.entities) return;
+  const vid = props.visibleRelationId;
+  LINK_ENTITY_IDS.forEach((linkId) => {
+    const e = viewer.entities.getById(linkId);
+    if (!e) return;
+    const relId = LINK_ENTITY_RELATION_IDS.get(linkId);
+    e.show = !!(vid && relId === vid);
+  });
+  viewer.scene.requestRender();
+};
+
+/** 飞行聚焦到指定关联的链路范围（链路折点 + 父/子标点，并留足边距以看到完整内容） */
+const flyToRelationBounds = (relationId) => {
+  if (!viewer?.scene?.camera || !relationId) return;
+  const points = [];
+  const time = viewer.clock.currentTime;
+  // 1) 该关联下所有链路的折点
+  LINK_ENTITY_IDS.forEach((linkId) => {
+    if (LINK_ENTITY_RELATION_IDS.get(linkId) !== relationId) return;
+    const e = viewer.entities.getById(linkId);
+    if (!e?.polyline?.positions) return;
+    const positions = e.polyline.positions.getValue(time);
+    if (Array.isArray(positions)) points.push(...positions);
+  });
+  // 2) 该关联所有边的端点（含 plane 则用飞机位置变量）
+  const relData = RELATION_UNIT_IDS.get(relationId);
+  if (relData?.edges?.length) {
+    const getPos = (id) => (id === 'plane' ? getPlanePosition() : getEntityPosition(id));
+    const seen = new Set();
+    for (const [fromId, toId] of relData.edges) {
+      if (!seen.has(fromId)) {
+        seen.add(fromId);
+        const p = getPos(fromId);
+        if (p) points.push(p);
+      }
+      if (!seen.has(toId)) {
+        seen.add(toId);
+        const p = getPos(toId);
+        if (p) points.push(p);
+      }
+    }
+  }
+  if (points.length < 2) return;
+  const boundingSphere = Cesium.BoundingSphere.fromPoints(points);
+  const radius = Math.max(boundingSphere.radius, 50000);
+  viewer.camera.flyToBoundingSphere(boundingSphere, {
+    duration: 1.2,
+    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), radius * 3.5),
+    easingFunction: Cesium.EasingFunction.CUBIC_OUT
+  });
+};
+
+/**
+ * 移除某关联下的所有链路实体（用于「与飞机连接的」关联切换时先清再画）
+ */
+const removeLinkEntitiesForRelation = (relationId) => {
+  const toRemove = [];
+  LINK_ENTITY_IDS.forEach((linkId) => {
+    if (LINK_ENTITY_RELATION_IDS.get(linkId) === relationId) toRemove.push(linkId);
+  });
+  toRemove.forEach((linkId) => {
+    const e = viewer.entities.getById(linkId);
+    if (e) viewer.entities.remove(e);
+    LINK_ENTITY_IDS.delete(linkId);
+    LINK_ENTITY_RELATION_IDS.delete(linkId);
+    LINK_ENTITY_ENDPOINTS.delete(linkId);
+  });
+  viewer?.scene?.requestRender();
+};
+
+/**
+ * 绘制「与飞机连接的」关联链路：按 edges 每条边 [from,to] 取坐标（plane 用变量），画完即静态。
+ */
+const drawPlaneRelationLinks = (relationId) => {
+  if (!viewer?.entities) return;
+  const relData = RELATION_UNIT_IDS.get(relationId);
+  if (!relData?.edges?.length) return;
+  const getPos = (id) => (id === 'plane' ? getPlanePosition() : getEntityPosition(id));
+  for (const [fromId, toId] of relData.edges) {
+    const fromPos = getPos(fromId);
+    const toPos = getPos(toId);
+    if (!fromPos || !toPos) continue;
+    const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
+    const linkId = `link-${relationId}-${fromId}-${toId}`;
+    viewer.entities.add({
+      id: linkId,
+      show: true,
+      polyline: {
+        positions,
+        width: 3,
+        material: createFlowDashMaterial(),
+        arcType: Cesium.ArcType.NONE,
+        clampToGround: false,
+        classificationType: Cesium.ClassificationType.NONE
+      }
+    });
+    LINK_ENTITY_IDS.add(linkId);
+    LINK_ENTITY_RELATION_IDS.set(linkId, relationId);
+    LINK_ENTITY_ENDPOINTS.set(linkId, { parentId: fromId, childId: toId });
+  }
+  viewer.scene.requestRender();
+};
+
+/** 将配置的一条关联规范为边列表 [[fromId, toId], ...]，兼容 edges 与旧版 parent+children */
+const normalizeRelationEdges = (rel) => {
+  if (Array.isArray(rel.edges) && rel.edges.length > 0) {
+    return rel.edges.map((e) => (Array.isArray(e) ? [e[0], e[1]] : [e.from, e.to])).filter((e) => e[0] && e[1]);
+  }
+  const parent = rel.parent;
+  const children = rel.children || [];
+  if (!parent || !children.length) return [];
+  return children.map((c) => [parent, c]);
+};
+
+/**
+ * 加载并绘制链路。每条关联用 edges 表示多组 from→to（可多层级、多分支）；
+ * 含「plane」的关联不在此画，等用户点击该关联时再 clear + drawPlaneRelationLinks。
+ */
+const loadAndAddLinks = async () => {
+  if (!viewer?.entities) return;
+  LINK_ENTITY_IDS.forEach((id) => {
+    const e = viewer.entities.getById(id);
+    if (e) viewer.entities.remove(e);
+  });
+  LINK_ENTITY_IDS.clear();
+  LINK_ENTITY_RELATION_IDS.clear();
+  LINK_ENTITY_ENDPOINTS.clear();
+  RELATION_UNIT_IDS.clear();
+  RELATIONS_WITH_PLANE.clear();
+  try {
+    const res = await fetch(`${_base ? _base + '/' : '/'}config/links.json`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const relations = data.relations || [];
+    for (const rel of relations) {
+      const edges = normalizeRelationEdges(rel);
+      if (!edges.length) continue;
+      RELATION_UNIT_IDS.set(rel.id, { edges: edges.map((e) => [...e]) });
+      const hasPlane = edges.some(([a, b]) => a === 'plane' || b === 'plane');
+      if (hasPlane) {
+        RELATIONS_WITH_PLANE.add(rel.id);
+        continue;
+      }
+      for (const [fromId, toId] of edges) {
+        const fromPos = getEntityPosition(fromId);
+        const toPos = getEntityPosition(toId);
+        if (!fromPos || !toPos) continue;
+        const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
+        const linkId = `link-${rel.id}-${fromId}-${toId}`;
+        viewer.entities.add({
+          id: linkId,
+          show: false,
+          polyline: {
+            positions,
+            width: 3,
+            material: createFlowDashMaterial(),
+            arcType: Cesium.ArcType.NONE,
+            clampToGround: false,
+            classificationType: Cesium.ClassificationType.NONE
+          }
+        });
+        LINK_ENTITY_IDS.add(linkId);
+        LINK_ENTITY_RELATION_IDS.set(linkId, rel.id);
+        LINK_ENTITY_ENDPOINTS.set(linkId, { parentId: fromId, childId: toId });
+      }
+    }
+    updateLinkVisibility();
+  } catch (e) {
+    console.warn('[CesiumViewport] load links.json failed:', e);
   }
 };
 
@@ -255,9 +484,15 @@ function setPlanePoseAtIndex(index) {
 
   viewer.scene.requestRender();
 
+  // 同步飞机位置变量，供「与飞机连接的链路」使用
+  planePositionCartesian = Cesium.Cartesian3.clone(p);
+
   // 若启用跟随，相机重新锁定到飞机
   viewer.trackedEntity = modelEntity;
 }
+
+/** 取飞机当前坐标：优先用变量，否则从实体取（如尚未点过阶段按钮） */
+const getPlanePosition = () => planePositionCartesian ?? getEntityPosition('planeEntity');
 
 const getViewState = () => {
   if (!viewer?.camera) return null;
@@ -761,9 +996,38 @@ watch(() => props.modelUrl, async (v) => {
 });
 
 watch(
+  () => props.pathPoints,
+  (pts) => {
+    if (planePositionCartesian != null || !viewer || !Array.isArray(pts) || pts.length === 0) return;
+    const p0 = pts[0];
+    planePositionCartesian = Cesium.Cartesian3.fromDegrees(p0.lon, p0.lat, p0.alt ?? 0);
+  },
+  { immediate: true }
+);
+
+watch(
   () => [props.showClusterDepAirport, props.showClusterArrAirport],
   () => updateUnitEntitiesVisibility(),
   { deep: true }
+);
+
+watch(
+  () => props.visibleRelationId,
+  (newVal) => {
+    if (newVal == null) {
+      RELATIONS_WITH_PLANE.forEach((rid) => removeLinkEntitiesForRelation(rid));
+      updateLinkVisibility();
+      return;
+    }
+    if (RELATIONS_WITH_PLANE.has(newVal)) {
+      removeLinkEntitiesForRelation(newVal);
+      drawPlaneRelationLinks(newVal);
+      flyToRelationBounds(newVal);
+    } else {
+      updateLinkVisibility();
+      flyToRelationBounds(newVal);
+    }
+  }
 );
 
 onBeforeUnmount(() => {

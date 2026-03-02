@@ -47,7 +47,7 @@
 
               <!-- Cesium 视口 + 飞机跟随 popup（相机高度≤阈值时显示） -->
               <div class="cb-cesium-layer cb-cesium-layer--with-popup">
-                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @module-highlight-screen="onModuleHighlightScreen" />
+                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :visible-relation-id="selectedRelationId" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @module-highlight-screen="onModuleHighlightScreen" />
                 <div
                   v-if="showPlanePopup && planeScreenInfo"
                   class="cb-plane-follow-popup"
@@ -193,13 +193,9 @@
               </div>
             </template>
             <template v-else-if="activeTab === 'relation'">
-              <div class="cb-item">
-                <h4><span style="color:#ffd54a;">关联：</span>卫星链路与地面控制中心</h4>
-                <p><span class="cb-link">点击查看详细信息</span></p>
-              </div>
-              <div class="cb-item">
-                <h4><span style="color:#ffd54a;">关联：</span>飞行控制与应急处置执行</h4>
-                <p><span class="cb-link">点击查看详细信息</span></p>
+              <div v-for="rel in (linksConfig?.relations || [])" :key="rel.id" class="cb-item" :class="{ 'cb-item--relation-selected': selectedRelationId === rel.id }">
+                <h4><span style="color:#ffd54a;">关联：</span>{{ rel.name }}</h4>
+                <p><span class="cb-link" @click="toggleRelationDetail(rel.id)">点击查看详细信息</span></p>
               </div>
             </template>
             <template v-else-if="activeTab === 'modules'">
@@ -466,6 +462,13 @@ const moduleHighlightContent = computed(() => {
 
 /** 地图标点配置（来自 units.json），分组后供地面弹窗列表使用 */
 const unitsConfig = ref(null);
+/** 链路关联配置（来自 links.json），交互关系 tab 与地图曲线数据源 */
+const linksConfig = ref(null);
+/** 当前选中的关联 id，用于显示对应链路并高亮该项；再次点击同一项则隐藏 */
+const selectedRelationId = ref(null);
+function toggleRelationDetail(relationId) {
+  selectedRelationId.value = selectedRelationId.value === relationId ? null : relationId;
+}
 const unitsGroups = computed(() => {
   const cfg = unitsConfig.value;
   if (!cfg) return [];
@@ -968,12 +971,19 @@ onMounted(() => {
   };
   requestAnimationFrame(tick);
 
-  // 加载地图标点配置，供地面模式弹窗列表使用
+  // 加载地图标点配置与链路关联配置
   const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-  fetch(`${base}/config/units.json`)
+  const baseUrl = base ? `${base}/` : '/';
+  fetch(`${baseUrl}config/units.json`)
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (data) unitsConfig.value = data;
+    })
+    .catch(() => {});
+  fetch(`${baseUrl}config/links.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (data) linksConfig.value = data;
     })
     .catch(() => {});
 });
@@ -984,6 +994,19 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 交互关系 tab：选中项高亮，便于识别当前显示的链路 */
+.cb-item.cb-item--relation-selected {
+  background: rgba(0, 80, 140, 0.25);
+  border-left: 3px solid #ffd54a;
+  padding-left: 10px;
+  margin-left: -10px;
+  border-radius: 4px;
+}
+.cb-item.cb-item--relation-selected .cb-link {
+  color: #7dd3fc;
+  font-weight: 600;
+}
+
 /* 让 cb-viewport 与地图层铺满可用高度，地图铺满 viewport */
 .cb-viewport {
   display: flex;
