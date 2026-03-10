@@ -9,12 +9,15 @@
             :ref="vpSingleRef"
             class="cb-dv-cesium"
             :model-url="modelUrl"
+            :units-url="unitsUrl"
             :auto-focus="autoFocus"
             :split-mode="false"
             :path-points="pathPoints"
             :path-progress="pathProgress"
             :follow-path="followPath"
-            :visible-relation-id="visibleRelationId"
+            :visible-relation-id="effectiveVisibleRelationId"
+            :visible-relation-ids-left="effectiveIdsLeft"
+            :visible-relation-ids-right="effectiveIdsRight"
             @marker-click="$emit('marker-click', $event)"
             @marker-move="$emit('marker-move', $event)"
             @plane-screen-info="$emit('plane-screen-info', $event)"
@@ -33,10 +36,13 @@
                 :split-position="splitPosition"
                 :readonly="readonly"
                 :auto-focus="autoFocus"
+                :units-url="unitsUrl"
                 :path-points="pathPoints"
                 :path-progress="pathProgress"
                 :follow-path="followPath"
-                :visible-relation-id="visibleRelationId"
+                :visible-relation-id="effectiveVisibleRelationId"
+                :visible-relation-ids-left="effectiveIdsLeft"
+                :visible-relation-ids-right="effectiveIdsRight"
                 @marker-click="$emit('marker-click', $event)"
                 @marker-move="$emit('marker-move', $event)"
               />
@@ -50,6 +56,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import CesiumViewport from './CesiumViewport.vue';
 
 const props = defineProps({
@@ -57,6 +64,7 @@ const props = defineProps({
   bindVpSingle: { type: Function, required: true },
   bindVpCompare: { type: Function, required: true },
   modelUrl: { type: String, default: '' },
+  unitsUrl: { type: String, default: '' },
   leftModelUrl: { type: String, default: '' },
   rightModelUrl: { type: String, default: '' },
   splitPosition: { type: Number, default: 0.5 },
@@ -65,8 +73,21 @@ const props = defineProps({
   pathPoints: { type: Array, default: null },
   pathProgress: { type: Number, default: 0 },
   followPath: { type: Boolean, default: false },
-  visibleRelationId: { type: String, default: null }
+  /** 旧 API：单 id，传入时自动转为 visibleRelationIdsLeft=[id]、visibleRelationIdsRight=[] */
+  visibleRelationId: { type: String, default: null },
+  visibleRelationIdsLeft: { type: Array, default: () => [] },
+  visibleRelationIdsRight: { type: Array, default: () => [] }
 });
+
+const effectiveIdsLeft = computed(() =>
+  props.visibleRelationId != null ? [props.visibleRelationId] : (props.visibleRelationIdsLeft || [])
+);
+const effectiveIdsRight = computed(() =>
+  props.visibleRelationId != null ? [] : (props.visibleRelationIdsRight || [])
+);
+const effectiveVisibleRelationId = computed(() =>
+  props.visibleRelationId ?? (effectiveIdsLeft.value[0] ?? null)
+);
 
 const vpSingleRef = (el) => {
   if (typeof props.bindVpSingle === 'function') props.bindVpSingle(el);

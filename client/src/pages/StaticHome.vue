@@ -42,12 +42,13 @@
               <div class="cb-overlay-tabs">
                 <button class="cb-mini cb-map-mini" :class="{ active: mapMode === 'plane' }" type="button" @click="onMapMode('plane')">飞机</button>
                 <button class="cb-mini cb-map-mini" :class="{ active: mapMode === 'ground' }" type="button" @click="onMapMode('ground')">地面</button>
+                <button class="cb-mini cb-map-mini" :class="{ active: mapMode === 'space' }" type="button" @click="onMapMode('space')">太空</button>
               </div>
               <div class="cb-stage">阶段：{{ phaseText }} ｜ 层级：{{ levelText }} ｜ 缩放级别：4</div>
 
               <!-- Cesium 视口 + 飞机跟随 popup（相机高度≤阈值时显示） -->
               <div class="cb-cesium-layer cb-cesium-layer--with-popup">
-                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :visible-relation-id="selectedRelationId" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @module-highlight-screen="onModuleHighlightScreen" />
+                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :visible-relation-id="selectedRelationId" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @plane-billboard-click="onPlaneBillboardClick" @module-highlight-screen="onModuleHighlightScreen" />
                 <div
                   v-if="showPlanePopup && planeScreenInfo"
                   class="cb-plane-follow-popup"
@@ -75,6 +76,20 @@
                 </div>
               </div>
 
+              <!-- 机载标点弹窗（点击飞机 billboard 显示，随飞机位置同步） -->
+              <div v-if="showAirbornePopup && planeScreenInfo" class="marker-popup airborne-popup cb-airborne-popup-follow" :style="airbornePopupStyle">
+                <div class="marker-popup-header">
+                  <div class="marker-popup-title">机载</div>
+                  <button type="button" class="marker-popup-close" aria-label="关闭" @click="closeAirbornePopup">×</button>
+                </div>
+                <div class="marker-popup-body">
+                  <ul class="airborne-popup-list">
+                    <li>机组</li>
+                    <li>国产黑匣子</li>
+                    <li>通感算一体机载感知预警设备</li>
+                  </ul>
+                </div>
+              </div>
               <!-- 标点弹窗（点击地面/星基点位显示，同一时间只一个） -->
               <div v-if="activePopup" class="marker-popup" :style="popupStyle">
                 <div class="marker-popup-header">
@@ -193,7 +208,7 @@
               </div>
             </template>
             <template v-else-if="activeTab === 'relation'">
-              <div v-for="rel in (linksConfig?.relations || [])" :key="rel.id" class="cb-item" :class="{ 'cb-item--relation-selected': selectedRelationId === rel.id }">
+              <div v-for="rel in panelRelations" :key="rel.id" class="cb-item" :class="{ 'cb-item--relation-selected': selectedRelationId === rel.id }">
                 <h4><span style="color:#ffd54a;">{{ rel.flowLabel || '关联' }}：</span>{{ rel.name }}</h4>
                 <p><span class="cb-link" @click="toggleRelationDetail(rel.id)">点击查看详细信息</span></p>
               </div>
@@ -260,7 +275,7 @@
               <div class="cb-detail-label">包含元素：</div>
               <ul class="cb-detail-list cb-detail-list--inline">
                 <li>高通量卫星（HTS）</li>
-                <li>低轨通信卫星（LEO）</li>
+                <li>低轨通信卫星（LEO）（属于HTS/5G ATG通信系统）</li>
               </ul>
             </div>
             <div class="cb-detail-section">
@@ -272,9 +287,9 @@
             <div class="cb-detail-section">
               <div class="cb-detail-sectitle">主要功能：</div>
               <ul class="cb-detail-list">
-                <li><strong>提供卫星通信链路能力：</strong>支撑“星-机”“星-地”数据传输与转发（地图缩小时以连线+标注示意）</li>
+                <li><strong>提供广域覆盖的卫星通信链路：</strong>通过"星-机"链路接入飞机，经"星-地"链路连接地面，实现"机-星-地"双向数据传输与转发（地图缩小时以连线+标注示意）</li>
                 <li><strong>承载飞行过程数据下传：</strong>与机载数据采集（FDR/CVR）及通感算一体机载感知预警系统协同，保障飞行时间、速度、高度、姿态、告警等关键数据传输至地面系统</li>
-                <li><strong>保障空地数据同步：</strong>作为 HTS/5G ATG 通信系统的卫星侧媒介之一，实现飞机数据与地面数据的同步传输</li>
+                <li><strong>保障空地数据双向实时传输：</strong>与5G ATG地面网络共同构成 HTS/5G ATG通信系统 的空地传输通道，实现空地数据双向实时传输</li>
                 <li><strong>应急通信支撑：</strong>在通信网络故障/链路异常场景下，为关键业务数据提供可用的广域传输通道（故障类型包含高通量卫星通信故障等）</li>
               </ul>
             </div>
@@ -312,23 +327,23 @@
             <div class="cb-detail-section">
               <div class="cb-detail-sectitle">功能说明：</div>
               <p class="cb-detail-para">
-                地面元素是云匣子体系的“态势获取—专家研判—推演决策—协同指挥—处置执行”闭环核心，负责接收机载数据与告警，完成飞行场景重构与风险识别，组织专家组研讨并借助推演系统生成处置方案，最终协调各相关部门执行落地。
+                地面运行控制中心属于地面运营控制中心应急专家组系统、地面飞行场景实时重构系统、体系应急决策推演系统和应急处置系统这四个地面系统在物理或逻辑上的部署场所的总称。由四大核心系统构成的地面元素是云匣子体系的“态势获取—专家研判—推演决策—协同指挥—处置执行”闭环核心，负责接收机载数据与告警，完成飞行场景重构与风险识别，组织专家组研讨并借助推演系统生成处置方案，最终协调各相关部门执行落地。四大系统均部署于地面运行控制中心，实现信息互通与协同工作。
               </p>
             </div>
             <div class="cb-detail-section">
               <div class="cb-detail-sectitle">主要功能：</div>
               <ul class="cb-detail-list">
-                <li><strong>1）飞行场景实时重构：</strong>地面侧快速完成飞行态势数字化重构，为突发紧急场景下获取航空器安全态势提供分析手段与风险识别能力。</li>
-                <li><strong>2）应急专家组研判：</strong>基于告警与态势信息组织讨论，直接制定应急处置方案并提出处置意见。</li>
-                <li><strong>3）应急决策推演：</strong>依据航空器风险状态生成多个动态决策方案，在仿真场景中开展平行推演，模拟处置过程并输出推演结果，辅助专家组制定最终方案，并支持方案分发至机组、航司、空管、机场等部门。</li>
-                <li><strong>4）运行控制与协同调度：</strong>作为地面侧运行与指挥中枢，承接方案落地过程中的组织协调与资源调度（与空管/机场/航司等联动在动态示例中体现）。</li>
-                <li><strong>5）应急处置执行：</strong>根据推演结果与专家组方案，协调机组、航司、空管、机场等应急部门各分支，完成紧急事态的下达、通知与执行。</li>
+                <li><strong>1）飞行场景实时重构</strong>（归属地面飞行场景实时重构系统）：地面侧快速完成飞行态势数字化重构，为突发紧急场景下获取航空器安全态势提供分析手段与风险识别能力。</li>
+                <li><strong>2）应急专家组研判</strong>（归属地面运营控制中心应急专家组系统）：基于告警与态势信息组织讨论，直接制定应急处置方案并提出处置意见。</li>
+                <li><strong>3）应急决策推演</strong>（归属体系应急决策推演系统）：依据航空器风险状态生成多个动态决策方案，在仿真场景中开展平行推演，模拟处置过程并输出推演结果，辅助专家组制定最终方案，并支持方案分发至机组、航司、空管、机场等部门。</li>
+                <li><strong>4）运行控制与协同调度</strong>（归属应急处置系统）：作为地面侧运行与指挥中枢，承接方案落地过程中的组织协调与资源调度（与空管/机场/航司等联动在动态示例中体现）。</li>
+                <li><strong>5）应急处置执行</strong>（归属应急处置系统）：根据推演结果与专家组方案，协调机组、航司、空管、机场等应急部门各分支，完成紧急事态的下达、通知与执行。</li>
               </ul>
             </div>
             <div class="cb-detail-section">
               <div class="cb-detail-sectitle">关联关系：</div>
               <ul class="cb-detail-list">
-                <li><strong>与链路元素连接：</strong>通过 5G ATG / HTS 卫星链路接入空地数据通道，接收告警包与飞行态势数据。</li>
+                <li><strong>与链路元素连接：</strong>通过 5G ATG / HTS 卫星链路接入空地数据通道，接收告警与飞行态势数据。</li>
                 <li><strong>与机载元素连接：</strong>接收机载感知预警系统/机载通感算一体设备上报的状态信息与告警数据，并向机组下发处置方案与指令（控制流在动态示例中体现）。</li>
                 <li><strong>地面内部关联：</strong>信息流可从机载感知预警系统进入地面专家组、推演系统；控制流由推演系统回到专家组，再分发至空管、机场、航司等部门执行。</li>
               </ul>
@@ -349,9 +364,9 @@
             <div class="cb-detail-section">
               <div class="cb-detail-label">包含元素：</div>
               <ul class="cb-detail-list">
-                <li>机载监测与云匣子协同终端（统称：机载侧协同能力）</li>
-                <li>关联设备/系统（文档定义的机载端）：黑匣子（FDR/CVR）、通感算一体机载感知预警设备、机组</li>
-                <li>数据采集系统（FDR/CVR）与通感算一体机载感知预警系统（模块表）</li>
+                <li>数据采集系统：黑匣子（FDR/CVR）</li>
+                <li>通感算一体机载感知预警系统：机载监测与云匣子协同终端（统称：机载侧协同能力）、通感算一体机载感知预警系统</li>
+                <li>机组系统（民航体系单元）</li>
               </ul>
             </div>
             <div class="cb-detail-section">
@@ -365,7 +380,7 @@
               <ul class="cb-detail-list">
                 <li><strong>1）机载数据采集与留存：</strong>由 FDR/CVR 记录飞行过程中的关键参数（时间、速度、高度、飞机倾斜度、发动机参数等）与驾驶舱话音数据，确保机上数据安全留存。</li>
                 <li><strong>2）机载主动感知预警：</strong>通感算一体机载感知预警系统融合通信与感知能力，获取航空器位置与轨迹信息，并在异常场景触发预警（动态示例中以节点高亮/拖尾表现）。</li>
-                <li><strong>3）告警与状态上报：</strong>将机载侧告警与状态信息通过 5G ATG / HTS 卫星链路快速同步到地面专家组与推演系统，支撑地面实时重构与决策推演启动。</li>
+                <li><strong>3）信息同步：</strong>将机载侧警告、位置与状态等信息通过 5G ATG / HTS 卫星链路快速同步到地面专家组和推演系统，支撑地面实时重构与决策推演启动。</li>
                 <li><strong>4）协同处置承接：</strong>接收地面专家组/推演系统形成的处置方案与指令，在机组侧执行/确认并反馈，形成处置闭环（控制流在动态示例中体现）。</li>
               </ul>
             </div>
@@ -464,6 +479,12 @@ const moduleHighlightContent = computed(() => {
 const unitsConfig = ref(null);
 /** 链路关联配置（来自 links.json），交互关系 tab 与地图曲线数据源 */
 const linksConfig = ref(null);
+/** 信息面板「交互关系」里不展示的演示链路（链路本体仍保留） */
+const PANEL_RELATION_HIDDEN_IDS = new Set(['link-sat-ground', 'link-flight-emergency']);
+const panelRelations = computed(() => {
+  const rels = linksConfig.value?.relations || [];
+  return rels.filter((r) => r?.id && !PANEL_RELATION_HIDDEN_IDS.has(r.id));
+});
 /** 当前选中的关联 id，用于显示对应链路并高亮该项；再次点击同一项则隐藏 */
 const selectedRelationId = ref(null);
 function toggleRelationDetail(relationId) {
@@ -510,6 +531,27 @@ function closePopup() {
   activePopup.value = null;
   vpStatic.value?.clearActiveMarker?.();
 }
+
+const showAirbornePopup = ref(false);
+function onPlaneBillboardClick() {
+  showAirbornePopup.value = true;
+}
+function closeAirbornePopup() {
+  showAirbornePopup.value = false;
+}
+// 与跟随飞机的 popup 同源：用 planeScreenInfo 实时定位，放在 billboard 右上角
+const airbornePopupStyle = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return {};
+  const offsetX = 54;
+  const offsetY = -8;
+  return {
+    position: 'fixed',
+    left: 0,
+    top: 0,
+    transform: `translate(${info.x + offsetX}px, ${info.y + offsetY}px)`
+  };
+});
 const popupStyle = computed(() => {
   const s = activePopup.value?.screen;
   if (!s) return { position: 'fixed', right: '16px', top: '80px' };
@@ -536,15 +578,8 @@ const planePopupStyle = computed(() => {
   };
 });
 
-const planeEnvText = computed(() => {
-  const info = planeScreenInfo.value;
-  if (!info) return '—';
-  const h = info.alt;
-  if (h < 100) return '起飞/滑跑';
-  if (h < 3000) return '爬升';
-  if (h < 8000) return '巡航';
-  return '进近/下降';
-});
+// 跟随飞机 popup 的「状态」与用户点击的阶段按钮同步，不再按高度计算
+const planeEnvText = computed(() => phaseText.value || '—');
 
 const FOLLOW_RANGE_M = 400;
 const FOLLOW_UP_M = 60;
@@ -942,11 +977,27 @@ const onMapMode = (m) => {
     const viewer = vpStatic.value?.getViewer?.();
     if (viewer) {
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(105.0, 35.0, 6500000.0),
+        destination: Cesium.Cartesian3.fromDegrees(113.714584, 33.749261, 1098475.91),
         orientation: {
-          heading: Cesium.Math.toRadians(0),
-          pitch: Cesium.Math.toRadians(-90),
-          roll: 0
+          heading: Cesium.Math.toRadians(351.75),
+          pitch: Cesium.Math.toRadians(-69.4),
+          roll: Cesium.Math.toRadians(360.0)
+        },
+        duration: 1.0,
+        easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+      });
+    }
+  }
+
+  if (m === 'space') {
+    const viewer = vpStatic.value?.getViewer?.();
+    if (viewer) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(147.294068, 35.050793, 83583265.87),
+        orientation: {
+          heading: Cesium.Math.toRadians(0.0),
+          pitch: Cesium.Math.toRadians(-89.98),
+          roll: Cesium.Math.toRadians(0.0)
         },
         duration: 1.0,
         easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
@@ -1132,6 +1183,17 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 4px;
 }
+.airborne-popup-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+.airborne-popup-list li {
+  margin: 4px 0;
+}
+.cb-airborne-popup-follow {
+  pointer-events: auto;
+}
 
 /* 地面模式：地图标点列表弹窗（无背景图，自设计样式） */
 .cb-map-popup--units {
@@ -1196,26 +1258,31 @@ onBeforeUnmount(() => {
 
 /* 地图标点 + 单元详情弹窗 滚动条统一样式 */
 .cb-map-popup--units .cb-float-bd.cb-units-list-bd,
-.cb-detail-modal-bd {
+.cb-detail-modal-bd,
+.cb-msg-panel .cb-panel-body {
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 180, 255, 0.55) rgba(255, 255, 255, 0.06);
 }
 .cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar,
-.cb-detail-modal-bd::-webkit-scrollbar {
+.cb-detail-modal-bd::-webkit-scrollbar,
+.cb-msg-panel .cb-panel-body::-webkit-scrollbar {
   width: 6px;
 }
 .cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar-track,
-.cb-detail-modal-bd::-webkit-scrollbar-track {
+.cb-detail-modal-bd::-webkit-scrollbar-track,
+.cb-msg-panel .cb-panel-body::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 3px;
 }
 .cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar-thumb,
-.cb-detail-modal-bd::-webkit-scrollbar-thumb {
+.cb-detail-modal-bd::-webkit-scrollbar-thumb,
+.cb-msg-panel .cb-panel-body::-webkit-scrollbar-thumb {
   background: rgba(100, 180, 255, 0.5);
   border-radius: 3px;
 }
 .cb-map-popup--units .cb-float-bd.cb-units-list-bd::-webkit-scrollbar-thumb:hover,
-.cb-detail-modal-bd::-webkit-scrollbar-thumb:hover {
+.cb-detail-modal-bd::-webkit-scrollbar-thumb:hover,
+.cb-msg-panel .cb-panel-body::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 180, 255, 0.75);
 }
 

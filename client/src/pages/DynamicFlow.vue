@@ -52,6 +52,7 @@
           :bindVpSingle="bindVpSingle"
           :bindVpCompare="bindVpCompare"
           :model-url="boeingModelUrl"
+          :units-url="engineFailureUnitsUrl"
           :left-model-url="boeingModelUrl"
           :right-model-url="boeingModelUrl"
           :split-position="0.5"
@@ -60,10 +61,13 @@
           :path-points="pathPointsForViewer"
           :path-progress="planeProgress"
           :follow-path="true"
-          :visible-relation-id="selectedRelationId"
+          :visible-relation-id="null"
+          :visible-relation-ids-left="visibleRelationIdsLeft"
+          :visible-relation-ids-right="visibleRelationIdsRight"
           @marker-click="onMarkerClick"
           @marker-move="onMarkerMove"
           @plane-screen-info="onPlaneScreenInfo"
+          @plane-billboard-click="onPlaneBillboardClick"
         >
           <template #header>
             <div class="cb-view-hd">
@@ -213,7 +217,20 @@
           </template>
         </ViewerStage>
 
-        <!-- 标点弹窗（与静态页一致） -->
+        <!-- 机载弹窗（点击飞机 billboard 显示，随飞机位置同步，位于 billboard 右上角） -->
+        <div v-if="showAirbornePopup && planeScreenInfo" class="marker-popup airborne-popup cb-airborne-popup-follow" :style="airbornePopupStyle">
+          <div class="marker-popup-header">
+            <div class="marker-popup-title">机载</div>
+            <button type="button" class="marker-popup-close" aria-label="关闭" @click="closeAirbornePopup">×</button>
+          </div>
+          <div class="marker-popup-body">
+            <ul class="airborne-popup-list">
+              <li>机组</li>
+              <li>国产黑匣子</li>
+              <li>通感算一体机载感知预警设备</li>
+            </ul>
+          </div>
+        </div>
         <div v-if="activePopup" class="marker-popup" :style="popupStyle">
           <div class="marker-popup-header">
             <div class="marker-popup-title">{{ activePopup.meta.name }}</div>
@@ -246,6 +263,9 @@
 
       <TimelineDock
         v-model.number="t"
+        :maxTime="timelineMax"
+        :step="0.1"
+        :keyframeMarks="keyframeMarks"
         :dvTitleIconLeft="dvTitleIconLeft"
         :playing="playing"
         :currentTimeLabel="currentTimeLabel"
@@ -274,7 +294,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import { buildFlightPathFromRunways, buildSampledPositionFromPath } from '../utils/flightPath';
@@ -291,15 +311,19 @@ const dvModeIcon = new URL('../assets/dynamicViewport/title_icon2.png', import.m
 const dvMsgTabSelect = new URL('../assets/dynamicViewport/msgpage_button_select.png', import.meta.url).href;
 const dvMsgTabSelected = new URL('../assets/dynamicViewport/msgpage_button_selected.png', import.meta.url).href;
 
+const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+const engineFailureUnitsUrl = `${baseUrl}/config/dynamic/engine_failure_units.json`;
+
 const vpSingle = ref(null);
 const vpCompare = ref(null);
 
 const planeMoveEnabled = ref(false);
-const planeProgress = ref(0);
+const planeProgress = ref(0.55);
 let _planeMoveRaf = 0;
 
 const planePathEnabled = ref(false);
 const activePopup = ref(null);
+const showAirbornePopup = ref(false);
 
 function onMarkerClick(payload) {
   activePopup.value = payload;
@@ -312,6 +336,25 @@ function closePopup() {
   vpSingle.value?.clearActiveMarker?.();
   vpCompare.value?.clearActiveMarker?.();
 }
+function onPlaneBillboardClick() {
+  showAirbornePopup.value = true;
+}
+function closeAirbornePopup() {
+  showAirbornePopup.value = false;
+}
+// 与跟随飞机的 popup 同源：用 planeScreenInfo 实时定位，放在 billboard 右上角
+const airbornePopupStyle = computed(() => {
+  const info = planeScreenInfo.value;
+  if (!info) return {};
+  const offsetX = 54;
+  const offsetY = -8;
+  return {
+    position: 'fixed',
+    left: 0,
+    top: 0,
+    transform: `translate(${info.x + offsetX}px, ${info.y + offsetY}px)`
+  };
+});
 const popupStyle = computed(() => {
   const s = activePopup.value?.screen;
   if (!s) return { position: 'fixed', right: '16px', top: '80px' };
@@ -548,6 +591,7 @@ const planeEnvText = computed(() => {
   return '进近/下降';
 });
 
+const timelineMax = ref(100);
 const t = ref(0);
 const lastNodeIdNo = ref(-1);
 const lastNodeIdYes = ref(-1);
@@ -555,11 +599,14 @@ const lastNodeIdSingle = ref(-1);
 const currentNodeId = ref(-1);
 const activeScenario = ref('engine');
 const steps = ref([]);
+const scenarioNodes = ref([]);
 const disposalCards = ref([]);
 const playing = ref(false);
 const activeSymbol = ref('plane');
-/** 当前选中的链路关联 id（与静态架构页交互关系「点击查看详细信息」一致，来自 links.json） */
+/** 当前选中的链路关联 id（保留兼容，不再作为主驱动；主驱动为 visibleRelationIdsLeft/Right） */
 const selectedRelationId = ref(null);
+const visibleRelationIdsLeft = ref([]);
+const visibleRelationIdsRight = ref([]);
 const rightTab = ref('info');
 
 const infoBoxVisible = ref(false);
@@ -613,7 +660,7 @@ const firedAlerts = reactive(new Set());
 
 const currentScenarioName = computed(() => scenarios.find((s) => s.key === activeScenario.value)?.name || '单发失效');
 
-const currentTimeLabel = computed(() => t.value);
+const currentTimeLabel = computed(() => t.value.toFixed(1));
 
 const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
 
@@ -663,6 +710,54 @@ const currentCardYes = computed(() => steps.value[getCurrentNodeIndexByTime(t.va
 const currentCard = computed(() => currentCardYes.value || fallbackCard());
 const currentCompareMeta = computed(() => getCompareMeta(activeScenario.value, currentCardYes.value?.nodeId ?? 0));
 
+const keyframeMarks = computed(() => {
+  const nodes = scenarioNodes.value || [];
+
+  const YES_ALLOWED = new Set(['0.0', '0.3', '10.3', '40.3']);
+  const NO_ALLOWED = new Set([0, 60, 180, 600, 1800]);
+
+  const yesTimes = Array.from(
+    new Set(
+      nodes
+        .map((n) => n?.yes?.t)
+        .filter((v) => v != null)
+        .map((v) => Number(v))
+        .filter((v) => Number.isFinite(v))
+        .map((v) => v.toFixed(1))
+        .filter((s) => YES_ALLOWED.has(s))
+    )
+  )
+    .map((s) => Number(s))
+    .sort((a, b) => a - b);
+
+  const noTimes = Array.from(
+    new Set(
+      nodes
+        .map((n) => n?.no?.t)
+        .filter((v) => v != null)
+        .map((v) => Number(v))
+        .filter((v) => Number.isFinite(v))
+        .filter((v) => NO_ALLOWED.has(v))
+    )
+  ).sort((a, b) => a - b);
+
+  const yesMarks = yesTimes.map((t) => ({
+    side: 'yes',
+    t,
+    label: `T+${t.toFixed(1)}s`,
+    title: `T+${t.toFixed(1)}s`
+  }));
+
+  const noMarks = noTimes.map((t) => ({
+    side: 'no',
+    t,
+    label: t === 0 ? 'T+0.0s' : `T+${(t / 60).toFixed(1)}min`,
+    title: t === 0 ? 'T+0.0s' : `T+${t.toFixed(1)}s`
+  }));
+
+  return [...yesMarks, ...noMarks];
+});
+
 const fallbackCard = () => ({
   id: -1,
   nodeId: -1,
@@ -702,7 +797,8 @@ const updateLinkPresentation = () => {
 
 const updateCompareMarkersAt = (time) => {
   if (!isCompare.value) return;
-  const rangeMax = 100;
+  const rangeMax = timelineMax.value;
+  if (rangeMax <= 0) return;
   const currentNode = getCurrentNodeByTime(time, 'yes');
   const nodeId = currentNode?.nodeId ?? 0;
   const meta = getCompareMeta(activeScenario.value, nodeId);
@@ -785,6 +881,14 @@ const refreshAll = (time, fromUser = false) => {
   const nodeYes = steps.value[curIdxYes];
 
   if (!isCompare.value) {
+    visibleRelationIdsLeft.value = nodeYes?.activeRelations_yes ?? [];
+    visibleRelationIdsRight.value = [];
+  } else {
+    visibleRelationIdsLeft.value = nodeYes?.activeRelations_yes ?? [];
+    visibleRelationIdsRight.value = nodeNo?.activeRelations_no ?? [];
+  }
+
+  if (!isCompare.value) {
     if (nodeYes && curIdxYes !== lastNodeIdSingle.value) {
       updateFloatingCard(nodeYes);
       highlightDisposalList(nodeYes);
@@ -840,18 +944,21 @@ const stopTimer = () => {
 const startTimer = () => {
   if (playTimer) return;
   playing.value = true;
+  const step = 0.1;
   playTimer = setInterval(() => {
-    if (t.value >= 100) {
+    const max = timelineMax.value;
+    if (t.value >= max) {
       stopTimer();
       return;
     }
-    t.value = clamp(t.value + 1, 0, 100);
+    t.value = clamp(t.value + step, 0, max);
     refreshAll(t.value, false);
   }, 200);
 };
 
 const jumpTo = (targetT) => {
-  const nextT = clamp(Math.round(targetT), 0, 100);
+  const max = timelineMax.value;
+  const nextT = clamp(Number(targetT) || 0, 0, max);
   if (playing.value) {
     stopTimer();
   }
@@ -884,7 +991,8 @@ const onReset = () => {
 };
 
 const onScrub = (val) => {
-  const nextT = clamp(Math.round(Number(val) || 0), 0, 100);
+  const max = timelineMax.value;
+  const nextT = clamp(Number(val) ?? 0, 0, max);
   updateCompareMarkersAt(nextT);
   t.value = nextT;
   if (scrubRaf) cancelAnimationFrame(scrubRaf);
@@ -892,6 +1000,15 @@ const onScrub = (val) => {
     refreshAll(nextT, false);
   });
 };
+
+// 关键帧按钮仅更新 t（v-model），这里统一监听 t 变化并刷新链路/卡片
+watch(t, (newT, oldT) => {
+  if (Number(newT) === Number(oldT)) return;
+  const max = timelineMax.value;
+  const nextT = clamp(Number(newT) ?? 0, 0, max);
+  updateCompareMarkersAt(nextT);
+  refreshAll(nextT, false);
+});
 
 const hideInfoBox = () => {
   infoBoxVisible.value = false;
@@ -997,26 +1114,70 @@ const buildDisposalCards = (items) => {
   }));
 };
 
-const loadScenario = (key) => {
+const loadScenario = async (key) => {
   activeScenario.value = key;
-  const base = [
-    { t: 0, title: '起始', phase: '证实', summary: '确认告警与初始处置', desc: '确认告警与初始处置', events: ['告警触发', '初步通联', '系统自检'], evidence: ['机组报告', '监测数据'], actions: ['启动预案', '通知相关部门'], alert: '', state: '待证实' },
-    { t: 10, title: '发现异常', phase: '证实', summary: '发现异常信号并研判', desc: '发现异常信号并研判', events: ['参数异常（示意）', '链路告警（示意）'], evidence: ['监测数据'], actions: ['发起研判'], alert: '巡航故障告警：请确认', state: '证实中' },
-    { t: 25, title: '证实完成', phase: '证实', summary: '完成证实与定性', desc: '完成证实与定性', events: ['证实完成（示意）'], evidence: ['多源证据'], actions: ['确认结论'], alert: '', state: '已证实' },
-    { t: 45, title: '决策', phase: '决策', summary: '评估影响与方案', desc: '评估影响与方案', events: ['方案比选（示意）'], evidence: ['航路限制'], actions: ['制定备选'], alert: '', state: '决策中' },
-    { t: 65, title: '协调', phase: '协调', summary: '跨单位协调资源', desc: '跨单位协调资源', events: ['协调通联（示意）'], evidence: ['通联记录'], actions: ['协调资源'], alert: '', state: '协调中' },
-    { t: 85, title: '指挥执行', phase: '处置', summary: '下发处置并监控', desc: '下发处置并监控', events: ['指令下发（示意）'], evidence: ['执行回执'], actions: ['下发指令'], alert: '', state: '执行中' },
-    { t: 100, title: '闭环', phase: '回收', summary: '复盘与回收', desc: '复盘与回收', events: ['复盘总结', '数据归档'], evidence: ['复盘记录'], actions: ['归档数据'], alert: '', state: '完成' }
-  ];
-  steps.value = buildSteps(base);
-  disposalCards.value = buildDisposalCards(steps.value);
-  firedAlerts.clear();
-  t.value = 0;
-  lastNodeIdNo.value = -1;
-  lastNodeIdYes.value = -1;
-  lastNodeIdSingle.value = -1;
-  refreshAll(0, true);
-  console.log('[DynamicFlow] loadScenario', key);
+  const scenarioKey = key === 'engine' ? 'engine_failure' : key;
+  try {
+    const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+    const url = base ? `${base}/config/dynamic_scenarios.json` : '/config/dynamic_scenarios.json';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch scenarios failed');
+    const data = await res.json();
+    const scenario = data?.scenarios?.[scenarioKey];
+    if (!scenario) {
+      console.warn('[DynamicFlow] scenario not found:', scenarioKey);
+      return;
+    }
+    timelineMax.value = Number(scenario.durationSec) || 100;
+    const nodes = scenario.nodes || [];
+    scenarioNodes.value = nodes;
+    steps.value = nodes.map((node, idx) => {
+      const y = node.yes || {};
+      const n = node.no || {};
+      return {
+        id: idx,
+        nodeId: node.nodeId ?? idx,
+        t_yes: Number(y.t) ?? 0,
+        t_no: Number(n.t) ?? 0,
+        name: y.title ?? '',
+        title: y.title ?? '',
+        phase: y.phase ?? '',
+        summary: y.summary ?? '',
+        desc: y.desc ?? '',
+        events: y.events ?? [],
+        evidence: y.evidence ?? [],
+        actions: y.actions ?? [],
+        alert: y.alert ?? '',
+        state: y.state ?? '待证实',
+        title_no: n.title ?? '',
+        phase_no: n.phase ?? '',
+        summary_no: n.summary ?? '',
+        desc_no: n.desc ?? '',
+        events_no: n.events ?? [],
+        evidence_no: n.evidence ?? [],
+        actions_no: n.actions ?? [],
+        alert_no: n.alert ?? '',
+        state_no: n.state ?? '待证实',
+        activeRelations_yes: y.activeRelations ?? [],
+        activeRelations_no: n.activeRelations ?? [],
+        hops_no: 3,
+        hops_yes: 2,
+        path_no: '地面→中继→机载',
+        path_yes: '地面→机载'
+      };
+    });
+    disposalCards.value = buildDisposalCards(steps.value);
+    t.value = 0;
+    planeProgress.value = 0.55;
+    lastNodeIdNo.value = -1;
+    lastNodeIdYes.value = -1;
+    lastNodeIdSingle.value = -1;
+    refreshAll(0, true);
+    selectedRelationId.value = steps.value[0]?.activeRelations_yes?.[0] ?? null;
+    console.log('[DynamicFlow] loadScenario', key);
+  } catch (e) {
+    console.warn('[DynamicFlow] loadScenario failed:', e);
+  }
 };
 
 const toggleCompare = () => {
@@ -1112,5 +1273,16 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.airborne-popup-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+.airborne-popup-list li {
+  margin: 4px 0;
+}
+.cb-airborne-popup-follow {
+  pointer-events: auto;
 }
 </style>

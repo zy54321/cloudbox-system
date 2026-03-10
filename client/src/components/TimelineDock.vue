@@ -11,6 +11,29 @@
       <button class="cb-time-btn ghost" type="button">T+ {{ currentTimeLabel }}</button>
     </div>
 
+    <div class="cb-time-marks" v-if="keyframeMarks.length">
+      <div class="marks-group marks-yes" v-if="marksBySide.yes.length">
+        <button
+          v-for="(mark, i) in marksBySide.yes"
+          :key="'yes-' + i"
+          type="button"
+          class="mark mark-yes"
+          :title="mark.title"
+          @click="$emit('update:modelValue', Number(mark.t))"
+        >{{ mark.label }}</button>
+      </div>
+      <div class="marks-group marks-no" v-if="marksBySide.no.length">
+        <button
+          v-for="(mark, i) in marksBySide.no"
+          :key="'no-' + i"
+          type="button"
+          class="mark mark-no"
+          :title="mark.title"
+          @click="$emit('update:modelValue', Number(mark.t))"
+        >{{ mark.label }}</button>
+      </div>
+    </div>
+
     <div class="cb-time-slider" style="position:relative;">
       <div class="compare-markers" v-show="isCompare" ref="compareMarkersEl">
         <div class="compare-marker marker-no" :class="`align-${markerNoAlign}`" :style="{ left: markerNoLeft + '%' }" :title="markerNoTitle">
@@ -25,7 +48,8 @@
       <input
         type="range"
         min="0"
-        max="100"
+        :max="maxTime"
+        :step="step"
         :value="modelValue"
         @input="$emit('update:modelValue', Number($event.target.value)); $emit('scrub', Number($event.target.value))"
         @change="$emit('scrub', Number($event.target.value))"
@@ -37,11 +61,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const compareMarkersEl = ref(null);
 
-defineProps({
+const props = defineProps({
   dvTitleIconLeft: { type: String, required: true },
   playing: { type: Boolean, required: true },
   currentTimeLabel: { type: String, required: true },
@@ -54,8 +78,50 @@ defineProps({
   markerYesLeft: { type: Number, required: true },
   markerYesTitle: { type: String, required: true },
   markerYesLabel: { type: String, required: true },
-  modelValue: { type: Number, required: true }
+  modelValue: { type: Number, required: true },
+  maxTime: { type: Number, required: true },
+  step: { type: Number, default: 0.1 },
+  keyframeMarks: { type: Array, default: () => [] }
+});
+
+const marksBySide = computed(() => {
+  const list = props.keyframeMarks || [];
+  return {
+    yes: list.filter((m) => m.side === 'yes'),
+    no: list.filter((m) => m.side === 'no')
+  };
 });
 
 defineEmits(['togglePlay', 'reset', 'scrub', 'update:modelValue']);
 </script>
+
+<style scoped>
+.cb-time-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 6px;
+}
+.cb-time-marks .marks-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mark {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  background: transparent;
+  color: #fff;
+}
+.mark-yes {
+  border: 1px solid #4CAF50;
+}
+.mark-no {
+  border: 1px solid #3B82F6;
+}
+.mark:hover {
+  opacity: 0.9;
+}
+</style>

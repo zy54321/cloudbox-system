@@ -15,10 +15,11 @@ const _publicImg = (path) => `${typeof window !== 'undefined' ? window.location.
 const planeBillboardImgUrl = _publicImg('img/planeBillBoardImg2.png');
 const unitBillboardImgUrl = _publicImg('img/planeBillBoardImg.png');
 
-const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'module-highlight-screen']);
+const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'plane-billboard-click', 'module-highlight-screen']);
 
 const props = defineProps({
   modelUrl: { type: String, default: '' },
+  unitsUrl: { type: String, default: '/config/units.json' },
   autoFocus: { type: Boolean, default: false },
   readonly: { type: Boolean, default: false },
   splitMode: { type: Boolean, default: false },
@@ -31,8 +32,11 @@ const props = defineProps({
   followPath: { type: Boolean, default: false },
   showClusterDepAirport: { type: Boolean, default: true },
   showClusterArrAirport: { type: Boolean, default: true },
-  /** 当前要显示的关联 id（来自 links.json relation.id），为 null 时所有链路隐藏 */
-  visibleRelationId: { type: String, default: null }
+  /** 当前要显示的关联 id（来自 links.json relation.id），为 null 时所有链路隐藏；保留兼容：转为 Left */
+  visibleRelationId: { type: String, default: null },
+  /** 左/右视口要显示的关联 id 列表（透传自 ViewerStage，双屏时使用） */
+  visibleRelationIdsLeft: { type: Array, default: () => [] },
+  visibleRelationIdsRight: { type: Array, default: () => [] }
 });
 
 const container = ref(null);
@@ -61,6 +65,29 @@ const MODULE_CUBE_OFFSETS = [
   { f: -2, r: -1, u: 0 }
 ];
 let winRafId = 0;
+let flowRaf = 0;
+let flowStartMs = Date.now();
+
+const startFlowLoop = () => {
+  if (flowRaf || !viewer) return;
+  flowStartMs = Date.now();
+  const tick = () => {
+    if (!viewer) {
+      flowRaf = 0;
+      return;
+    }
+    flowRaf = requestAnimationFrame(tick);
+    viewer.scene.requestRender();
+  };
+  flowRaf = requestAnimationFrame(tick);
+};
+
+const stopFlowLoop = () => {
+  if (flowRaf) {
+    cancelAnimationFrame(flowRaf);
+    flowRaf = 0;
+  }
+};
 
 const UNIT_ENTITY_IDS = new Set();
 const UNIT_ENTITY_CLUSTER = new Map();
@@ -68,6 +95,10 @@ const LINK_ENTITY_IDS = new Set();
 const LINK_ENTITY_RELATION_IDS = new Map(); // linkEntityId -> relationId
 /** relationId -> { parent, children[] }，用于聚焦时把两端标点纳入视野 */
 const RELATION_UNIT_IDS = new Map();
+/** relationId -> flowLabel（INFO/CTRL/信息流/控制流等），用于选择材质 */
+const RELATION_FLOW_LABEL = new Map();
+/** linkEntityId -> 'left' | 'right' | 'none'（用于 splitMode 下的 plane 链路） */
+const LINK_ENTITY_SIDE = new Map();
 /** linkId -> { parentId, childId }，用于阶段切换后按当前端点位置刷新链路（如飞机移动） */
 const LINK_ENTITY_ENDPOINTS = new Map();
 /** 飞机位置变量：起飞/巡航等阶段切换时更新，绘制与飞机连接的链路时用此坐标 */
@@ -81,12 +112,19 @@ const createFlowDashMaterial = () =>
     color: new Cesium.Color(0.35, 0.75, 1.0, 0.95),
     gapColor: new Cesium.Color(0.2, 0.5, 0.85, 0.35),
     dashLength: 22,
-    dashPattern: new Cesium.CallbackProperty((time) => {
-      const sec = time ? Cesium.JulianDate.secondsDifference(time, new Cesium.JulianDate(0)) : 0;
+    dashPattern: new Cesium.CallbackProperty(() => {
+      // 不依赖 Cesium clock；用真实时间 + requestRenderLoop 保证静止也流动
+      const sec = (Date.now() - flowStartMs) / 1000;
       const shift = Math.floor(sec * 4) % 16;
       return ((0xf0f0 >>> shift) | (0xf0f0 << (16 - shift))) >>> 0;
     }, false)
   });
+
+const getLinkMaterialByFlowLabel = (flowLabel) => {
+  const f = String(flowLabel ?? '').toUpperCase();
+  if (f === 'CTRL') return new Cesium.PolylineArrowMaterialProperty(new Cesium.Color(1.0, 0.55, 0.1, 0.95));
+  return createFlowDashMaterial();
+};
 
 /** 根据实体 id 获取当前时刻的笛卡尔位置 */
 const getEntityPosition = (entityId) => {
@@ -131,7 +169,7 @@ const updateUnitEntitiesVisibility = () => {
 const loadAndAddUnits = async () => {
   if (!viewer?.entities) return;
   try {
-    const res = await fetch(`${_base ? _base + '/' : '/'}config/units.json`);
+    const res = await fetch(props.unitsUrl);
     if (!res.ok) return;
     const data = await res.json();
 
@@ -205,16 +243,77 @@ const loadAndAddUnits = async () => {
   }
 };
 
-/** 根据 visibleRelationId 更新链路显示/隐藏 */
+/** 根据 visibleRelationId / visibleRelationIdsLeft|Right 更新链路显示/隐藏与 splitDirection */
 const updateLinkVisibility = () => {
   if (!viewer?.entities) return;
-  const vid = props.visibleRelationId;
+  const leftArr = props.visibleRelationId != null ? [props.visibleRelationId] : (props.visibleRelationIdsLeft || []);
+  const rightArr = props.visibleRelationIdsRight || [];
+  const leftSet = new Set(leftArr.map(String).filter(Boolean));
+  const rightSet = new Set(rightArr.map(String).filter(Boolean));
+  const splitMode = props.splitMode;
+
+  // 双屏时：把「含 plane 端点」的关联分别绘制为 LEFT/RIGHT splitDirection 的实体
+  // 这里采用“每次重建 plane 链路实体”的方式，保证方向与可见集合一致
+  if (RELATIONS_WITH_PLANE.size) {
+    const toRemove = [];
+    LINK_ENTITY_IDS.forEach((linkId) => {
+      const rid = LINK_ENTITY_RELATION_IDS.get(linkId);
+      if (rid && RELATIONS_WITH_PLANE.has(rid)) toRemove.push(linkId);
+    });
+    toRemove.forEach((linkId) => {
+      const e = viewer.entities.getById(linkId);
+      if (e) viewer.entities.remove(e);
+      LINK_ENTITY_IDS.delete(linkId);
+      LINK_ENTITY_RELATION_IDS.delete(linkId);
+      LINK_ENTITY_ENDPOINTS.delete(linkId);
+      LINK_ENTITY_SIDE.delete(linkId);
+    });
+
+    if (!splitMode) {
+      leftSet.forEach((rid) => {
+        if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'none');
+      });
+    } else {
+      leftSet.forEach((rid) => {
+        if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'left');
+      });
+      rightSet.forEach((rid) => {
+        if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'right');
+      });
+    }
+  }
+
   LINK_ENTITY_IDS.forEach((linkId) => {
     const e = viewer.entities.getById(linkId);
     if (!e) return;
     const relId = LINK_ENTITY_RELATION_IDS.get(linkId);
-    e.show = !!(vid && relId === vid);
+    if (!relId) return;
+    const rid = String(relId);
+    const side = LINK_ENTITY_SIDE.get(linkId) || 'none';
+
+    const dir = !splitMode
+      ? Cesium.SplitDirection.NONE
+      : side === 'left'
+        ? (leftSet.has(rid) ? Cesium.SplitDirection.LEFT : Cesium.SplitDirection.NONE)
+        : side === 'right'
+          ? (rightSet.has(rid) ? Cesium.SplitDirection.RIGHT : Cesium.SplitDirection.NONE)
+          : (leftSet.has(rid)
+              ? Cesium.SplitDirection.LEFT
+              : rightSet.has(rid)
+                ? Cesium.SplitDirection.RIGHT
+                : Cesium.SplitDirection.NONE);
+
+    e.show = !splitMode ? leftSet.has(rid) : dir !== Cesium.SplitDirection.NONE;
+    e.splitDirection = dir;
+    if (e.polyline) e.polyline.splitDirection = dir;
   });
+  let anyShown = false;
+  LINK_ENTITY_IDS.forEach((linkId) => {
+    const e = viewer.entities.getById(linkId);
+    if (e?.show) anyShown = true;
+  });
+  if (anyShown) startFlowLoop();
+  else stopFlowLoop();
   viewer.scene.requestRender();
 };
 
@@ -273,6 +372,7 @@ const removeLinkEntitiesForRelation = (relationId) => {
     LINK_ENTITY_IDS.delete(linkId);
     LINK_ENTITY_RELATION_IDS.delete(linkId);
     LINK_ENTITY_ENDPOINTS.delete(linkId);
+    LINK_ENTITY_SIDE.delete(linkId);
   });
   viewer?.scene?.requestRender();
 };
@@ -280,32 +380,43 @@ const removeLinkEntitiesForRelation = (relationId) => {
 /**
  * 绘制「与飞机连接的」关联链路：按 edges 每条边 [from,to] 取坐标（plane 用变量），画完即静态。
  */
-const drawPlaneRelationLinks = (relationId) => {
+const drawPlaneRelationLinks = (relationId, side = 'none') => {
   if (!viewer?.entities) return;
   const relData = RELATION_UNIT_IDS.get(relationId);
   if (!relData?.edges?.length) return;
+  const material = getLinkMaterialByFlowLabel(RELATION_FLOW_LABEL.get(relationId));
   const getPos = (id) => (id === 'plane' ? getPlanePosition() : getEntityPosition(id));
   for (const [fromId, toId] of relData.edges) {
     const fromPos = getPos(fromId);
     const toPos = getPos(toId);
     if (!fromPos || !toPos) continue;
     const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
-    const linkId = `link-${relationId}-${fromId}-${toId}`;
+    const suffix = side === 'left' ? 'L' : side === 'right' ? 'R' : 'N';
+    const linkId = `link-${relationId}-${fromId}-${toId}-${suffix}`;
     viewer.entities.add({
       id: linkId,
       show: true,
       polyline: {
         positions,
         width: 3,
-        material: createFlowDashMaterial(),
+        material,
         arcType: Cesium.ArcType.NONE,
         clampToGround: false,
-        classificationType: Cesium.ClassificationType.NONE
-      }
+        classificationType: Cesium.ClassificationType.NONE,
+        splitDirection: Cesium.SplitDirection.NONE
+      },
+      splitDirection: !props.splitMode
+        ? Cesium.SplitDirection.NONE
+        : side === 'left'
+          ? Cesium.SplitDirection.LEFT
+          : side === 'right'
+            ? Cesium.SplitDirection.RIGHT
+            : Cesium.SplitDirection.NONE
     });
     LINK_ENTITY_IDS.add(linkId);
     LINK_ENTITY_RELATION_IDS.set(linkId, relationId);
     LINK_ENTITY_ENDPOINTS.set(linkId, { parentId: fromId, childId: toId });
+    LINK_ENTITY_SIDE.set(linkId, side);
   }
   viewer.scene.requestRender();
 };
@@ -333,8 +444,10 @@ const loadAndAddLinks = async () => {
   });
   LINK_ENTITY_IDS.clear();
   LINK_ENTITY_RELATION_IDS.clear();
+  LINK_ENTITY_SIDE.clear();
   LINK_ENTITY_ENDPOINTS.clear();
   RELATION_UNIT_IDS.clear();
+  RELATION_FLOW_LABEL.clear();
   RELATIONS_WITH_PLANE.clear();
   try {
     const res = await fetch(`${_base ? _base + '/' : '/'}config/links.json`);
@@ -345,6 +458,7 @@ const loadAndAddLinks = async () => {
       const edges = normalizeRelationEdges(rel);
       if (!edges.length) continue;
       RELATION_UNIT_IDS.set(rel.id, { edges: edges.map((e) => [...e]) });
+      RELATION_FLOW_LABEL.set(rel.id, rel.flowLabel);
       const hasPlane = edges.some(([a, b]) => a === 'plane' || b === 'plane');
       if (hasPlane) {
         RELATIONS_WITH_PLANE.add(rel.id);
@@ -356,21 +470,26 @@ const loadAndAddLinks = async () => {
         if (!fromPos || !toPos) continue;
         const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
         const linkId = `link-${rel.id}-${fromId}-${toId}`;
+        const material = (rel.flowLabel === 'CTRL' || String(rel.flowLabel).toUpperCase() === 'CTRL')
+          ? new Cesium.PolylineArrowMaterialProperty(new Cesium.Color(1.0, 0.55, 0.1, 0.95))
+          : createFlowDashMaterial();
         viewer.entities.add({
           id: linkId,
           show: false,
           polyline: {
             positions,
             width: 3,
-            material: createFlowDashMaterial(),
+            material,
             arcType: Cesium.ArcType.NONE,
             clampToGround: false,
-            classificationType: Cesium.ClassificationType.NONE
+            classificationType: Cesium.ClassificationType.NONE,
+            splitDirection: Cesium.SplitDirection.NONE
           }
         });
         LINK_ENTITY_IDS.add(linkId);
         LINK_ENTITY_RELATION_IDS.set(linkId, rel.id);
         LINK_ENTITY_ENDPOINTS.set(linkId, { parentId: fromId, childId: toId });
+        LINK_ENTITY_SIDE.set(linkId, 'none');
       }
     }
     updateLinkVisibility();
@@ -567,14 +686,26 @@ const loadGlbModelEntity = async (uri) => {
   modelEntity = planeEntity;
 
   billboardEntity = viewer.entities.add({
+    id: 'planeBillboard',
     position: billboardPosition,
     billboard: {
       image: planeBillboardImgUrl,
       show: true,
       scale: 0.5,
-      verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY
     }
   });
+
+  // 模型实体已就绪：若当前选中的是「含 plane 端点」链路，此时才能拿到 plane 坐标完成绘制
+  try {
+    const pNow = planeEntity.position?.getValue?.(viewer.clock.currentTime);
+    if (pNow) planePositionCartesian = Cesium.Cartesian3.clone(pNow);
+  } catch (_) {}
+  if (props.visibleRelationId != null && RELATIONS_WITH_PLANE.has(props.visibleRelationId)) {
+    removeLinkEntitiesForRelation(props.visibleRelationId);
+    drawPlaneRelationLinks(props.visibleRelationId);
+  }
 
   viewer.scene.requestRender?.();
 
@@ -810,6 +941,8 @@ onMounted(async () => {
   if (!container.value) return;
   viewer = await createCesiumViewer(container.value, creditEl.value);
 
+  viewer.scene.splitPosition = props.splitMode ? props.splitPosition : 1.0;
+
   const ctrl = viewer.scene?.screenSpaceCameraController;
   if (ctrl) ctrl.enableInputs = !props.readonly;
 
@@ -837,7 +970,21 @@ onMounted(async () => {
     const lat = Cesium.Math.toDegrees(carto.latitude);
     const h = carto.height;
 
-    console.log(`[Pick] lon=${lon.toFixed(6)}, lat=${lat.toFixed(6)}, h=${Number.isFinite(h) ? h.toFixed(2) : '0.00'}m`);
+    // 相机参数：经纬高 + heading/pitch/roll（度）
+    const cam = viewer.camera;
+    const camCarto = Cesium.Cartographic.fromCartesian(cam.positionWC);
+    const camLon = Cesium.Math.toDegrees(camCarto.longitude);
+    const camLat = Cesium.Math.toDegrees(camCarto.latitude);
+    const camH = camCarto.height ?? 0;
+    const camHeading = Cesium.Math.toDegrees(cam.heading);
+    const camPitch = Cesium.Math.toDegrees(cam.pitch);
+    const camRoll = Cesium.Math.toDegrees(cam.roll);
+
+    console.log(
+      `[Pick] lon=${lon.toFixed(6)}, lat=${lat.toFixed(6)}, h=${Number.isFinite(h) ? h.toFixed(2) : '0.00'}m | ` +
+        `cam lon=${camLon.toFixed(6)}, lat=${camLat.toFixed(6)}, h=${Number.isFinite(camH) ? camH.toFixed(2) : '0.00'}m | ` +
+        `heading=${camHeading.toFixed(2)}°, pitch=${camPitch.toFixed(2)}°, roll=${camRoll.toFixed(2)}°`
+    );
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   await loadAndAddUnits();
@@ -854,6 +1001,13 @@ onMounted(async () => {
     const picked = viewer.scene.pick(movement.position);
     if (!Cesium.defined(picked) || !picked.id) return;
     const ent = picked.id;
+    if (ent.id === 'planeBillboard') {
+      const pos = ent.position?.getValue(viewer.clock.currentTime);
+      const win = pos ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos) : null;
+      const screen = win ? canvasToViewport(win.x, win.y) : null;
+      emit('plane-billboard-click', { screen });
+      return;
+    }
     const meta = ent.__meta;
     if (!meta) return;
     activeMarkerEntity = ent;
@@ -895,7 +1049,7 @@ onMounted(async () => {
   });
 
   if (props.splitMode) {
-    viewer.scene.splitPosition = props.splitPosition;
+    viewer.scene.splitPosition = props.splitPosition ?? 0.5;
 
     const spline = (props.followPath && props.pathPoints) ? buildSpline(props.pathPoints) : null;
     const basePosition = spline
@@ -1020,6 +1174,23 @@ watch(
 );
 
 watch(
+  () => [props.splitMode, props.splitPosition],
+  () => {
+    if (!viewer?.scene) return;
+    viewer.scene.splitPosition = props.splitMode ? (props.splitPosition ?? 0.5) : 1.0;
+    viewer.scene.requestRender();
+  }
+);
+
+watch(
+  () => [props.visibleRelationId, props.visibleRelationIdsLeft, props.visibleRelationIdsRight, props.splitMode],
+  () => {
+    updateLinkVisibility();
+  },
+  { deep: true }
+);
+
+watch(
   () => props.visibleRelationId,
   (newVal) => {
     if (newVal == null) {
@@ -1039,6 +1210,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  stopFlowLoop();
   if (_planeFaultFlashInterval) {
     clearInterval(_planeFaultFlashInterval);
     _planeFaultFlashInterval = null;
