@@ -106,24 +106,120 @@ let planePositionCartesian = null;
 /** 含端点 "plane" 的关联 id 集合，这些链路在用户点击该关联时再按当前飞机位置重绘 */
 const RELATIONS_WITH_PLANE = new Set();
 
-/** 流动虚线材质（dashPattern 随时间变化形成流动效果） */
-const createFlowDashMaterial = () =>
-  new Cesium.PolylineDashMaterialProperty({
-    color: new Cesium.Color(0.35, 0.75, 1.0, 0.95),
-    gapColor: new Cesium.Color(0.2, 0.5, 0.85, 0.35),
-    dashLength: 22,
-    dashPattern: new Cesium.CallbackProperty(() => {
-      // 不依赖 Cesium clock；用真实时间 + requestRenderLoop 保证静止也流动
-      const sec = (Date.now() - flowStartMs) / 1000;
-      const shift = Math.floor(sec * 4) % 16;
-      return ((0xf0f0 >>> shift) | (0xf0f0 << (16 - shift))) >>> 0;
-    }, false)
-  });
+// --- 卷帘专用 Polyline 材质扩展 (纯 GLSL 实现，修复编译报错) ---
+const ensureSplitMaterials = () => {
+  const cache = Cesium.Material._materialCache;
+  
+  // 1. 独立编写的流动虚线（信息流）材质
+  if (!cache.getMaterial('SplitDash')) {
+    cache.addMaterial('SplitDash', {
+      fabric: {
+        type: 'SplitDash',
+        uniforms: {
+          color: new Cesium.Color(0.35, 0.75, 1.0, 0.95),
+          time: 0.0,
+          splitDir: 0.0,
+          splitPos: 0.5
+        },
+        source: `
+          czm_material czm_getMaterial(czm_materialInput materialInput) {
+            // --- 双屏裁剪逻辑 ---
+            float fragX = gl_FragCoord.x / czm_viewport.z;
+            if (splitDir < 0.0 && fragX > splitPos) discard; // LEFT
+            if (splitDir > 0.0 && fragX < splitPos) discard; // RIGHT
+
+            czm_material material = czm_getDefaultMaterial(materialInput);
+            vec2 st = materialInput.st;
+            
+            // --- 纯数学计算流动虚线尾迹 ---
+            // st.s 是线段方向的相对距离。乘以 4.0 代表一条线上画 4 段。
+            float t = fract(st.s * 4.0 - time); 
+            float a = smoothstep(0.0, 0.15, t) * (1.0 - smoothstep(0.75, 1.0, t));
+            
+            material.diffuse = color.rgb;
+            material.alpha = a * color.a;
+            return material;
+          }
+        `
+      },
+      translucent: () => true
+    });
+  }
+
+  // 2. 独立编写的流动箭头（控制流）材质
+  if (!cache.getMaterial('SplitArrow')) {
+    cache.addMaterial('SplitArrow', {
+      fabric: {
+        type: 'SplitArrow',
+        uniforms: {
+          color: new Cesium.Color(1.0, 0.55, 0.1, 0.95), // 控制流橙色
+          time: 0.0,
+          splitDir: 0.0,
+          splitPos: 0.5
+        },
+        source: `
+          czm_material czm_getMaterial(czm_materialInput materialInput) {
+            // --- 双屏裁剪逻辑 ---
+            float fragX = gl_FragCoord.x / czm_viewport.z;
+            if (splitDir < 0.0 && fragX > splitPos) discard;
+            if (splitDir > 0.0 && fragX < splitPos) discard;
+
+            czm_material material = czm_getDefaultMaterial(materialInput);
+            vec2 st = materialInput.st;
+            
+            // --- 纯数学计算流动箭头形状 ---
+            float distFromCenter = abs(st.t - 0.5) * 2.0; // 离中心线的距离 (0到1)
+            float s = fract(st.s * 4.0 - time); // 沿线的周期性流动
+            
+            // 箭头头部 (后半段变窄) 和 箭柄 (前半段等宽)
+            float arrowHead = step(distFromCenter, (1.0 - s) * 2.0) * step(0.5, s);
+            float arrowStem = step(distFromCenter, 0.2) * step(s, 0.5);
+            float arrowShape = clamp(arrowHead + arrowStem, 0.0, 1.0);
+            
+            material.diffuse = color.rgb;
+            material.alpha = arrowShape * color.a;
+            return material;
+          }
+        `
+      },
+      translucent: () => true
+    });
+  }
+};
+
+// --- 自定义的 MaterialProperty 类 ---
+class SplitLinkMaterialProperty {
+  constructor(isArrow = false) {
+    this._definitionChanged = new Cesium.Event();
+    this.isArrow = isArrow;
+    this.splitDir = 0.0; // -1(左), 1(右), 0(全屏)
+    this._startMs = Date.now();
+  }
+  get isConstant() { return false; }
+  get definitionChanged() { return this._definitionChanged; }
+  getType(time) {
+    ensureSplitMaterials();
+    return this.isArrow ? 'SplitArrow' : 'SplitDash';
+  }
+  getValue(time, result) {
+    if (!result) result = {};
+    
+    // 传递双屏参数
+    result.splitDir = this.splitDir;
+    result.splitPos = viewer?.scene?.splitPosition ?? 0.5;
+    
+    // 统一使用内置时间驱动流动动画 (修改最后面的乘数可以调整流速)
+    result.time = ((Date.now() - this._startMs) / 1000) * 1.5; 
+    
+    return result;
+  }
+  equals(other) { return this === other; }
+}
 
 const getLinkMaterialByFlowLabel = (flowLabel) => {
   const f = String(flowLabel ?? '').toUpperCase();
-  if (f === 'CTRL') return new Cesium.PolylineArrowMaterialProperty(new Cesium.Color(1.0, 0.55, 0.1, 0.95));
-  return createFlowDashMaterial();
+  const isArrow = (f === 'CTRL');
+  return new SplitLinkMaterialProperty(isArrow);
 };
 
 /** 根据实体 id 获取当前时刻的笛卡尔位置 */
@@ -306,6 +402,17 @@ const updateLinkVisibility = () => {
     e.show = !splitMode ? leftSet.has(rid) : dir !== Cesium.SplitDirection.NONE;
     e.splitDirection = dir;
     if (e.polyline) e.polyline.splitDirection = dir;
+
+    // 将方向传给自定义 Split 材质，真正让 Shader 做左右裁剪
+    if (e.polyline && e.polyline.material && e.polyline.material.splitDir !== undefined) {
+      if (dir === Cesium.SplitDirection.LEFT) {
+        e.polyline.material.splitDir = -1.0;
+      } else if (dir === Cesium.SplitDirection.RIGHT) {
+        e.polyline.material.splitDir = 1.0;
+      } else {
+        e.polyline.material.splitDir = 0.0;
+      }
+    }
   });
   let anyShown = false;
   LINK_ENTITY_IDS.forEach((linkId) => {
@@ -470,9 +577,7 @@ const loadAndAddLinks = async () => {
         if (!fromPos || !toPos) continue;
         const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
         const linkId = `link-${rel.id}-${fromId}-${toId}`;
-        const material = (rel.flowLabel === 'CTRL' || String(rel.flowLabel).toUpperCase() === 'CTRL')
-          ? new Cesium.PolylineArrowMaterialProperty(new Cesium.Color(1.0, 0.55, 0.1, 0.95))
-          : createFlowDashMaterial();
+        const material = getLinkMaterialByFlowLabel(rel.flowLabel);
         viewer.entities.add({
           id: linkId,
           show: false,
