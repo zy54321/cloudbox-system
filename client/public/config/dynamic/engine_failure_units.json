@@ -7,12 +7,12 @@
         "name": "有云匣子链路节点",
         "center": { "lon": 108.7519, "lat": 34.446756 },
         "units": [
-          { "id": "yes-engine", "type": "ground_unit", "name": "发动机", "lon": 108.7619, "lat": 34.456756, "image": "img/planeBillBoardImg.png" },
-          { "id": "yes-onboard-warn", "type": "ground_unit", "name": "机载感知预警系统", "lon": 108.7719, "lat": 34.446756, "image": "img/planeBillBoardImg.png" },
-          { "id": "yes-expert-group", "type": "ground_unit", "name": "地面专家组", "lon": 108.7619, "lat": 34.436756, "image": "img/planeBillBoardImg.png" },
-          { "id": "yes-sim-system", "type": "ground_unit", "name": "体系推演系统", "lon": 108.7519, "lat": 34.426756, "image": "img/planeBillBoardImg.png" },
-          { "id": "yes-atc", "type": "ground_unit", "name": "空管", "lon": 108.7419, "lat": 34.436756, "image": "img/planeBillBoardImg.png" },
-          { "id": "yes-airport", "type": "ground_unit", "name": "机场", "lon": 108.7319, "lat": 34.446756, "image": "img/planeBillBoardImg.png" }
+          { "id": "yes-engine", "type": "ground_unit", "name": "发动机", "lon": 113.782093, "lat": 36.458785, "alt": 9999.05, "image": "img/planeBillBoardImg.png" },
+          { "id": "yes-onboard-warn", "type": "ground_unit", "name": "机载感知预警系统", "lon": 113.782127, "lat": 36.458907, "alt": 10001.14, "image": "img/planeBillBoardImg.png" },
+          { "id": "yes-expert-group", "type": "ground_unit", "name": "地面专家组", "lon": 108.771877, "lat": 34.444764, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "yes-sim-system", "type": "ground_unit", "name": "体系推演系统", "lon": 108.764385, "lat": 34.445150, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "yes-atc", "type": "ground_unit", "name": "空管", "lon": 108.753483, "lat": 34.436707, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "yes-airport", "type": "ground_unit", "name": "机场", "lon": 108.755438, "lat": 34.441397, "alt": 0, "image": "img/planeBillBoardImg.png" }
         ]
       },
       {
@@ -20,16 +20,16 @@
         "name": "无云匣子链路节点",
         "center": { "lon": 116.42906, "lat": 39.485763 },
         "units": [
-          { "id": "no-crew", "type": "ground_unit", "name": "机组", "lon": 116.43906, "lat": 39.495763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-tower", "type": "ground_unit", "name": "塔台/进近管制", "lon": 116.44906, "lat": 39.485763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-atc", "type": "ground_unit", "name": "空管", "lon": 116.43906, "lat": 39.475763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-emergency-sys", "type": "ground_unit", "name": "应急处理系统", "lon": 116.42906, "lat": 39.465763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-airport-ops", "type": "ground_unit", "name": "机场运行控制中心", "lon": 116.41906, "lat": 39.475763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-dispatch", "type": "ground_unit", "name": "航司签派/运控中心", "lon": 116.40906, "lat": 39.485763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-sat-gw", "type": "ground_unit", "name": "卫星通信地面站", "lon": 116.39906, "lat": 39.495763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-maint", "type": "ground_unit", "name": "机务", "lon": 116.40906, "lat": 39.505763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-airline-tech", "type": "ground_unit", "name": "航司技术支援", "lon": 116.41906, "lat": 39.515763, "image": "img/planeBillBoardImg.png" },
-          { "id": "no-safety", "type": "ground_unit", "name": "航安部门", "lon": 116.42906, "lat": 39.525763, "image": "img/planeBillBoardImg.png" }
+          { "id": "no-crew", "type": "ground_unit", "name": "机组", "lon": 113.782116, "lat": 36.458891, "alt": 10002.23, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-tower", "type": "ground_unit", "name": "塔台/进近管制", "lon": 108.769123, "lat": 34.452557, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-atc", "type": "ground_unit", "name": "空管", "lon": 108.753483, "lat": 34.436707, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-emergency-sys", "type": "ground_unit", "name": "应急处理系统", "lon": 108.766150, "lat": 34.448481, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-airport-ops", "type": "ground_unit", "name": "机场运行控制中心", "lon": 108.765459, "lat": 34.440776, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-dispatch", "type": "ground_unit", "name": "航司签派/运控中心", "lon": 108.743828, "lat": 34.432877, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-sat-gw", "type": "ground_unit", "name": "卫星通信地面站", "lon": 108.790894, "lat": 34.433823, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-maint", "type": "ground_unit", "name": "机务", "lon": 116.431346, "lat": 39.494977, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-airline-tech", "type": "ground_unit", "name": "航司技术支援", "lon": 116.406143, "lat": 39.519143, "alt": 0, "image": "img/planeBillBoardImg.png" },
+          { "id": "no-safety", "type": "ground_unit", "name": "航安部门", "lon": 116.433551, "lat": 39.521643, "alt": 0, "image": "img/planeBillBoardImg.png" }
         ]
       }
     ]

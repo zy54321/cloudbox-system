@@ -276,11 +276,11 @@ const loadAndAddUnits = async () => {
     const data = await res.json();
 
     const addBillboard = (unit, clusterId) => {
-      const altM = unit.alt_m ?? 0;
+      const altM = unit.alt ?? unit.alt_m ?? 0;
       const imgUrl = unit.image ? _publicImg(unit.image) : unitBillboardImgUrl;
       const scale = unit.size != null ? Number(unit.size) : 0.5;
       const offsetX = unit.offset?.[0] ?? 0;
-      const offsetY = unit.offset?.[1] ?? -28;
+      const offsetY = (unit.offset?.[1] ?? -28) + 25;
       const e = viewer.entities.add({
         id: unit.id,
         position: Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, altM),
@@ -314,6 +314,7 @@ const loadAndAddUnits = async () => {
         type: unit.type,
         lon: unit.lon,
         lat: unit.lat,
+        alt: altM,
         alt_m: altM,
         clusterId: clusterId ?? null
       };
@@ -324,7 +325,7 @@ const loadAndAddUnits = async () => {
     const space = data.space;
     if (space?.star_based?.length) {
       space.star_based.forEach((u) => {
-        addBillboard({ ...u, alt_m: u.alt_m ?? 0 }, null);
+        addBillboard({ ...u, alt: u.alt ?? u.alt_m ?? 0 }, null);
       });
     }
 
@@ -333,7 +334,7 @@ const loadAndAddUnits = async () => {
       ground.clusters.forEach((cluster) => {
         const clusterId = cluster.clusterId;
         (cluster.units || []).forEach((u) => {
-          addBillboard({ ...u, alt_m: 0 }, clusterId);
+          addBillboard({ ...u, alt: u.alt ?? 0 }, clusterId);
         });
       });
     }

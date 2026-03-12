@@ -85,9 +85,7 @@ const effectiveIdsLeft = computed(() =>
 const effectiveIdsRight = computed(() =>
   props.visibleRelationId != null ? [] : (props.visibleRelationIdsRight || [])
 );
-const effectiveVisibleRelationId = computed(() =>
-  props.visibleRelationId ?? (effectiveIdsLeft.value[0] ?? null)
-);
+const effectiveVisibleRelationId = computed(() => props.visibleRelationId);
 
 const vpSingleRef = (el) => {
   if (typeof props.bindVpSingle === 'function') props.bindVpSingle(el);

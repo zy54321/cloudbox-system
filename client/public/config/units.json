@@ -39,6 +39,7 @@
             "lon": 108.7319,
             "lat": 34.461756,
             "image": "img/planeBillBoardImg.png",
+            "alt": 0,
             "size": 0.5,
             "offset": [0, -28]
           },
@@ -48,7 +49,8 @@
             "name": "地面运营控制中心专家组",
             "lon": 108.7669,
             "lat": 34.426755,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "dep-atc",
@@ -56,7 +58,8 @@
             "name": "空管系统",
             "lon": 108.7919,
             "lat": 34.441755,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "dep-airline",
@@ -64,7 +67,8 @@
             "name": "航司系统",
             "lon": 108.7119,
             "lat": 34.446756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "dep-airport",
@@ -72,7 +76,8 @@
             "name": "机场系统",
             "lon": 108.7819,
             "lat": 34.466756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "route-atg-01",
@@ -80,7 +85,8 @@
             "name": "5G基站",
             "lon": 111.2,
             "lat": 36.0,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "route-atg-02",
@@ -88,7 +94,8 @@
             "name": "5G基站",
             "lon": 113.8,
             "lat": 37.5,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "no-crew",
@@ -96,7 +103,8 @@
             "name": "机组(无)",
             "lon": 108.8019,
             "lat": 34.456756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "no-tower",
@@ -104,7 +112,8 @@
             "name": "塔台(无)",
             "lon": 108.8219,
             "lat": 34.446756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "no-emergency-sys",
@@ -112,7 +121,8 @@
             "name": "应急系统(无)",
             "lon": 108.8419,
             "lat": 34.436756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "no-airport-ops",
@@ -120,7 +130,8 @@
             "name": "机场运行(无)",
             "lon": 108.8619,
             "lat": 34.426756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "no-dispatch",
@@ -128,7 +139,8 @@
             "name": "签派(无)",
             "lon": 108.8819,
             "lat": 34.416756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "no-sat-gw",
@@ -136,7 +148,8 @@
             "name": "卫星关口(无)",
             "lon": 108.9019,
             "lat": 34.406756,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           }
         ]
       },
@@ -151,7 +164,8 @@
             "name": "体系应急决策推演系统",
             "lon": 116.404059,
             "lat": 39.470762,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "arr-rescue",
@@ -159,7 +173,8 @@
             "name": "救援系统",
             "lon": 116.429059,
             "lat": 39.515763,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "arr-airport",
@@ -167,7 +182,8 @@
             "name": "机场系统",
             "lon": 116.459059,
             "lat": 39.505763,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "arr-atg-station",
@@ -175,7 +191,8 @@
             "name": "5G基站",
             "lon": 116.449059,
             "lat": 39.525762,
-            "image": "img/planeBillBoardImg.png"
+            "image": "img/planeBillBoardImg.png",
+            "alt": 0
           },
           {
             "id": "no-maint",
