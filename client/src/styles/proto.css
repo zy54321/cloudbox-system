@@ -597,7 +597,7 @@ header {
 
 .cb-wrap--static .cb-panel-body {
   width: 442px;
-  background: rgba(18, 72, 155, 0.6);
+  background: rgba(18, 72, 155, 0.1);
   border-radius: 6px;
   border: 1px solid #2A74C9;
   padding: 12px;
@@ -800,8 +800,10 @@ header {
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 2px;
-  background: rgba(255, 255, 255, 0.25);
+  width: 4px;
+  margin-left: -2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.5));
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
   pointer-events: none;
 }
 
@@ -2103,7 +2105,7 @@ body {
 /* left (ViewerStage) and right panel stretch and align */
 .cb-wrap--dynamic .cb-dv-main,
 .cb-wrap--dynamic .cb-dv-panel {
-  height: 100%;
+  /* height: 100%; */
   min-height: 0;
   min-width: 0;
 }
@@ -2157,4 +2159,664 @@ body {
   opacity: 0.75;
   margin-left: 8px;
   white-space: nowrap;
+}
+
+/* ===== 大屏浮层布局：第1步，仅 UI，不改业务 ===== */
+.cb-wrap--static,
+.cb-wrap--dynamic {
+  position: relative;
+}
+
+.cb-wrap--static .cb-main,
+.cb-wrap--dynamic .cb-main--screen {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ---------- 静态架构页：地图全铺 + 右侧面板浮层 ---------- */
+.cb-wrap--static .cb-grid--static-screen {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-height: 0;
+}
+
+.cb-wrap--static .cb-center-card--screen {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  min-width: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(7, 22, 50, 0.18);
+  border: 1px solid rgba(42, 116, 201, 0.35);
+}
+
+.cb-wrap--static .cb-center-card--screen > .cb-card-hd--overlay {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 35;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(7, 22, 50, 0.42);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.cb-wrap--static .cb-tools--overlay {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 500px;
+  z-index: 35;
+  padding: 0;
+  max-width: calc(100% - 560px);
+}
+
+.cb-wrap--static .cb-center-stage {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+}
+
+.cb-wrap--static .cb-center-stage > .cb-viewport {
+  height: 100%;
+  border: 0;
+  border-radius: 16px;
+  background: radial-gradient(900px 500px at 30% 30%, rgba(31, 227, 255, 0.10), transparent 60%), rgba(0, 0, 0, 0.12);
+}
+
+.cb-wrap--static .cb-center-stage .cb-cesium-layer,
+.cb-wrap--static .cb-center-stage .cesium-container,
+.cb-wrap--static .cb-center-stage .cesium-widget,
+.cb-wrap--static .cb-center-stage canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.cb-wrap--static .cb-center-stage .cb-overlay-tabs {
+  left: 18px;
+  top: 62px;
+}
+
+.cb-wrap--static .cb-center-stage .cb-stage {
+  left: 288px;
+  top: 70px;
+}
+
+.cb-wrap--static .cb-center-stage .cb-float {
+  top: 18px;
+  right: 500px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.cb-wrap--static .cb-center-tip {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 35;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  background: rgba(7, 22, 50, 0.42);
+  border: 1px solid rgba(42, 116, 201, 0.35);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.cb-wrap--static .cb-warn {
+  left: 18px;
+  right: 500px;
+  width: auto;
+  transform: none;
+  bottom: 74px;
+}
+
+.cb-wrap--static .cb-msg-panel--overlay {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  width: 460px;
+  min-width: 460px;
+  z-index: 40;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
+}
+
+.cb-wrap--static .cb-msg-panel--overlay .cb-panel-body {
+  width: auto;
+  margin: 0 14px 14px;
+  align-items: stretch;
+}
+
+.cb-wrap--static .cb-msg-panel--overlay .cb-item {
+  width: auto;
+}
+
+/* ---------- 动态交互页：地图全铺 + 场景栏/右面板/时间轴浮层 ---------- */
+.cb-wrap--dynamic .cb-scene-panel--overlay {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 14px;
+  z-index: 45;
+  width: auto;
+  height: auto;
+  min-height: 88px;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.20);
+}
+
+.cb-wrap--dynamic .cb-main--screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cb-wrap--dynamic .cb-dv-mainrow {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-height: 0;
+}
+
+.cb-wrap--dynamic .cb-dv-main-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: transparent;
+}
+
+.cb-wrap--dynamic .cb-dv-main-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+}
+
+.cb-wrap--dynamic .cb-dv-main-stage > .cb-viewport,
+.cb-wrap--dynamic .cb-dv-main-stage .cb-viewer-single,
+.cb-wrap--dynamic .cb-dv-main-stage .cb-viewer-split,
+.cb-wrap--dynamic .cb-dv-main-stage .cb-viewport--split-full,
+.cb-wrap--dynamic .cb-dv-main-stage .cb-cesium-layer {
+  height: 100%;
+  min-height: 0;
+}
+
+.cb-wrap--dynamic .cb-dv-main-stage .cesium-container,
+.cb-wrap--dynamic .cb-dv-main-stage .cesium-widget,
+.cb-wrap--dynamic .cb-dv-main-stage canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.cb-wrap--dynamic .cb-dv-main-shell .cb-view-hd {
+  position: absolute;
+  top: 112px;
+  left: 18px;
+  z-index: 42;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(7, 22, 50, 0.42);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.cb-wrap--dynamic .cb-dv-main-shell .cb-symbols--single {
+  top: 166px;
+  left: 18px;
+  right: auto;
+  z-index: 42;
+}
+
+.cb-wrap--dynamic .cb-dv-main-shell .cb-dv-infobox {
+  top: 112px;
+  right: 492px;
+  z-index: 42;
+  backdrop-filter: blur(10px);
+}
+
+.cb-wrap--dynamic .cb-dv-main-shell .floating-card {
+  right: 18px;
+  bottom: 124px;
+  z-index: 42;
+  backdrop-filter: blur(10px);
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .cb-split-hint {
+  top: 112px;
+  left: 18px;
+  z-index: 42;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .cb-symbols--compare {
+  top: 146px;
+  left: 18px;
+  right: auto;
+  z-index: 42;
+}
+
+.cb-wrap--dynamic .cb-dv-panel--overlay {
+  position: absolute;
+  top: 112px;
+  right: 18px;
+  bottom: 116px;
+  width: 460px;
+  min-width: 460px;
+  max-width: 460px;
+  z-index: 43;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
+}
+
+.cb-wrap--dynamic .cb-dv-panel--overlay .cb-panel-body {
+  padding: 12px 14px 14px;
+}
+
+.cb-wrap--dynamic .cb-dv-panel--overlay .cb-info-box {
+  width: 100%;
+}
+
+.cb-wrap--dynamic .cb-time-dock--overlay {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 44;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
+}
+
+/* 右侧浮层出现后，单屏/双屏信息框向左让位，避免压到右面板 */
+.cb-wrap--dynamic .cb-infobox,
+.cb-wrap--dynamic .cb-dv-infobox {
+  max-width: min(420px, calc(100vw - 560px));
+}
+
+/* 保持浮层可点击，地图继续在底层响应 */
+.cb-wrap--static .cb-card-hd--overlay,
+.cb-wrap--static .cb-tools--overlay,
+.cb-wrap--static .cb-center-tip,
+.cb-wrap--static .cb-msg-panel--overlay,
+.cb-wrap--dynamic .cb-scene-panel--overlay,
+.cb-wrap--dynamic .cb-dv-panel--overlay,
+.cb-wrap--dynamic .cb-time-dock--overlay,
+.cb-wrap--dynamic .cb-dv-main-shell .cb-view-hd {
+  pointer-events: auto;
+}
+
+/* ===== 地图容器全铺：去掉外层限制与圆角 ===== */
+/* 静态页：主工作区无外边距，地图区无圆角无边框 */
+.cb-wrap--static {
+  padding: 0 !important;
+}
+
+.cb-wrap--static .cb-main {
+  margin-top: 0 !important;
+}
+
+.cb-wrap--static .cb-center-card--screen {
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.cb-wrap--static .cb-center-stage > .cb-viewport {
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+/* 动态页：主视图壳与 viewport 无圆角无边框，地图铺满 */
+.cb-wrap--dynamic .cb-dv-main-shell {
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.cb-wrap--dynamic .cb-dv-main-stage .cb-viewport,
+.cb-wrap--dynamic .cb-dv-main-stage .cb-viewport--split-full {
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.cb-wrap--dynamic .cb-dv-main-stage .cb-cesium-layer {
+  border-radius: 0 !important;
+}
+
+/* 动态页：主工作区无外边距，地图贴满 */
+.cb-wrap--dynamic {
+  padding: 0 !important;
+}
+
+.cb-wrap--dynamic .cb-main--screen {
+  margin-top: 0 !important;
+}
+
+/* ===== 第3步：地图基础控件位置微调 ===== */
+.cb-wrap--static .cb-center-stage .cb-map-hud {
+  left: 18px;
+  bottom: 18px;
+}
+
+.cb-wrap--dynamic .cb-dv-main-stage .cb-map-hud,
+.cb-wrap--dynamic .cb-dv-main-shell .cb-map-hud {
+  left: 18px;
+  bottom: 120px;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-map-hud {
+  bottom: 120px;
+}
+
+.cb-wrap--static .cb-map-scale,
+.cb-wrap--dynamic .cb-map-scale {
+  min-width: 92px;
+}
+
+/* ===== 动态交互：单屏当前节点置顶居中（不改场景栏风格） ===== */
+.cb-wrap--dynamic .cb-scene-panel--overlay .cb-scene-node {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  transform: translateX(-50%);
+  z-index: 52;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(7, 22, 50, 0.42);
+  border: 1px solid rgba(42, 116, 201, 0.35);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  font-weight: 700;
+  color: #EAFBFF;
+  text-shadow: 0 0 6px rgba(0, 175, 255, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ===== 动态交互：单屏四按钮上移 ===== */
+.cb-wrap--dynamic .cb-dv-main-shell .cb-symbols--single {
+  top: 116px;
+}
+
+/* ===== 时间轴：按钮/进度条间距微调（单屏/双屏） ===== */
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-actions {
+  transform: translateY(-10px);
+  margin-bottom: 5px;
+}
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-slider {
+  margin-top: 5px;
+  transform: translateY(15px);
+}
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-hint {
+  transform: translateY(15px);
+}
+
+/* ===== 动态交互：时间轴布局（按钮行在进度条上方，间距 5px） ===== */
+/* .cb-wrap--dynamic .cb-dv-timeline .cb-time-actions,
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-slider,
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-hint {
+  transform: none;
+} */
+
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-actions {
+  align-items: center;
+  margin: 0;
+}
+
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-slider {
+  flex: 1;
+  min-width: 1095px;
+  margin-top: 5px;
+}
+
+/* ===== 动态交互：时间轴回退（按钮位置不变，marks 一行在进度条上方） ===== */
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-row {
+  display: block;
+}
+
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-actions {
+  transform: none;
+  margin: 0;
+}
+
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-marks {
+  transform: none;
+  margin: 5px 0;
+}
+
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-slider {
+  transform: none;
+  margin: 0;
+}
+
+/* ===== 时间轴：marks 上移10px，进度条下移10px（左右不变） ===== */
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-marks {
+  transform: translateY(-10px);
+}
+.cb-wrap--dynamic .cb-dv-timeline .cb-time-slider {
+  transform: translateY(18px);
+}
+
+/* ===== 动态交互：单屏处置卡片文案与样式修正 ===== */
+.cb-wrap--dynamic .cb-dv-panel .list .item {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+}
+
+.cb-wrap--dynamic .cb-card-title {
+  display: block;
+  width: auto;
+  height: auto;
+  font-size: 16px;
+  line-height: 1.55;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.cb-wrap--dynamic .cb-card-sub {
+  display: block;
+  width: auto;
+  height: auto;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: normal;
+}
+
+.cb-wrap--dynamic .cb-card-summary {
+  margin-top: 8px;
+  color: #14f7fd;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.cb-wrap--dynamic .cb-card-desc {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(8, 48, 109, 0.5);
+  border: 1px solid rgba(42, 116, 201, 0.4);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
+  line-height: 1.72;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.cb-wrap--dynamic .card-section-title {
+  margin: 10px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cb-wrap--dynamic .cb-card-item,
+.cb-wrap--dynamic .card-node-info .cb-card-item {
+  width: auto;
+  height: auto;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.68;
+  font-size: 13px;
+}
+
+.cb-wrap--dynamic .card-info-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.cb-wrap--dynamic .cb-dv-panel .cb-panel-body .scroll {
+  padding-right: 4px;
+}
+
+/* ===== 动态交互：双屏浮窗承接处置卡片 ===== */
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card {
+  right: 14px;
+  bottom: 122px;
+  width: min(360px, calc(100% - 28px));
+  min-width: 260px;
+  background: rgba(14, 44, 123, 0.46);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card-header {
+  min-height: 38px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #eaf4ff;
+  background: linear-gradient(180deg, rgba(60, 120, 255, 0.24), rgba(18, 52, 120, 0.1));
+  border-bottom: 1px solid rgba(42, 116, 201, 0.42);
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card-body {
+  padding: 12px 14px;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .card-meta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.5;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .card-summary {
+  margin-top: 8px;
+  color: #14f7fd;
+  font-size: 13px;
+  line-height: 1.62;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .card-desc {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(8, 48, 109, 0.5);
+  border: 1px solid rgba(42, 116, 201, 0.4);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
+  line-height: 1.72;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .card-details {
+  margin-top: 10px;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .card-section-title {
+  margin: 10px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .card-info-list {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  line-height: 1.68;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .btn-small,
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .btn-icon {
+  border: 1px solid rgba(82, 221, 255, 0.25);
+  background: rgba(8, 48, 109, 0.42);
+  color: #fff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cb-wrap--dynamic .cb-dv-panel[style*='display: none'] {
+  pointer-events: none;
+}
+
+/* ===== 动态交互：双屏浮窗滚动条样式 ===== */
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(82, 221, 255, 0.5) transparent;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card-body::-webkit-scrollbar-track {
+  background: rgba(8, 48, 109, 0.3);
+  border-radius: 100px;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(82, 221, 255, 0.6), rgba(42, 116, 201, 0.7));
+  border-radius: 100px;
+  min-height: 40px;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col .floating-card-body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(82, 221, 255, 0.8), rgba(42, 116, 201, 0.9));
 }

@@ -1,5 +1,5 @@
 <template>
-  <section class="cb-time-dock cb-dv-timeline">
+  <section class="cb-time-dock cb-dv-timeline cb-time-dock--overlay">
     <div class="cb-dv-title">
       <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
       <span class="cb-dv-title-text cb-dv-timeline-title">时间轴（T+ 回放）</span>
@@ -34,7 +34,8 @@
       </div>
     </div>
 
-    <div class="cb-time-slider" style="position:relative;">
+    <div class="cb-time-slider" style="position: absolute;
+    left: 495px;">
       <div class="compare-markers" v-show="isCompare" ref="compareMarkersEl">
         <div class="compare-marker marker-no" :class="`align-${markerNoAlign}`" :style="{ left: markerNoLeft + '%' }" :title="markerNoTitle">
           <span class="marker-label">{{ markerNoLabel }}</span>
@@ -86,25 +87,37 @@ const props = defineProps({
 
 const marksBySide = computed(() => {
   const list = props.keyframeMarks || [];
-  return {
-    yes: list.filter((m) => m.side === 'yes'),
-    no: list.filter((m) => m.side === 'no')
-  };
+  const yes = list.filter((m) => m.side === 'yes');
+  const no = list.filter((m) => m.side === 'no');
+  if (!props.isCompare) {
+    return { yes, no: [] };
+  }
+  return { yes, no };
 });
 
 defineEmits(['togglePlay', 'reset', 'scrub', 'update:modelValue']);
 </script>
 
 <style scoped>
+.cb-time-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .cb-time-marks {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
-  margin: 8px 0 6px;
+  margin: 5px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  transform: translateY(-10px);
 }
 .cb-time-marks .marks-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
 }
 .mark {
@@ -123,5 +136,21 @@ defineEmits(['togglePlay', 'reset', 'scrub', 'update:modelValue']);
 }
 .mark:hover {
   opacity: 0.9;
+}
+
+.cb-time-slider {
+  transform: translateY(10px);
+}
+
+/* compare 标签：从进度条上方移到下方 */
+.compare-markers {
+  overflow: visible;
+  top: 0;
+  height: 0;
+}
+
+.compare-marker .marker-label {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 </style>

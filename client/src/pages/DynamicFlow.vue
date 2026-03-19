@@ -12,7 +12,8 @@
   </header>
 
   <div class="cb-wrap cb-wrap--dynamic">
-    <section class="cb-scene-bar cb-scene-panel">
+    <section class="cb-scene-bar cb-scene-panel cb-scene-panel--overlay">
+      <div v-if="!isCompare" class="cb-scene-node">当前节点：{{ currentNodeName }}</div>
       <div class="cb-scene-head">
         <div class="cb-scene-title">
           <img class="cb-scene-title-icon" :src="dvTitleIconLeft" alt="" />
@@ -45,8 +46,8 @@
       </div>
     </section>
 
-    <div class="cb-main">
-      <div class="cb-grid cb-grid--dynamic cb-dv-mainrow">
+    <div class="cb-main cb-main--screen">
+      <div class="cb-grid cb-grid--dynamic cb-dv-mainrow cb-dv-mainrow--screen">
         <ViewerStage
           :isCompare="isCompare"
           :bindVpSingle="bindVpSingle"
@@ -61,23 +62,19 @@
           :path-points="pathPointsForViewer"
           :path-progress="planeProgress"
           :follow-path="true"
+          :dep-airport-label="depAirportLabel"
+          :arr-airport-label="arrAirportLabel"
           :visible-relation-id="null"
           :visible-relation-ids-left="visibleRelationIdsLeft"
           :visible-relation-ids-right="visibleRelationIdsRight"
+          :visible-unit-cluster-ids-left="visibleUnitClusterIdsLeft"
+          :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
           @marker-click="onMarkerClick"
           @marker-move="onMarkerMove"
           @plane-screen-info="onPlaneScreenInfo"
           @plane-billboard-click="onPlaneBillboardClick"
         >
-          <template #header>
-            <div class="cb-view-hd">
-              <div class="cb-dv-title">
-                <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
-                <span class="cb-dv-title-text">主视图区</span><span class="cb-title-hint">（单屏/双屏可切换，时间轴同步驱动）</span>
-              </div>
-              <div class="cb-view-title smallnote">当前节点：{{ currentNodeName }}</div>
-            </div>
-          </template>
+          <template #header></template>
 
           <template #single-overlays>
             <!-- 与静态架构页完全一致：仅根据 plane-screen-info 刷新 popup，不参与飞机运动逻辑 -->
@@ -144,7 +141,7 @@
               </div>
               <FloatingCard
                 id="disposalFloatingCardNo"
-                :card="currentCardNo"
+                :card="{ ...currentCardYes, phase: '有云匣子' }"
                 :collapsed="floatingCardNoCollapsed"
                 :detailsOpen="detailsOpenNo"
                 keyPrefix="no-"
@@ -162,39 +159,13 @@
               </div>
               <FloatingCard
                 id="disposalFloatingCardYes"
-                :card="currentCardYes"
+                :card="{ ...currentCardNo, phase: '无云匣子' }"
                 :collapsed="floatingCardYesCollapsed"
                 :detailsOpen="detailsOpenYes"
                 keyPrefix="yes-"
                 @toggle-collapsed="floatingCardYesCollapsed = !floatingCardYesCollapsed"
                 @toggle-details="detailsOpenYes = !detailsOpenYes"
               >
-                <template #extra>
-                  <div class="card-section-title">对比结论（示意）</div>
-                  <div class="compare-content">
-                    <div class="compare-data-row">
-                      <span class="compare-data-label">T_no / T_yes</span>
-                      <span class="compare-data-value">{{ currentCompareMeta.t_no }} / {{ currentCompareMeta.t_yes }}</span>
-                    </div>
-                    <div class="compare-data-row">
-                      <span class="compare-data-label">Δt</span>
-                      <span class="compare-data-value compare-delta">{{ currentCompareMeta.dt }}</span>
-                    </div>
-                    <div class="compare-data-row">
-                      <span class="compare-data-label">hops_no / hops_yes</span>
-                      <span class="compare-data-value">{{ currentCompareMeta.hops_no }} / {{ currentCompareMeta.hops_yes }}</span>
-                    </div>
-                    <div class="compare-data-row">
-                      <span class="compare-data-label">Δhops</span>
-                      <span class="compare-data-value compare-delta">{{ currentCompareMeta.dhops }}</span>
-                    </div>
-                    <div class="compare-path">
-                      <div class="compare-hint">路径（示意）</div>
-                      <div>{{ currentCompareMeta.path_no }}</div>
-                      <div>{{ currentCompareMeta.path_yes }}</div>
-                    </div>
-                  </div>
-                </template>
               </FloatingCard>
             </div>
             <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
@@ -237,21 +208,22 @@
             <button type="button" class="marker-popup-close" @click="closePopup">×</button>
           </div>
           <div class="marker-popup-body">
-            <div>类型：{{ activePopup.meta.type }}</div>
-            <div>经度：{{ activePopup.meta.lon.toFixed(6) }}</div>
-            <div>纬度：{{ activePopup.meta.lat.toFixed(6) }}</div>
-            <div>高度：{{ activePopup.meta.alt_m }} m</div>
+            <div class="marker-popup-meta">
+              <span class="marker-popup-badge">{{ activePopup.meta.infoSource || '节点介绍' }}</span>
+              <span class="marker-popup-type">类型：{{ activePopup.meta.typeLabel || activePopup.meta.type }}</span>
+            </div>
+            <div class="marker-popup-desc">{{ activePopup.meta.info || '该节点用于展示其在"云匣子"体系中的位置与作用。' }}</div>
           </div>
         </div>
 
-        <RightPanel
+        <RightPanel v-show="!isCompare"
           :dvTitleIconLeft="dvTitleIconLeft"
           :dvMsgTabSelected="dvMsgTabSelected"
           :dvMsgTabSelect="dvMsgTabSelect"
           :rightTab="rightTab"
           :toggleRightTab="toggleRightTab"
           :infoFields="infoFields"
-          :disposalCards="disposalCards"
+          :disposalCards="panelDisposalCards"
           :currentNodeId="currentNodeId"
           :isCompare="isCompare"
           :steps="steps"
@@ -346,8 +318,8 @@ function closeAirbornePopup() {
 const airbornePopupStyle = computed(() => {
   const info = planeScreenInfo.value;
   if (!info) return {};
-  const offsetX = 54;
-  const offsetY = -8;
+  const offsetX = 4;
+  const offsetY = -108;
   return {
     position: 'fixed',
     left: 0,
@@ -367,6 +339,8 @@ let _dynTickUnsub2 = null;
 // --- 与 StaticHome 同一套：跑道贴地 -> buildFlightPathFromRunways ---
 const startRunway = { a: { lon: 108.742455, lat: 34.439922 }, b: { lon: 108.761345, lat: 34.453589 } };
 const endRunway = { a: { lon: 116.430944, lat: 39.473803 }, b: { lon: 116.427175, lat: 39.497722 } };
+const depAirportLabel = '西安咸阳国际机场';
+const arrAirportLabel = '北京首都国际机场';
 
 const flightPath = buildFlightPathFromRunways(startRunway, endRunway, { cruiseAlt: 10000 });
 
@@ -607,6 +581,8 @@ const activeSymbol = ref('plane');
 const selectedRelationId = ref(null);
 const visibleRelationIdsLeft = ref([]);
 const visibleRelationIdsRight = ref([]);
+const visibleUnitClusterIdsLeft = ref(['DYN_YES']);
+const visibleUnitClusterIdsRight = ref([]);
 const rightTab = ref('info');
 
 const infoBoxVisible = ref(false);
@@ -705,9 +681,9 @@ const getCompareMeta = (scenarioKey, nodeId) => {
   };
 };
 
-const currentCardNo = computed(() => steps.value[getCurrentNodeIndexByTime(t.value, 'no')] || fallbackCard());
-const currentCardYes = computed(() => steps.value[getCurrentNodeIndexByTime(t.value, 'yes')] || fallbackCard());
-const currentCard = computed(() => currentCardYes.value || fallbackCard());
+const currentCardNo = computed(() => toSideCard(steps.value[getCurrentNodeIndexByTime(t.value, 'no')], 'no'));
+const currentCardYes = computed(() => toSideCard(steps.value[getCurrentNodeIndexByTime(t.value, 'yes')], 'yes'));
+const currentCard = computed(() => currentCardYes.value || fallbackCard('yes'));
 const currentCompareMeta = computed(() => getCompareMeta(activeScenario.value, currentCardYes.value?.nodeId ?? 0));
 
 const keyframeMarks = computed(() => {
@@ -758,23 +734,49 @@ const keyframeMarks = computed(() => {
   return [...yesMarks, ...noMarks];
 });
 
-const fallbackCard = () => ({
-  id: -1,
-  nodeId: -1,
-  name: '起始',
-  phase: '起始',
-  title: '起始',
-  summary: '暂无数据',
-  state: '待证实',
-  t_no: 0,
-  t_yes: 0,
-  t: 0,
-  alert: '',
-  events: [],
-  evidence: [],
-  actions: [],
-  compare: getCompareMeta(activeScenario.value, 0)
-});
+const toSideCard = (step, side = 'yes') => {
+  if (!step) {
+    return {
+      id: -1,
+      nodeId: -1,
+      name: '起始',
+      phase: '起始',
+      title: '起始',
+      summary: '暂无数据',
+      desc: '',
+      state: '待证实',
+      t: 0,
+      t_no: 0,
+      t_yes: 0,
+      alert: '',
+      events: [],
+      evidence: [],
+      actions: [],
+      compare: getCompareMeta(activeScenario.value, 0)
+    };
+  }
+  const isNo = side === 'no';
+  return {
+    id: step.id,
+    nodeId: step.nodeId,
+    name: isNo ? (step.title_no || step.name || step.title || '') : (step.title || step.name || ''),
+    phase: isNo ? (step.phase_no || step.phase || '') : (step.phase || ''),
+    title: isNo ? (step.title_no || step.title || '') : (step.title || ''),
+    summary: isNo ? (step.summary_no || step.summary || '') : (step.summary || ''),
+    desc: isNo ? (step.desc_no || step.desc || '') : (step.desc || ''),
+    state: isNo ? (step.state_no || step.state || '待证实') : (step.state || '待证实'),
+    t: isNo ? Number(step.t_no ?? 0) : Number(step.t_yes ?? 0),
+    t_no: Number(step.t_no ?? 0),
+    t_yes: Number(step.t_yes ?? 0),
+    events: isNo ? ((step.events_no && step.events_no.length) ? step.events_no : (step.events || [])) : (step.events || []),
+    evidence: isNo ? ((step.evidence_no && step.evidence_no.length) ? step.evidence_no : (step.evidence || [])) : (step.evidence || []),
+    actions: isNo ? ((step.actions_no && step.actions_no.length) ? step.actions_no : (step.actions || [])) : (step.actions || []),
+    alert: isNo ? (step.alert_no || step.alert || '') : (step.alert || ''),
+    compare: getCompareMeta(activeScenario.value, step.nodeId ?? 0)
+  };
+};
+
+const fallbackCard = (side = 'yes') => toSideCard(null, side);
 
 const setPlaneState = (side, state) => {
   let cls = '';
@@ -883,9 +885,13 @@ const refreshAll = (time, fromUser = false) => {
   if (!isCompare.value) {
     visibleRelationIdsLeft.value = nodeYes?.activeRelations_yes ?? [];
     visibleRelationIdsRight.value = [];
+    visibleUnitClusterIdsLeft.value = ['DYN_YES'];
+    visibleUnitClusterIdsRight.value = [];
   } else {
     visibleRelationIdsLeft.value = nodeYes?.activeRelations_yes ?? [];
     visibleRelationIdsRight.value = nodeNo?.activeRelations_no ?? [];
+    visibleUnitClusterIdsLeft.value = ['DYN_YES'];
+    visibleUnitClusterIdsRight.value = ['DYN_NO'];
   }
 
   if (!isCompare.value) {
@@ -1096,23 +1102,15 @@ const buildSteps = (base) => {
 };
 
 const buildDisposalCards = (items) => {
-  return items.map((s) => ({
-    id: s.id,
-    nodeId: s.nodeId,
-    phase: s.phase,
-    title: s.title,
-    summary: s.summary,
-    state: s.state,
-    t_no: s.t_no,
-    t_yes: s.t_yes,
-    t: s.t_no,
-    events: s.events,
-    evidence: s.evidence,
-    actions: s.actions,
-    alert: s.alert || '',
-    compare: getCompareMeta(activeScenario.value, s.nodeId)
-  }));
+  return items
+    .map((s) => toSideCard(s, 'yes'))
+    .filter((card) => String(card.title || '').trim());
 };
+
+const panelDisposalCards = computed(() => {
+  if (isCompare.value) return [];
+  return disposalCards.value;
+});
 
 const loadScenario = async (key) => {
   activeScenario.value = key;
@@ -1216,63 +1214,118 @@ onBeforeUnmount(() => {
   left: 0;
   top: 0;
   pointer-events: none;
-  min-width: 140px;
-  padding: 6px 10px;
-  background: rgba(0, 20, 40, 0.92);
-  border: 1px solid rgba(100, 180, 255, 0.5);
-  border-radius: 6px;
-  font-size: 12px;
-  color: #e0f0ff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  min-width: 220px;
+  padding: 0;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 .cb-plane-follow-popup-hd {
-  font-weight: 600;
-  margin-bottom: 4px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  color: #eaf4ff;
+  background: linear-gradient(180deg, rgba(60, 120, 255, 0.24), rgba(18, 52, 120, 0.1));
+  border-bottom: 1px solid rgba(42, 116, 201, 0.42);
 }
 .cb-plane-follow-popup-bd {
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
 }
 .cb-plane-follow-row {
   white-space: nowrap;
+  padding: 8px 10px;
+  background: rgba(8, 48, 109, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(42, 116, 201, 0.36);
+  color: rgba(255, 255, 255, 0.94);
+  line-height: 1.5;
 }
 
+/* 地图标点弹窗：与右侧信息面板一致风格 */
 .marker-popup {
   z-index: 100;
-  min-width: 200px;
+  min-width: 220px;
   padding: 0;
-  background: rgba(0, 20, 40, 0.95);
-  border: 1px solid rgba(100, 180, 255, 0.5);
-  border-radius: 8px;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
   font-size: 13px;
   color: #e0f0ff;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 .marker-popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.12);
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.marker-popup-title { font-weight: 600; }
+.marker-popup-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  text-shadow: 0 0 6px #00AFFF;
+}
 .marker-popup-close {
   background: none;
   border: none;
-  color: rgba(255,255,255,0.8);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 18px;
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
 }
 .marker-popup-body {
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  max-width: 340px;
+}
+.marker-popup-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.marker-popup-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(82, 221, 255, 0.45);
+  background: rgba(8, 48, 109, 0.62);
+  color: #9fefff;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.marker-popup-type {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+}
+.marker-popup-desc {
+  padding: 10px 12px;
+  background: rgba(8, 48, 109, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(42, 116, 201, 0.4);
+  color: rgba(255, 255, 255, 0.94);
+  line-height: 1.72;
+  white-space: normal;
 }
 .airborne-popup-list {
   margin: 0;

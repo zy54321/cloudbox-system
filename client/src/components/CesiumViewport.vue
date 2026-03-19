@@ -1,5 +1,19 @@
 <template>
   <div ref="container" class="cesium-container">
+    <div class="cb-map-hud">
+      <div class="cb-map-hud__tools">
+        <button class="cb-map-tool cb-map-tool--home" type="button" title="复位" @click="resetCameraHome">复位</button>
+        <button class="cb-map-tool cb-map-tool--compass" type="button" title="回正北" @click="resetCameraNorth">
+          <span class="cb-map-tool__compass-ring"></span>
+          <span class="cb-map-tool__compass-arrow" :style="{ transform: `translateX(-50%) rotate(${-compassHeadingDeg}deg)` }"></span>
+          <span class="cb-map-tool__compass-text">N</span>
+        </button>
+      </div>
+      <div class="cb-map-scale">
+        <span class="cb-map-scale__label">{{ scaleBarLabel }}</span>
+        <span class="cb-map-scale__bar" :style="{ width: `${scaleBarWidthPx || 40}px` }"></span>
+      </div>
+    </div>
     <div ref="creditEl" class="cb-cesium-credit"></div>
   </div>
 </template>
@@ -12,14 +26,27 @@ import { createCesiumViewer, destroyCesiumViewer } from '../engine/cesium/viewer
 // 所有 billboard 图片统一从 public/img 加载，与 units.json 的 image 路径一致
 const _base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const _publicImg = (path) => `${typeof window !== 'undefined' ? window.location.origin : ''}${_base ? _base + '/' : '/'}${String(path).replace(/^\//, '')}`;
+const _publicAsset = (path) => encodeURI(`${typeof window !== 'undefined' ? window.location.origin : ''}${_base ? _base + '/' : '/'}${String(path).replace(/^\//, '')}`);
 const planeBillboardImgUrl = _publicImg('img/planeBillBoardImg2.png');
 const unitBillboardImgUrl = _publicImg('img/planeBillBoardImg.png');
+const chinaAdminGeoJsonUrl = _publicAsset('json/中国_polyline.geojson');
+const UNIT_LABEL_FADE_START = 60000;
+const UNIT_LABEL_HIDE_DISTANCE = 90000;
+const UNIT_LABEL_MIN_SCALE = 0.75;
+const SCENE_LIGHT_INTENSITY = 3.4;
+const MODEL_ENV_BRIGHTNESS = 1.35;
+const MODEL_ENV_ATMOSPHERE_SCATTER = 3.1;
+const FOG_MIN_BRIGHTNESS = 0.18;
+const AIRPORT_LABEL_HEIGHT_OFFSET_M = 12;
+const AIRPORT_LABEL_FADE_START = 1500000;
+const AIRPORT_LABEL_HIDE_DISTANCE = 12000000;
+const AIRPORT_LABEL_PIXEL_OFFSET = new Cesium.Cartesian2(0, -18);
 
 const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'plane-billboard-click', 'module-highlight-screen']);
 
 const props = defineProps({
   modelUrl: { type: String, default: '' },
-  unitsUrl: { type: String, default: '/config/units.json' },
+  unitsUrl: { type: String, default: `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/config/units.json` },
   autoFocus: { type: Boolean, default: false },
   readonly: { type: Boolean, default: false },
   splitMode: { type: Boolean, default: false },
@@ -30,21 +57,32 @@ const props = defineProps({
   pathPoints: { type: Array, default: null },
   pathProgress: { type: Number, default: 0 },
   followPath: { type: Boolean, default: false },
+  depAirportLabel: { type: String, default: '' },
+  arrAirportLabel: { type: String, default: '' },
   showClusterDepAirport: { type: Boolean, default: true },
   showClusterArrAirport: { type: Boolean, default: true },
   /** 当前要显示的关联 id（来自 links.json relation.id），为 null 时所有链路隐藏；保留兼容：转为 Left */
   visibleRelationId: { type: String, default: null },
   /** 左/右视口要显示的关联 id 列表（透传自 ViewerStage，双屏时使用） */
   visibleRelationIdsLeft: { type: Array, default: () => [] },
-  visibleRelationIdsRight: { type: Array, default: () => [] }
+  visibleRelationIdsRight: { type: Array, default: () => [] },
+  visibleUnitClusterIdsLeft: { type: Array, default: () => [] },
+  visibleUnitClusterIdsRight: { type: Array, default: () => [] }
 });
 
 const container = ref(null);
 const creditEl = ref(null);
+const compassHeadingDeg = ref(0);
+const scaleBarLabel = ref('');
+const scaleBarWidthPx = ref(0);
 
 let viewer = null;
+let chinaBoundaryDataSource = null;
+let chinaBoundaryGeoJsonPromise = null;
 let modelEntity = null;
 let billboardEntity = null;
+let depAirportLabelEntity = null;
+let arrAirportLabelEntity = null;
 let clickHandler = null;
 let pickHandler = null;
 let activeMarkerEntity = null;
@@ -67,6 +105,8 @@ const MODULE_CUBE_OFFSETS = [
 let winRafId = 0;
 let flowRaf = 0;
 let flowStartMs = Date.now();
+let removeHudPostRender = null;
+let lastHudUpdateMs = 0;
 
 const startFlowLoop = () => {
   if (flowRaf || !viewer) return;
@@ -90,6 +130,7 @@ const stopFlowLoop = () => {
 };
 
 const UNIT_ENTITY_IDS = new Set();
+const UNIT_TEXT_BILLBOARD_CACHE = new Map();
 const UNIT_ENTITY_CLUSTER = new Map();
 const LINK_ENTITY_IDS = new Set();
 const LINK_ENTITY_RELATION_IDS = new Map(); // linkEntityId -> relationId
@@ -256,16 +297,111 @@ const computeArcPositions = (start, end, numPoints = 24, arcHeightRatio = 0.15) 
   return points;
 };
 
+const applyUnitSplitDirection = (entity, dir) => {
+  entity.splitDirection = dir;
+  if (entity.billboard) entity.billboard.splitDirection = dir;
+  if (entity.point) entity.point.splitDirection = dir;
+};
+
 const updateUnitEntitiesVisibility = () => {
   if (!viewer?.entities) return;
+  const leftSet = new Set((props.visibleUnitClusterIdsLeft || []).map(String).filter(Boolean));
+  const rightSet = new Set((props.visibleUnitClusterIdsRight || []).map(String).filter(Boolean));
+  const hasDynamicFilter = leftSet.size > 0 || rightSet.size > 0;
+
   UNIT_ENTITY_IDS.forEach((id) => {
     const e = viewer.entities.getById(id);
     const clusterId = UNIT_ENTITY_CLUSTER.get(id);
-    if (!e || clusterId == null) return;
-    if (clusterId === 'DEP_AIRPORT') e.show = props.showClusterDepAirport;
-    else if (clusterId === 'ARR_AIRPORT') e.show = props.showClusterArrAirport;
+    if (!e) return;
+
+    if (!hasDynamicFilter) {
+      let visible = true;
+      if (clusterId === 'DEP_AIRPORT') visible = props.showClusterDepAirport;
+      else if (clusterId === 'ARR_AIRPORT') visible = props.showClusterArrAirport;
+      e.show = visible;
+      applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+      return;
+    }
+
+    const cid = String(clusterId || '');
+    const inLeft = leftSet.has(cid);
+    const inRight = rightSet.has(cid);
+
+    if (!props.splitMode) {
+      e.show = inLeft;
+      applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+      return;
+    }
+
+    e.show = inLeft || inRight;
+
+    let dir = Cesium.SplitDirection.NONE;
+    if (inLeft && !inRight) dir = Cesium.SplitDirection.LEFT;
+    else if (!inLeft && inRight) dir = Cesium.SplitDirection.RIGHT;
+
+    applyUnitSplitDirection(e, dir);
   });
-  viewer.scene.requestRender();
+
+  viewer.scene.requestRender?.();
+};
+
+const roundedRect = (ctx, x, y, w, h, r) => {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+};
+
+const buildUnitTextBillboardImage = (text) => {
+  const key = String(text || '').trim();
+  if (!key) return null;
+  if (UNIT_TEXT_BILLBOARD_CACHE.has(key)) return UNIT_TEXT_BILLBOARD_CACHE.get(key);
+
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const fontSize = 14;
+  const fontWeight = 600;
+  const fontFamily = '"Source Han Sans CN", "Source Han Sans", "Microsoft YaHei", sans-serif';
+  const padX = 10;
+  const padY = 6;
+  const radius = 10;
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  const metrics = ctx.measureText(key);
+  const textWidth = Math.ceil(metrics.width);
+  const width = textWidth + padX * 2;
+  const height = fontSize + padY * 2 + 2;
+
+  canvas.width = Math.ceil(width * dpr);
+  canvas.height = Math.ceil(height * dpr);
+  ctx.scale(dpr, dpr);
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  roundedRect(ctx, 0.5, 0.5, width - 1, height - 1, radius);
+  ctx.fillStyle = 'rgba(14, 44, 123, 0.58)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(42, 116, 201, 0.55)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0, 204, 255, 0.42)';
+  ctx.lineWidth = 2.2;
+  ctx.strokeText(key, width / 2, height / 2 + 0.5);
+
+  ctx.fillStyle = 'rgba(235, 248, 255, 0.98)';
+  ctx.fillText(key, width / 2, height / 2 + 0.5);
+
+  const result = { image: canvas, width, height };
+  UNIT_TEXT_BILLBOARD_CACHE.set(key, result);
+  return result;
 };
 
 const loadAndAddUnits = async () => {
@@ -281,7 +417,22 @@ const loadAndAddUnits = async () => {
       const scale = unit.size != null ? Number(unit.size) : 0.5;
       const offsetX = unit.offset?.[0] ?? 0;
       const offsetY = (unit.offset?.[1] ?? -28) + 25;
-      const e = viewer.entities.add({
+
+      const baseMeta = {
+        id: unit.id,
+        name: unit.name,
+        type: unit.type,
+        typeLabel: toUnitTypeLabel(unit.type),
+        lon: unit.lon,
+        lat: unit.lat,
+        alt: altM,
+        alt_m: altM,
+        clusterId: clusterId ?? null,
+        info: unit.info || '',
+        infoSource: unit.infoSource || ''
+      };
+
+      const iconEntity = viewer.entities.add({
         id: unit.id,
         position: Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, altM),
         billboard: {
@@ -289,37 +440,40 @@ const loadAndAddUnits = async () => {
           show: true,
           scale,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY
-        },
-        label: unit.name
-          ? {
-              text: unit.name,
-              font: '14px sans-serif',
-              show: true,
-              showBackground: true,
-              backgroundPadding: new Cesium.Cartesian2(6, 4),
-              pixelOffset: new Cesium.Cartesian2(offsetX, offsetY),
-              horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, Number.POSITIVE_INFINITY),
-              translucencyByDistance: new Cesium.NearFarScalar(1.0, 1.0, 1.0e9, 1.0),
-              scaleByDistance: new Cesium.NearFarScalar(1.0, 1.0, 1.0e9, 1.0),
-              disableDepthTestDistance: Number.POSITIVE_INFINITY
-            }
-          : undefined
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          splitDirection: Cesium.SplitDirection.NONE
+        }
       });
-      e.__meta = {
-        id: unit.id,
-        name: unit.name,
-        type: unit.type,
-        lon: unit.lon,
-        lat: unit.lat,
-        alt: altM,
-        alt_m: altM,
-        clusterId: clusterId ?? null
-      };
-      UNIT_ENTITY_IDS.add(unit.id);
-      if (clusterId) UNIT_ENTITY_CLUSTER.set(unit.id, clusterId);
+      iconEntity.__meta = baseMeta;
+
+      UNIT_ENTITY_IDS.add(iconEntity.id);
+      if (clusterId) UNIT_ENTITY_CLUSTER.set(iconEntity.id, clusterId);
+
+      const textTexture = buildUnitTextBillboardImage(unit.name);
+      if (textTexture) {
+        const textEntityId = `${unit.id}__text`;
+        const textEntity = viewer.entities.add({
+          id: textEntityId,
+          position: Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, altM),
+          billboard: {
+            image: textTexture.image,
+            show: true,
+            width: textTexture.width,
+            height: textTexture.height,
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(offsetX, offsetY),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, UNIT_LABEL_HIDE_DISTANCE),
+            translucencyByDistance: new Cesium.NearFarScalar(UNIT_LABEL_FADE_START, 1.0, UNIT_LABEL_HIDE_DISTANCE, 0.0),
+            scaleByDistance: new Cesium.NearFarScalar(1000.0, 1.0, UNIT_LABEL_HIDE_DISTANCE, UNIT_LABEL_MIN_SCALE),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            splitDirection: Cesium.SplitDirection.NONE
+          }
+        });
+        textEntity.__meta = { ...baseMeta, isTextBillboard: true, anchorId: unit.id };
+        UNIT_ENTITY_IDS.add(textEntity.id);
+        if (clusterId) UNIT_ENTITY_CLUSTER.set(textEntity.id, clusterId);
+      }
     };
 
     const space = data.space;
@@ -814,6 +968,13 @@ const loadGlbModelEntity = async (uri) => {
       shadows: Cesium.ShadowMode.DISABLED
     }
   });
+  try {
+    const runtimeModel =
+      planeEntity?.model?._runtime?.model ||
+      planeEntity?.model?._cesiumModel ||
+      planeEntity?.model;
+    boostModelBrightness(runtimeModel);
+  } catch (_) {}
   modelEntity = planeEntity;
 
   billboardEntity = viewer.entities.add({
@@ -940,6 +1101,14 @@ const getPlaneScreenInfo = () => {
   };
 };
 
+const toUnitTypeLabel = (type) => {
+  if (type === 'satellite') return '卫星节点';
+  if (type === 'ground_unit') return '地面节点';
+  if (type === 'aircraft') return '机载节点';
+  if (type === 'airport') return '机场节点';
+  return type || '未知类型';
+};
+
 /** 相机高度（米），用于缩放阈值 */
 const getCameraHeight = () => {
   if (!viewer?.camera) return null;
@@ -948,6 +1117,265 @@ const getCameraHeight = () => {
   if (!pos) return null;
   const carto = Cesium.Cartographic.fromCartesian(pos);
   return carto.height;
+};
+
+const loadChinaBoundaryGeoJsonObject = async () => {
+  if (!chinaBoundaryGeoJsonPromise) {
+    chinaBoundaryGeoJsonPromise = fetch(chinaAdminGeoJsonUrl)
+      .then((res) => {
+        if (!res.ok) throw new Error(`[china boundary] load failed: ${res.status}`);
+        return res.json();
+      })
+      .catch((err) => {
+        chinaBoundaryGeoJsonPromise = null;
+        throw err;
+      });
+  }
+  return chinaBoundaryGeoJsonPromise;
+};
+
+const styleChinaBoundaryDataSource = (dataSource) => {
+  if (!dataSource?.entities) return;
+  const mainColor = Cesium.Color.fromCssColorString('#49D8FF').withAlpha(0.72);
+  const outlineColor = Cesium.Color.fromCssColorString('#0A2A66').withAlpha(0.88);
+  const depthFailColor = Cesium.Color.fromCssColorString('#49D8FF').withAlpha(0.35);
+  const entities = dataSource.entities.values;
+  for (const entity of entities) {
+    if (entity.label) entity.label.show = false;
+    if (entity.billboard) entity.billboard.show = false;
+    if (entity.point) entity.point.show = false;
+
+    if (entity.polyline) {
+      entity.polyline.width = 2.8;
+      entity.polyline.material = new Cesium.PolylineOutlineMaterialProperty({
+        color: mainColor,
+        outlineColor,
+        outlineWidth: 2.0
+      });
+      entity.polyline.depthFailMaterial = new Cesium.PolylineOutlineMaterialProperty({
+        color: depthFailColor,
+        outlineColor: outlineColor.withAlpha(0.42),
+        outlineWidth: 2.0
+      });
+      entity.polyline.clampToGround = false;
+      entity.polyline.distanceDisplayCondition = new Cesium.DistanceDisplayCondition(0.0, 2.5e7);
+    }
+
+    if (entity.polygon) {
+      entity.polygon.fill = false;
+      entity.polygon.outline = true;
+      entity.polygon.outlineColor = mainColor;
+      entity.polygon.material = Cesium.Color.TRANSPARENT;
+      entity.polygon.height = 0;
+    }
+  }
+};
+
+const loadChinaBoundaryLayer = async () => {
+  if (!viewer || chinaBoundaryDataSource) return;
+  try {
+    const geojson = await loadChinaBoundaryGeoJsonObject();
+    const dataSource = await Cesium.GeoJsonDataSource.load(geojson, {
+      clampToGround: false,
+      stroke: Cesium.Color.fromCssColorString('#49D8FF').withAlpha(0.72),
+      fill: Cesium.Color.TRANSPARENT,
+      strokeWidth: 2.8,
+      markerSize: 0
+    });
+    styleChinaBoundaryDataSource(dataSource);
+    chinaBoundaryDataSource = dataSource;
+    await viewer.dataSources.add(dataSource);
+    viewer.scene.requestRender?.();
+  } catch (err) {
+    console.warn('[china boundary] load failed:', err);
+  }
+};
+
+const removeAirportEndpointLabels = () => {
+  if (!viewer) return;
+  if (depAirportLabelEntity) {
+    try { viewer.entities.remove(depAirportLabelEntity); } catch (_) {}
+    depAirportLabelEntity = null;
+  }
+  if (arrAirportLabelEntity) {
+    try { viewer.entities.remove(arrAirportLabelEntity); } catch (_) {}
+    arrAirportLabelEntity = null;
+  }
+};
+
+const syncAirportEndpointLabels = () => {
+  if (!viewer) return;
+  removeAirportEndpointLabels();
+  const pts = props.pathPoints;
+  if (!Array.isArray(pts) || pts.length < 2) return;
+
+  const start = pts[0];
+  const end = pts[pts.length - 1];
+  const depName = (props.depAirportLabel || '').trim();
+  const arrName = (props.arrAirportLabel || '').trim();
+
+  const buildLabelEntity = (id, point, text) => {
+    if (!point || !text) return null;
+    const altitude = Math.max(0, Number(point.alt ?? 0)) + AIRPORT_LABEL_HEIGHT_OFFSET_M;
+    return viewer.entities.add({
+      id,
+      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, altitude),
+      label: {
+        text,
+        font: '600 18px "Microsoft YaHei", "PingFang SC", sans-serif',
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        fillColor: Cesium.Color.fromCssColorString('#7EE7FF').withAlpha(0.96),
+        outlineColor: Cesium.Color.fromCssColorString('#08214D').withAlpha(0.98),
+        outlineWidth: 4,
+        showBackground: true,
+        backgroundColor: Cesium.Color.fromCssColorString('#0A1F4D').withAlpha(0.46),
+        backgroundPadding: new Cesium.Cartesian2(10, 6),
+        pixelOffset: AIRPORT_LABEL_PIXEL_OFFSET,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 1e10)
+      }
+    });
+  };
+
+  depAirportLabelEntity = buildLabelEntity('depAirportLabel', start, depName);
+  arrAirportLabelEntity = buildLabelEntity('arrAirportLabel', end, arrName);
+  viewer.scene.requestRender?.();
+};
+
+const applySceneBrightnessBoost = () => {
+  if (!viewer?.scene) return;
+  viewer.scene.light = new Cesium.SunLight({
+    color: Cesium.Color.WHITE,
+    intensity: SCENE_LIGHT_INTENSITY
+  });
+  if (viewer.scene.atmosphere) {
+    viewer.scene.atmosphere.dynamicLighting = Cesium.DynamicAtmosphereLightingType.SUNLIGHT;
+  }
+  if (viewer.scene.fog) {
+    viewer.scene.fog.minimumBrightness = Math.max(viewer.scene.fog.minimumBrightness || 0, FOG_MIN_BRIGHTNESS);
+  }
+  viewer.scene.requestRender?.();
+};
+
+const boostModelBrightness = (runtimeModel) => {
+  if (!runtimeModel) return;
+  try {
+    if (runtimeModel.environmentMapManager) {
+      runtimeModel.environmentMapManager.brightness = MODEL_ENV_BRIGHTNESS;
+      runtimeModel.environmentMapManager.atmosphereScatteringIntensity = MODEL_ENV_ATMOSPHERE_SCATTER;
+    }
+  } catch (_) {}
+};
+
+const formatScaleDistance = (meters) => {
+  if (!Number.isFinite(meters) || meters <= 0) return '';
+  if (meters >= 1000) {
+    const km = meters / 1000;
+    return Number.isInteger(km) ? `${km} km` : `${km.toFixed(1)} km`;
+  }
+  return `${Math.round(meters)} m`;
+};
+
+const getNiceScaleDistance = (meters) => {
+  if (!Number.isFinite(meters) || meters <= 0) return 0;
+  const exponent = Math.floor(Math.log10(meters));
+  const unit = Math.pow(10, exponent);
+  const normalized = meters / unit;
+  const nice = normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1;
+  return nice * unit;
+};
+
+const updateCompassHeading = () => {
+  if (!viewer?.camera) return;
+  compassHeadingDeg.value = Cesium.Math.toDegrees(viewer.camera.heading || 0);
+};
+
+const updateScaleBar = () => {
+  if (!viewer?.scene?.canvas || !viewer?.camera) {
+    return;
+  }
+  const scene = viewer.scene;
+  const canvas = scene.canvas;
+  const width = canvas.clientWidth || canvas.width || 0;
+  const height = canvas.clientHeight || canvas.height || 0;
+  if (width < 120 || height < 80) {
+    return;
+  }
+  const samplePx = Math.max(80, Math.min(140, Math.round(width * 0.12)));
+  const y = Math.max(30, height - 56);
+  const left = new Cesium.Cartesian2(Math.round(width / 2 - samplePx / 2), y);
+  const right = new Cesium.Cartesian2(Math.round(width / 2 + samplePx / 2), y);
+  const leftRay = viewer.camera.getPickRay(left);
+  const rightRay = viewer.camera.getPickRay(right);
+  if (!leftRay || !rightRay) {
+    return;
+  }
+  const leftPos = scene.globe.pick(leftRay, scene);
+  const rightPos = scene.globe.pick(rightRay, scene);
+  if (!leftPos || !rightPos) {
+    return;
+  }
+  const leftCarto = Cesium.Cartographic.fromCartesian(leftPos);
+  const rightCarto = Cesium.Cartographic.fromCartesian(rightPos);
+  const geodesic = new Cesium.EllipsoidGeodesic(leftCarto, rightCarto);
+  const rawMeters = geodesic.surfaceDistance;
+  if (!Number.isFinite(rawMeters) || rawMeters <= 0) {
+    return;
+  }
+  const niceMeters = getNiceScaleDistance(rawMeters);
+  if (!niceMeters) {
+    return;
+  }
+  scaleBarLabel.value = formatScaleDistance(niceMeters);
+  scaleBarWidthPx.value = Math.max(36, Math.round(samplePx * (niceMeters / rawMeters)));
+};
+
+const updateMapHud = (force = false) => {
+  const now = Date.now();
+  if (!force && now - lastHudUpdateMs < 120) return;
+  lastHudUpdateMs = now;
+  updateCompassHeading();
+  updateScaleBar();
+};
+
+const resetCameraHome = () => {
+  if (!viewer) return;
+  if (modelEntity) {
+    viewer.flyTo(modelEntity, {
+      duration: 0.8,
+      offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-25), 140)
+    });
+    viewer.scene.requestRender?.();
+    return;
+  }
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(116.397428, 39.90923, 1000),
+    orientation: {
+      heading: 0,
+      pitch: Cesium.Math.toRadians(-45),
+      roll: 0
+    },
+    duration: 0.8
+  });
+  viewer.scene.requestRender?.();
+};
+
+const resetCameraNorth = () => {
+  if (!viewer?.camera) return;
+  const destination = viewer.camera.positionWC?.clone?.() || viewer.camera.position?.clone?.();
+  if (!destination) return;
+  viewer.camera.flyTo({
+    destination,
+    orientation: {
+      heading: 0,
+      pitch: viewer.camera.pitch,
+      roll: 0
+    },
+    duration: 0.6
+  });
+  viewer.scene.requestRender?.();
 };
 
 /** 飞机模型巡航故障红色闪烁：true 开启，false 关闭 */
@@ -1071,6 +1499,15 @@ defineExpose({
 onMounted(async () => {
   if (!container.value) return;
   viewer = await createCesiumViewer(container.value, creditEl.value);
+  await loadChinaBoundaryLayer();
+  applySceneBrightnessBoost();
+
+  const hudPostRender = () => updateMapHud(false);
+  viewer.scene.postRender.addEventListener(hudPostRender);
+  removeHudPostRender = () => {
+    try { viewer?.scene?.postRender?.removeEventListener(hudPostRender); } catch (_) {}
+  };
+  updateMapHud(true);
 
   viewer.scene.splitPosition = props.splitMode ? props.splitPosition : 1.0;
 
@@ -1119,6 +1556,7 @@ onMounted(async () => {
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   await loadAndAddUnits();
+  syncAirportEndpointLabels();
 
   /** 将 canvas 内坐标转为视口坐标，供静态/动态页 marker-popup 统一使用 position:fixed 定位 */
   const canvasToViewport = (canvasX, canvasY) => {
@@ -1299,7 +1737,13 @@ watch(
 );
 
 watch(
-  () => [props.showClusterDepAirport, props.showClusterArrAirport],
+  () => [
+    props.showClusterDepAirport,
+    props.showClusterArrAirport,
+    props.visibleUnitClusterIdsLeft,
+    props.visibleUnitClusterIdsRight,
+    props.splitMode
+  ],
   () => updateUnitEntitiesVisibility(),
   { deep: true }
 );
@@ -1340,6 +1784,12 @@ watch(
   }
 );
 
+watch(
+  () => [props.pathPoints, props.depAirportLabel, props.arrAirportLabel],
+  () => syncAirportEndpointLabels(),
+  { deep: true }
+);
+
 onBeforeUnmount(() => {
   stopFlowLoop();
   if (_planeFaultFlashInterval) {
@@ -1361,11 +1811,20 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(winRafId);
     winRafId = 0;
   }
+  if (removeHudPostRender) {
+    removeHudPostRender();
+    removeHudPostRender = null;
+  }
   clickHandler?.destroy();
   clickHandler = null;
   pickHandler?.destroy();
   pickHandler = null;
+  removeAirportEndpointLabels();
   if (viewer) {
+    if (chinaBoundaryDataSource) {
+      try { viewer.dataSources.remove(chinaBoundaryDataSource, true); } catch (_) {}
+      chinaBoundaryDataSource = null;
+    }
     UNIT_ENTITY_IDS.forEach((id) => {
       try {
         viewer.entities.removeById(id);
@@ -1383,5 +1842,112 @@ onBeforeUnmount(() => {
 .cesium-container {
   width: 100%;
   height: 100%;
+  position: relative;
+}
+
+.cb-map-hud {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 36;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.cb-map-hud__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.cb-map-tool {
+  pointer-events: auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 197, 255, 0.62);
+  background: rgba(7, 22, 50, 0.58);
+  box-shadow: inset 0 0 16px rgba(0, 197, 255, 0.22), 0 8px 18px rgba(0, 0, 0, 0.18);
+  color: #EAFBFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.cb-map-tool--home {
+  width: 56px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cb-map-tool--compass {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+}
+
+.cb-map-tool__compass-ring {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+}
+
+.cb-map-tool__compass-arrow {
+  position: absolute;
+  left: 50%;
+  top: 9px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 18px solid #00E5FF;
+  transform-origin: 50% 17px;
+}
+
+.cb-map-tool__compass-text {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(0, 197, 255, 0.6);
+}
+
+.cb-map-scale {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 197, 255, 0.42);
+  background: rgba(7, 22, 50, 0.52);
+  box-shadow: inset 0 0 16px rgba(0, 197, 255, 0.16), 0 8px 18px rgba(0, 0, 0, 0.18);
+  color: #EAFBFF;
+  backdrop-filter: blur(8px);
+}
+
+.cb-map-scale__label {
+  font-size: 12px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.cb-map-scale__bar {
+  display: block;
+  height: 0;
+  border-top: 3px solid #00E5FF;
+  border-left: 2px solid #00E5FF;
+  border-right: 2px solid #00E5FF;
+  box-sizing: border-box;
 }
 </style>

@@ -1,8 +1,8 @@
 <template>
-  <section class="cb-card cb-main cb-dv-main" style="display:flex;flex-direction:column;min-height:0;">
+  <section class="cb-card cb-main cb-dv-main cb-dv-main-shell">
     <slot name="header" />
 
-    <div style="flex:1;min-height:0;padding:14px;">
+    <div class="cb-dv-main-stage">
       <div class="cb-viewport" :class="{ 'cb-viewport--split': isCompare }">
         <div v-show="!isCompare" class="cb-viewport--single cb-viewer-single">
           <CesiumViewport
@@ -15,9 +15,13 @@
             :path-points="pathPoints"
             :path-progress="pathProgress"
             :follow-path="followPath"
+            :dep-airport-label="depAirportLabel"
+            :arr-airport-label="arrAirportLabel"
             :visible-relation-id="effectiveVisibleRelationId"
             :visible-relation-ids-left="effectiveIdsLeft"
             :visible-relation-ids-right="effectiveIdsRight"
+            :visible-unit-cluster-ids-left="visibleUnitClusterIdsLeft"
+            :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
             @marker-click="$emit('marker-click', $event)"
             @marker-move="$emit('marker-move', $event)"
             @plane-screen-info="$emit('plane-screen-info', $event)"
@@ -40,9 +44,13 @@
                 :path-points="pathPoints"
                 :path-progress="pathProgress"
                 :follow-path="followPath"
+                :dep-airport-label="depAirportLabel"
+                :arr-airport-label="arrAirportLabel"
                 :visible-relation-id="effectiveVisibleRelationId"
                 :visible-relation-ids-left="effectiveIdsLeft"
                 :visible-relation-ids-right="effectiveIdsRight"
+                :visible-unit-cluster-ids-left="visibleUnitClusterIdsLeft"
+                :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
                 @marker-click="$emit('marker-click', $event)"
                 @marker-move="$emit('marker-move', $event)"
               />
@@ -73,10 +81,14 @@ const props = defineProps({
   pathPoints: { type: Array, default: null },
   pathProgress: { type: Number, default: 0 },
   followPath: { type: Boolean, default: false },
+  depAirportLabel: { type: String, default: '' },
+  arrAirportLabel: { type: String, default: '' },
   /** 旧 API：单 id，传入时自动转为 visibleRelationIdsLeft=[id]、visibleRelationIdsRight=[] */
   visibleRelationId: { type: String, default: null },
   visibleRelationIdsLeft: { type: Array, default: () => [] },
-  visibleRelationIdsRight: { type: Array, default: () => [] }
+  visibleRelationIdsRight: { type: Array, default: () => [] },
+  visibleUnitClusterIdsLeft: { type: Array, default: () => [] },
+  visibleUnitClusterIdsRight: { type: Array, default: () => [] }
 });
 
 const effectiveIdsLeft = computed(() =>

@@ -7,10 +7,12 @@
         "name": "HTS卫星",
         "lon": 112.0,
         "lat": 36.0,
-        "alt_m": 35786000,
+        "alt_m": 1600000,
         "image": "img/satelliteIcon.png",
         "size": 0.3,
-        "offset": [0, 32]
+        "offset": [0, 32],
+        "info": "高通量卫星通信节点，承担飞机与地面之间的大容量高速数据传输，是\"云匣子\"空天链路的重要组成部分。",
+        "infoSource": "文档摘要"
       },
       {
         "id": "sat-leo-01",
@@ -21,7 +23,9 @@
         "alt_m": 800000,
         "image": "img/satelliteIcon.png",
         "size": 0.3,
-        "offset": [0, 32]
+        "offset": [0, 32],
+        "info": "低轨通信卫星节点，作为空天网络的一部分补充广域覆盖与链路连续性，为实时数据传输提供支撑。",
+        "infoSource": "补充说明"
       }
     ]
   },
@@ -36,48 +40,58 @@
             "id": "dep-reconstruction",
             "type": "ground_unit",
             "name": "地面飞行场景实时重构系统",
-            "lon": 108.7319,
-            "lat": 34.461756,
+            "lon": 108.770117,
+            "lat": 34.453236,
             "image": "img/planeBillBoardImg.png",
             "alt": 0,
             "size": 0.5,
-            "offset": [0, -28]
+            "offset": [0, -28],
+            "info": "该系统基于民用航空器飞行数据和舱音数据，分析下传数据的变化趋势，并将重建结果共享给专家组与决策模块，实现高效的数据传输与态势支撑。",
+            "infoSource": "文档摘要"
           },
           {
             "id": "dep-expert-group",
             "type": "ground_unit",
             "name": "地面运营控制中心专家组",
-            "lon": 108.7669,
-            "lat": 34.426755,
+            "lon": 108.771811,
+            "lat": 34.445005,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "该系统从专家视角对飞机运行中的问题进行多方位分析，对机载预警设备和地面场景重构系统输出的告警进行认定，并制定或优化应急处置方案。",
+            "infoSource": "文档摘要"
           },
           {
             "id": "dep-atc",
             "type": "ground_unit",
             "name": "空管系统",
-            "lon": 108.7919,
-            "lat": 34.441755,
+            "lon": 108.766361,
+            "lat": 34.446522,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "空管系统负责空域调度、飞行引导与险情协同，接收处置方案后联动机场与机组执行应急流程。",
+            "infoSource": "补充说明"
           },
           {
             "id": "dep-airline",
             "type": "ground_unit",
             "name": "航司系统",
-            "lon": 108.7119,
-            "lat": 34.446756,
+            "lon": 108.744077,
+            "lat": 34.432633,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "航司系统负责从运行与技术支持视角参与应急处置，协调签派、技术和保障资源，支撑方案落地。",
+            "infoSource": "补充说明"
           },
           {
             "id": "dep-airport",
             "type": "ground_unit",
             "name": "机场系统",
-            "lon": 108.7819,
-            "lat": 34.466756,
+            "lon": 108.758305,
+            "lat": 34.439267,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "机场系统承担跑道、地面保障与现场应急资源协同，是处置方案落地执行的重要节点。",
+            "infoSource": "补充说明"
           },
           {
             "id": "route-atg-01",
@@ -86,7 +100,9 @@
             "lon": 111.2,
             "lat": 36.0,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。",
+            "infoSource": "文档摘要"
           },
           {
             "id": "route-atg-02",
@@ -95,61 +111,9 @@
             "lon": 113.8,
             "lat": 37.5,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
-          },
-          {
-            "id": "no-crew",
-            "type": "ground_unit",
-            "name": "机组(无)",
-            "lon": 108.8019,
-            "lat": 34.456756,
-            "image": "img/planeBillBoardImg.png",
-            "alt": 0
-          },
-          {
-            "id": "no-tower",
-            "type": "ground_unit",
-            "name": "塔台(无)",
-            "lon": 108.8219,
-            "lat": 34.446756,
-            "image": "img/planeBillBoardImg.png",
-            "alt": 0
-          },
-          {
-            "id": "no-emergency-sys",
-            "type": "ground_unit",
-            "name": "应急系统(无)",
-            "lon": 108.8419,
-            "lat": 34.436756,
-            "image": "img/planeBillBoardImg.png",
-            "alt": 0
-          },
-          {
-            "id": "no-airport-ops",
-            "type": "ground_unit",
-            "name": "机场运行(无)",
-            "lon": 108.8619,
-            "lat": 34.426756,
-            "image": "img/planeBillBoardImg.png",
-            "alt": 0
-          },
-          {
-            "id": "no-dispatch",
-            "type": "ground_unit",
-            "name": "签派(无)",
-            "lon": 108.8819,
-            "lat": 34.416756,
-            "image": "img/planeBillBoardImg.png",
-            "alt": 0
-          },
-          {
-            "id": "no-sat-gw",
-            "type": "ground_unit",
-            "name": "卫星关口(无)",
-            "lon": 108.9019,
-            "lat": 34.406756,
-            "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。",
+            "infoSource": "文档摘要"
           }
         ]
       },
@@ -165,7 +129,9 @@
             "lon": 116.404059,
             "lat": 39.470762,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "该系统依据航空器风险状态生成多个动态决策方案，在仿真场景中开展平行推演，评估处置路径优劣并辅助专家组形成最优方案。",
+            "infoSource": "文档摘要"
           },
           {
             "id": "arr-rescue",
@@ -174,7 +140,9 @@
             "lon": 116.429059,
             "lat": 39.515763,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "救援系统负责承接机场侧下发的应急任务，参与人员疏散、伤员救治和现场处置等执行环节。",
+            "infoSource": "补充说明"
           },
           {
             "id": "arr-airport",
@@ -183,7 +151,9 @@
             "lon": 116.459059,
             "lat": 39.505763,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
+            "alt": 0,
+            "info": "机场系统承担跑道、地面保障与现场应急资源协同，是处置方案落地执行的重要节点。",
+            "infoSource": "补充说明"
           },
           {
             "id": "arr-atg-station",
@@ -192,31 +162,9 @@
             "lon": 116.449059,
             "lat": 39.525762,
             "image": "img/planeBillBoardImg.png",
-            "alt": 0
-          },
-          {
-            "id": "no-maint",
-            "type": "ground_unit",
-            "name": "机务(无)",
-            "lon": 116.469059,
-            "lat": 39.515762,
-            "image": "img/planeBillBoardImg.png"
-          },
-          {
-            "id": "no-airline-tech",
-            "type": "ground_unit",
-            "name": "航司技术(无)",
-            "lon": 116.489059,
-            "lat": 39.505762,
-            "image": "img/planeBillBoardImg.png"
-          },
-          {
-            "id": "no-safety",
-            "type": "ground_unit",
-            "name": "安全(无)",
-            "lon": 116.509059,
-            "lat": 39.495762,
-            "image": "img/planeBillBoardImg.png"
+            "alt": 0,
+            "info": "5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。",
+            "infoSource": "文档摘要"
           }
         ]
       }

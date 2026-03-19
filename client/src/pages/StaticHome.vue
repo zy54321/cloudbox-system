@@ -6,26 +6,17 @@
       <div class="cb-tabs">
         <div class="cb-tab active">静态架构</div>
         <RouterLink class="cb-tab" to="/dynamic">动态交互</RouterLink>
+        <!-- <RouterLink class="cb-tab" @click.prevent="onClickDynamicTab">动态交互</RouterLink> -->
       </div>
     </div>
   </header>
 
   <div class="cb-wrap cb-wrap--static">
     <div class="cb-main">
-      <div class="cb-grid">
+      <div class="cb-grid cb-grid--static-screen">
         <!-- 左侧主区域 -->
-        <section class="cb-card cb-center-card" style="display:flex;flex-direction:column;min-height:0;">
-          <div class="cb-card-hd" style="justify-content:flex-start;">
-            <div class="cb-card-title">
-              <img class="cb-center-icon" src="../assets/staticPage/center_left_icon.png" alt="" />
-              <span class="cb-center-title">中央视图区</span>
-              <span class="cb-model-tag">
-                <span class="cb-model-text">模型：民航客机</span>
-              </span>
-            </div>
-          </div>
-
-          <div class="cb-tools">
+        <section class="cb-card cb-center-card cb-center-card--screen">
+          <div class="cb-tools cb-tools--overlay">
             <button class="cb-btn" :class="{ active: activeTool === '起飞' }" type="button" @click="onTool('起飞')">起飞</button>
             <button class="cb-btn" :class="{ active: activeTool === '爬升' }" type="button" @click="onTool('爬升')">爬升</button>
             <button class="cb-btn" :class="{ active: activeTool === '巡航' }" type="button" @click="onTool('巡航')">巡航</button>
@@ -37,7 +28,7 @@
             <button class="cb-btn ghost" :class="{ active: activeTool === '沿线飞行' }" type="button" @click="onTool('沿线飞行')">沿线飞行</button>
           </div>
 
-          <div style="flex:1;min-height:0;padding:0 14px 14px;">
+          <div class="cb-center-stage">
             <div class="cb-viewport">
               <div class="cb-overlay-tabs">
                 <button class="cb-mini cb-map-mini" :class="{ active: mapMode === 'plane' }" type="button" @click="onMapMode('plane')">飞机</button>
@@ -48,7 +39,7 @@
 
               <!-- Cesium 视口 + 飞机跟随 popup（相机高度≤阈值时显示） -->
               <div class="cb-cesium-layer cb-cesium-layer--with-popup">
-                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :visible-relation-id="selectedRelationId" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @plane-billboard-click="onPlaneBillboardClick" @module-highlight-screen="onModuleHighlightScreen" />
+                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :dep-airport-label="depAirportLabel" :arr-airport-label="arrAirportLabel" :visible-relation-id="selectedRelationId" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @plane-billboard-click="onPlaneBillboardClick" @module-highlight-screen="onModuleHighlightScreen" />
                 <div
                   v-if="showPlanePopup && planeScreenInfo"
                   class="cb-plane-follow-popup"
@@ -97,10 +88,11 @@
                   <button type="button" class="marker-popup-close" @click="closePopup">×</button>
                 </div>
                 <div class="marker-popup-body">
-                  <div>类型：{{ activePopup.meta.type }}</div>
-                  <div>经度：{{ activePopup.meta.lon.toFixed(6) }}</div>
-                  <div>纬度：{{ activePopup.meta.lat.toFixed(6) }}</div>
-                  <div>高度：{{ activePopup.meta.alt_m }} m</div>
+                  <div class="marker-popup-meta">
+                    <span class="marker-popup-badge">{{ activePopup.meta.infoSource || '节点介绍' }}</span>
+                    <span class="marker-popup-type">类型：{{ activePopup.meta.typeLabel || activePopup.meta.type }}</span>
+                  </div>
+                  <div class="marker-popup-desc">{{ activePopup.meta.info || '该节点用于展示其在"云匣子"体系中的位置与作用。' }}</div>
                 </div>
               </div>
 
@@ -167,14 +159,10 @@
             </div>
           </div>
 
-          <div style="padding:0 14px 14px;color:rgba(255,255,255,.75);font-size:12px;display:flex;gap:10px;align-items:center;">
-            <span>i</span>
-            <span>提示：地图点位（飞机/地面/天空等符号）已在主视图区提供信息框。</span>
-          </div>
         </section>
 
         <!-- 右侧信息面板 -->
-        <aside class="cb-card cb-panel cb-msg-panel">
+        <aside class="cb-card cb-panel cb-msg-panel cb-msg-panel--overlay">
           <div class="cb-card-hd">
             <div class="cb-card-title">
               <img class="cb-msg-icon" src="../assets/staticPage/msgpage_icon.png" alt="" />
@@ -507,6 +495,10 @@ const unitsGroups = computed(() => {
   return groups;
 });
 
+const onClickDynamicTab = () => {
+  return;
+};
+
 function openDetailModal(kind) {
   detailModalType.value = kind;
 }
@@ -543,8 +535,8 @@ function closeAirbornePopup() {
 const airbornePopupStyle = computed(() => {
   const info = planeScreenInfo.value;
   if (!info) return {};
-  const offsetX = 54;
-  const offsetY = -8;
+  const offsetX = 4;
+  const offsetY = -108;
   return {
     position: 'fixed',
     left: 0,
@@ -703,6 +695,8 @@ let _trailTickViewer = null;
 // 跑道贴地点位（唯一数据源 -> buildFlightPathFromRunways）
 const startRunway = { a: { lon: 108.742455, lat: 34.439922 }, b: { lon: 108.761345, lat: 34.453589 } };
 const endRunway = { a: { lon: 116.430944, lat: 39.473803 }, b: { lon: 116.427175, lat: 39.497722 } };
+const depAirportLabel = '西安咸阳国际机场';
+const arrAirportLabel = '北京首都国际机场';
 
 const flightPath = buildFlightPathFromRunways(startRunway, endRunway, { cruiseAlt: 10000 });
 
@@ -993,11 +987,11 @@ const onMapMode = (m) => {
     const viewer = vpStatic.value?.getViewer?.();
     if (viewer) {
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(147.294068, 35.050793, 83583265.87),
+        destination: Cesium.Cartesian3.fromDegrees(120.901020, 26.363403, 3394682.08),
         orientation: {
-          heading: Cesium.Math.toRadians(0.0),
-          pitch: Cesium.Math.toRadians(-89.98),
-          roll: Cesium.Math.toRadians(0.0)
+          heading: Cesium.Math.toRadians(341.06),
+          pitch: Cesium.Math.toRadians(-59.67),
+          roll: Cesium.Math.toRadians(359.98)
         },
         duration: 1.0,
         easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
@@ -1124,64 +1118,117 @@ onBeforeUnmount(() => {
   left: 0;
   top: 0;
   pointer-events: none;
-  min-width: 140px;
-  padding: 6px 10px;
-  background: rgba(0, 20, 40, 0.92);
-  border: 1px solid rgba(100, 180, 255, 0.5);
-  border-radius: 6px;
-  font-size: 12px;
-  color: #e0f0ff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  min-width: 220px;
+  padding: 0;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 .cb-plane-follow-popup-hd {
-  font-weight: 600;
-  margin-bottom: 4px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255,255,255,0.15);
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  color: #eaf4ff;
+  background: linear-gradient(180deg, rgba(60, 120, 255, 0.24), rgba(18, 52, 120, 0.1));
+  border-bottom: 1px solid rgba(42, 116, 201, 0.42);
 }
 .cb-plane-follow-popup-bd {
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
 }
 .cb-plane-follow-row {
   white-space: nowrap;
+  padding: 8px 10px;
+  background: rgba(8, 48, 109, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(42, 116, 201, 0.36);
+  color: rgba(255, 255, 255, 0.94);
+  line-height: 1.5;
 }
+/* 地图标点弹窗：与右侧信息面板一致风格 */
 .marker-popup {
   z-index: 100;
-  min-width: 200px;
+  min-width: 220px;
   padding: 0;
-  background: rgba(0, 20, 40, 0.95);
-  border: 1px solid rgba(100, 180, 255, 0.5);
-  border-radius: 8px;
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
   font-size: 13px;
   color: #e0f0ff;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 .marker-popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.12);
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .marker-popup-title {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  text-shadow: 0 0 6px #00AFFF;
 }
 .marker-popup-close {
   background: none;
   border: none;
-  color: rgba(255,255,255,0.8);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 18px;
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
 }
 .marker-popup-body {
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  max-width: 340px;
+}
+.marker-popup-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.marker-popup-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(82, 221, 255, 0.45);
+  background: rgba(8, 48, 109, 0.62);
+  color: #9fefff;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.marker-popup-type {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+}
+.marker-popup-desc {
+  padding: 10px 12px;
+  background: rgba(8, 48, 109, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(42, 116, 201, 0.4);
+  color: rgba(255, 255, 255, 0.94);
+  line-height: 1.72;
+  white-space: normal;
 }
 .airborne-popup-list {
   margin: 0;
@@ -1195,13 +1242,14 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
-/* 地面模式：地图标点列表弹窗（无背景图，自设计样式） */
+/* 地面模式：地图标点列表弹窗，与右侧信息面板一致风格 */
 .cb-map-popup--units {
   background-image: none;
-  background: rgba(0, 24, 48, 0.96);
-  border: 1px solid rgba(100, 180, 255, 0.45);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
   min-width: 240px;
   max-width: 280px;
 }
@@ -1209,11 +1257,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  font-weight: 600;
-  font-size: 13px;
-  color: #e0f0ff;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  text-shadow: 0 0 6px #00AFFF;
 }
 .cb-map-popup-units-close {
   opacity: 0.75;
@@ -1223,7 +1272,7 @@ onBeforeUnmount(() => {
 .cb-map-popup--units .cb-float-bd.cb-units-list-bd {
   max-height: 320px;
   overflow-y: auto;
-  padding: 8px 0;
+  padding: 12px 14px;
   background: transparent;
 }
 .cb-map-popup--units .cb-units-group {
@@ -1240,18 +1289,24 @@ onBeforeUnmount(() => {
   padding: 0 12px;
 }
 .cb-map-popup--units .cb-units-item {
-  padding: 6px 12px;
+  padding: 10px 12px;
   font-size: 12px;
   color: #e0f0ff;
   cursor: pointer;
-  border-left: 2px solid transparent;
+  border-radius: 6px;
+  border: 1px solid rgba(42, 116, 201, 0.4);
+  background: rgba(8, 48, 109, 0.5);
+  margin-bottom: 6px;
+}
+.cb-map-popup--units .cb-units-item:last-child {
+  margin-bottom: 0;
 }
 .cb-map-popup--units .cb-units-item:hover {
-  background: rgba(100, 180, 255, 0.12);
-  border-left-color: rgba(100, 180, 255, 0.6);
+  background: rgba(8, 48, 109, 0.75);
+  border-color: rgba(42, 116, 201, 0.65);
 }
 .cb-map-popup--units .cb-units-empty {
-  padding: 12px 12px;
+  padding: 12px 14px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.55);
 }

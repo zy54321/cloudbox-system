@@ -1,5 +1,5 @@
 <template>
-  <aside class="cb-card cb-panel cb-dv-panel">
+  <aside class="cb-card cb-panel cb-dv-panel cb-dv-panel--overlay">
     <div class="cb-card-hd">
       <div class="cb-dv-title">
         <img class="cb-dv-title-icon" :src="dvTitleIconLeft" alt="" />
@@ -71,11 +71,12 @@
               :data-node-id="card.nodeId"
             >
               <b class="cb-card-title">{{ card.phase }} · {{ card.title }}</b>
-              <div class="meta cb-card-sub">T+{{ card.t }} | {{ card.state }}</div>
-              <div class="small" style="margin-top:6px;">{{ card.summary }}</div>
+              <div class="meta cb-card-sub">T+{{ card.t }}s ｜ {{ card.state }}</div>
+              <div class="cb-card-summary" v-if="card.summary">{{ card.summary }}</div>
+              <div class="cb-card-desc" v-if="card.desc">{{ card.desc }}</div>
 
               <div class="card-node-info" v-if="card.events && card.events.length">
-                <div class="card-section-title">本节点信息（示意）</div>
+                <div class="card-section-title">界面表现 / 节点状态</div>
                 <ul class="card-info-list">
                   <li v-for="(ev, idx) in card.events.slice(0, 5)" :key="idx" class="cb-card-item">{{ ev }}</li>
                 </ul>
