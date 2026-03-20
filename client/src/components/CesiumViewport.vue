@@ -34,7 +34,7 @@ const UNIT_LABEL_FADE_START = 60000;
 const UNIT_LABEL_HIDE_DISTANCE = 90000;
 const UNIT_LABEL_MIN_SCALE = 0.75;
 const SCENE_LIGHT_INTENSITY = 3.4;
-const MODEL_ENV_BRIGHTNESS = 1.35;
+const MODEL_ENV_BRIGHTNESS = 30.35;
 const MODEL_ENV_ATMOSPHERE_SCATTER = 3.1;
 const FOG_MIN_BRIGHTNESS = 0.18;
 const AIRPORT_LABEL_HEIGHT_OFFSET_M = 12;
@@ -921,6 +921,21 @@ const setViewState = (state) => {
   });
 };
 
+/** 递归查找与 entity 绑定的 Model（ModelVisualizer 会在 model.id 上挂载 entity） */
+const findModelForEntity = (primitives, entity) => {
+  if (!primitives?.length) return null;
+  for (let i = 0; i < primitives.length; i++) {
+    const p = primitives.get(i);
+    if (!p) continue;
+    if (p.environmentMapManager && p.id === entity) return p;
+    if (typeof p.get === 'function' && p.length > 0) {
+      const nested = findModelForEntity(p, entity);
+      if (nested) return nested;
+    }
+  }
+  return null;
+};
+
 const loadGlbModelEntity = async (uri) => {
   if (!viewer || !uri) return;
   if (modelEntity) {
@@ -968,13 +983,22 @@ const loadGlbModelEntity = async (uri) => {
       shadows: Cesium.ShadowMode.DISABLED
     }
   });
-  try {
-    const runtimeModel =
-      planeEntity?.model?._runtime?.model ||
-      planeEntity?.model?._cesiumModel ||
-      planeEntity?.model;
-    boostModelBrightness(runtimeModel);
-  } catch (_) {}
+  // Model 由 ModelVisualizer 异步加载，entity.model 仅为 ModelGraphics 不含 environmentMapManager。
+  // 模型加载完成后会加入 scene.primitives 且 model.id === entity，需在 postRender 中延后查找并应用亮度。
+  let boostAttempts = 0;
+  const MAX_BOOST_ATTEMPTS = 300;
+  const tryBoostModel = () => {
+    if (boostAttempts++ >= MAX_BOOST_ATTEMPTS) {
+      try { viewer.scene.postRender.removeEventListener(tryBoostModel); } catch (_) {}
+      return;
+    }
+    const found = findModelForEntity(viewer.scene.primitives, planeEntity);
+    if (found) {
+      try { viewer.scene.postRender.removeEventListener(tryBoostModel); } catch (_) {}
+      boostModelBrightness(found);
+    }
+  };
+  viewer.scene.postRender.addEventListener(tryBoostModel);
   modelEntity = planeEntity;
 
   billboardEntity = viewer.entities.add({
