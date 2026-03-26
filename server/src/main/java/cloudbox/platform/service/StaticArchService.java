@@ -2,13 +2,19 @@ package cloudbox.platform.service;
 
 import cloudbox.platform.entity.ModuleInfo;
 import cloudbox.platform.entity.SpatialFacility;
+import cloudbox.platform.entity.SpatialRelation;
 import cloudbox.platform.entity.UnitInfo;
 import cloudbox.platform.mapper.SpatialFacilityMapper;
+import cloudbox.platform.mapper.SpatialRelationMapper;
 import cloudbox.platform.mapper.ModuleInfoMapper;
 import cloudbox.platform.mapper.UnitInfoMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,10 +28,18 @@ public class StaticArchService {
     private SpatialFacilityMapper spatialFacilityMapper;
 
     @Autowired
+    private SpatialRelationMapper spatialRelationMapper;
+
+    @Autowired
     private UnitInfoMapper unitInfoMapper;
 
     @Autowired
     private ModuleInfoMapper moduleInfoMapper;
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String CHINA_POLYLINE_GEOJSON_PATH = "static/china_polyline.geojson";
+
+    private volatile Object chinaPolylineGeoJsonCache;
 
     private static final Map<String, Map<String, String>> STAGE_INSTRUMENT = Map.of(
             "takeoff", Map.of(
@@ -183,17 +197,33 @@ public class StaticArchService {
     }
 
     /**
-     * 空间设施数据（地面/卫星合一）：入参 category 为 ground 或 satellite，从 spatial_facility 按大类型查询并按 type 分组返回（不包含地面类型/卫星类型 key）。
+     * 空间设施数据：
+     * - category=ground：按 cluster 组装，返回 {clusters:[{clusterId,name,center,units:[]}]}
+     * - category=satellite：返回 {star_based:[...]}
      */
     public Map<String, Object> getSpatialData(String category) {
         List<SpatialFacility> list = spatialFacilityMapper.selectByCategory(category);
-        Map<String, List<Map<String, Object>>> byType = list.stream()
-                .collect(Collectors.groupingBy(SpatialFacility::getType,
-                        LinkedHashMap::new,
-                        Collectors.mapping(StaticArchService::toItem, Collectors.toList())));
-        Map<String, Object> result = new LinkedHashMap<>();
-        byType.forEach(result::put);
-        return result;
+        if ("ground".equalsIgnoreCase(category)) {
+            return buildGroundClusters(list);
+        }
+        // 默认按卫星节点返回（units.json: space.star_based）
+        List<Map<String, Object>> starBased = list.stream()
+                .map(StaticArchService::toItem)
+                .collect(Collectors.toList());
+        return Map.of("star_based", starBased);
+    }
+
+    /**
+     * 未指定 category 时，返回完整空间数据（结构贴近 units.json）：
+     * { space: { star_based: [...] }, ground: { clusters: [...] } }
+     */
+    public Map<String, Object> getSpatialAll() {
+        Map<String, Object> space = getSpatialData("satellite");
+        Map<String, Object> ground = getSpatialData("ground");
+        return Map.of(
+                "space", space,
+                "ground", ground
+        );
     }
 
     /**
@@ -202,15 +232,62 @@ public class StaticArchService {
     private static Map<String, Object> toItem(SpatialFacility e) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", e.getCode());
+        m.put("type", e.getType());
         m.put("longitude", e.getLongitude());
         m.put("latitude", e.getLatitude());
         m.put("name", e.getName());
-        m.put("remark", e.getRemark());
+        if (e.getAltitudeM() != null) m.put("alt_m", e.getAltitudeM());
+        if (e.getImage() != null) m.put("image", e.getImage());
+        if (e.getSize() != null) m.put("size", e.getSize());
+        if (e.getOffsetX() != null || e.getOffsetY() != null) {
+            m.put("offset", List.of(
+                    e.getOffsetX() != null ? e.getOffsetX() : 0,
+                    e.getOffsetY() != null ? e.getOffsetY() : 0
+            ));
+        }
+        if (e.getInfo() != null) m.put("info", e.getInfo());
+        if (e.getInfoSource() != null) m.put("infoSource", e.getInfoSource());
         return m;
     }
 
-    /** 链路拓扑：from/to 英文 satellite|aircraft|ground，type 英文 one_to_one|one_to_many|many_to_one|many_to_many */
-    public List<Map<String, Object>> getLinkTopology(Map<String, Object> requestBody) {
+    private static Map<String, Object> buildGroundClusters(List<SpatialFacility> list) {
+        Map<String, List<SpatialFacility>> byCluster = list.stream()
+                .collect(Collectors.groupingBy(
+                        f -> f.getClusterId() != null ? f.getClusterId() : "DEFAULT",
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        List<Map<String, Object>> clusters = new ArrayList<>();
+        for (Map.Entry<String, List<SpatialFacility>> entry : byCluster.entrySet()) {
+            List<SpatialFacility> units = entry.getValue();
+            SpatialFacility first = units.get(0);
+            Map<String, Object> cluster = new LinkedHashMap<>();
+            cluster.put("clusterId", first.getClusterId());
+            cluster.put("name", first.getClusterName());
+            if (first.getClusterCenterLongitude() != null && first.getClusterCenterLatitude() != null) {
+                cluster.put("center", Map.of(
+                        "lon", first.getClusterCenterLongitude(),
+                        "lat", first.getClusterCenterLatitude()
+                ));
+            }
+            List<Map<String, Object>> unitItems = units.stream()
+                    .map(StaticArchService::toItem)
+                    .collect(Collectors.toList());
+            cluster.put("units", unitItems);
+            clusters.add(cluster);
+        }
+        return Map.of("clusters", clusters);
+    }
+
+    /**
+     * 链路拓扑（与 getLinkRelations() 返回结构保持一致）：
+     * {relations:[{id,flowLabel,name,edges:[["a","b"], ...]}]}
+     *
+     * 入参：from（satellite|aircraft|ground）、to（satellite|aircraft|ground）、type（one_to_one|one_to_many|many_to_one|many_to_many）
+     * 可选：aircraftLongitude、aircraftLatitude
+     */
+    public Map<String, Object> getLinkTopology(Map<String, Object> requestBody) {
         String from = requestBody != null && requestBody.get("from") != null ? (String) requestBody.get("from") : "satellite";
         String to = requestBody != null && requestBody.get("to") != null ? (String) requestBody.get("to") : "ground";
         String type = requestBody != null && requestBody.get("type") != null ? (String) requestBody.get("type") : "one_to_many";
@@ -235,20 +312,23 @@ public class StaticArchService {
         List<Map<String, Object>> fromList = oneFrom && !fromNodes.isEmpty() ? List.of(fromNodes.get(0)) : fromNodes;
         List<Map<String, Object>> toList = oneTo && !toNodes.isEmpty() ? List.of(toNodes.get(0)) : toNodes;
 
-        List<Map<String, Object>> roots = new ArrayList<>();
-        for (int i = 0; i < fromList.size(); i++) {
-            Map<String, Object> fromNode = new LinkedHashMap<>(fromList.get(i));
-            List<Map<String, Object>> linkChildren = new ArrayList<>();
-            Map<String, Object> linkNode = new LinkedHashMap<>();
-            linkNode.put("id", "link-" + fromNode.get("id") + "-" + i);
-            linkNode.put("name", linkName);
-            linkNode.put("type", "link");
-            linkNode.put("children", toList);
-            linkChildren.add(linkNode);
-            fromNode.put("children", linkChildren);
-            roots.add(fromNode);
+        List<List<String>> edges = new ArrayList<>();
+        for (Map<String, Object> f : fromList) {
+            Object fromId = f.get("id");
+            if (fromId == null) continue;
+            for (Map<String, Object> t : toList) {
+                Object toId = t.get("id");
+                if (toId == null) continue;
+                edges.add(List.of(String.valueOf(fromId), String.valueOf(toId)));
+            }
         }
-        return roots;
+
+        Map<String, Object> relation = new LinkedHashMap<>();
+        relation.put("id", "topology-" + from + "-" + to + "-" + type);
+        relation.put("flowLabel", "TOPOLOGY");
+        relation.put("name", linkName);
+        relation.put("edges", edges);
+        return Map.of("relations", List.of(relation));
     }
 
     private List<Map<String, Object>> resolveNodes(String role, Double aircraftLng, Double aircraftLat) {
@@ -297,5 +377,52 @@ public class StaticArchService {
         if (hasSat && hasAir) return "卫星链路";
         if (hasAir) return "5G ATG链路";
         return "卫星链路";
+    }
+
+    /**
+     * links.json 形式的关系配置：{relations:[{id,flowLabel,name,edges:[["a","b"],...]}, ...]}
+     */
+    public Map<String, Object> getLinkRelations() {
+        List<SpatialRelation> list = spatialRelationMapper.selectAll();
+        List<Map<String, Object>> relations = new ArrayList<>();
+        for (SpatialRelation r : list) {
+            List<List<String>> edges = Collections.emptyList();
+            if (r.getEdgesJson() != null && !r.getEdgesJson().isBlank()) {
+                try {
+                    edges = JSON.readValue(r.getEdgesJson(), new TypeReference<>() {});
+                } catch (Exception ignored) {
+                    edges = Collections.emptyList();
+                }
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", r.getCode());
+            if (r.getFlowLabel() != null) m.put("flowLabel", r.getFlowLabel());
+            m.put("name", r.getName());
+            m.put("edges", edges);
+            relations.add(m);
+        }
+        return Map.of("relations", relations);
+    }
+
+    /**
+     * 返回 static/china_polyline.geojson 的完整解析结果（GeoJSON）。
+     */
+    public Object getChinaPolylineGeoJson() {
+        Object cached = chinaPolylineGeoJsonCache;
+        if (cached != null) return cached;
+        synchronized (this) {
+            if (chinaPolylineGeoJsonCache != null) return chinaPolylineGeoJsonCache;
+            chinaPolylineGeoJsonCache = loadGeoJson(CHINA_POLYLINE_GEOJSON_PATH);
+            return chinaPolylineGeoJsonCache;
+        }
+    }
+
+    private Object loadGeoJson(String classpath) {
+        try (InputStream in = new ClassPathResource(classpath).getInputStream()) {
+            // 用 JsonNode/Map 都可；这里用 readTree 兼容任意 GeoJSON 结构
+            return JSON.readTree(in);
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 }

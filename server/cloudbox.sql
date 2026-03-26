@@ -23,69 +23,129 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `spatial_facility`;
 CREATE TABLE `spatial_facility` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
-  `code` varchar(32) NOT NULL,
-  `category` varchar(16) NOT NULL,
-  `type` varchar(32) NOT NULL,
+  `code` varchar(64) NOT NULL COMMENT '节点ID（units.json 的 id）',
+  `category` varchar(16) NOT NULL COMMENT '大类：ground / satellite',
+  `type` varchar(32) NOT NULL COMMENT '节点类型（units.json 的 type，如 satellite/ground_unit）',
   `longitude` decimal(10,6) NOT NULL,
   `latitude` decimal(10,6) NOT NULL,
   `name` varchar(128) NOT NULL,
-  `remark` varchar(512) DEFAULT NULL,
+  `altitude_m` int(11) DEFAULT NULL COMMENT '高度（米），units.json: alt_m/alt',
+  `image` varchar(256) DEFAULT NULL COMMENT '图标路径（相对 static）',
+  `size` decimal(8,3) DEFAULT NULL COMMENT '图标缩放比例',
+  `offset_x` int(11) DEFAULT NULL COMMENT '标注 X 偏移',
+  `offset_y` int(11) DEFAULT NULL COMMENT '标注 Y 偏移',
+  `info` text COMMENT '详情说明（长文本）',
+  `info_source` varchar(128) DEFAULT NULL COMMENT '说明来源（如 文档摘要）',
+  `cluster_id` varchar(64) DEFAULT NULL COMMENT '地面集群ID（units.json ground.clusters[].clusterId）',
+  `cluster_name` varchar(128) DEFAULT NULL COMMENT '地面集群名称',
+  `cluster_center_longitude` decimal(10,6) DEFAULT NULL COMMENT '集群中心点经度',
+  `cluster_center_latitude` decimal(10,6) DEFAULT NULL COMMENT '集群中心点纬度',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_spatial_facility_code` (`code`)
+  UNIQUE KEY `uk_spatial_facility_code` (`code`),
+  KEY `idx_spatial_facility_category` (`category`),
+  KEY `idx_spatial_facility_cluster` (`cluster_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------
 -- Records of spatial_facility
 -- ----------------------------
 BEGIN;
-INSERT INTO `spatial_facility` VALUES (1, 'ct-1', 'ground', '操作塔', 116.584000, 40.080000, '首都机场西塔台', '西区主塔台，负责西跑道起降指挥', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (2, 'ct-2', 'ground', '操作塔', 121.805000, 31.144000, '浦东机场东塔台', '东区塔台，T1/T2 近机位指挥', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (3, 'ct-3', 'ground', '操作塔', 113.309000, 23.392000, '白云机场北塔台', '北跑道塔台', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (4, 'ct-4', 'ground', '操作塔', 103.947000, 30.579000, '双流机场塔台', '双流主塔台', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (5, 'ct-5', 'ground', '操作塔', 113.819000, 22.639000, '宝安机场塔台', '深圳宝安主塔台', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (6, 'ct-6', 'ground', '操作塔', 108.751000, 34.447000, '咸阳机场塔台', '西安咸阳主塔台', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (7, 'ct-7', 'ground', '操作塔', 120.434000, 30.229000, '萧山机场塔台', '杭州萧山主塔台', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (8, 't-1', 'ground', '航站楼', 116.588000, 40.076000, '首都机场 T3', 'T3 航站楼，国际及部分国内', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (9, 't-2', 'ground', '航站楼', 116.578000, 40.082000, '首都机场 T2', 'T2 航站楼，国内航班', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (10, 't-3', 'ground', '航站楼', 121.801000, 31.148000, '浦东 T2', '浦东 T2 航站楼', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (11, 't-4', 'ground', '航站楼', 121.810000, 31.140000, '浦东 T1', '浦东 T1 航站楼', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (12, 't-5', 'ground', '航站楼', 113.305000, 23.388000, '白云 T2', '白云机场 T2', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (13, 't-6', 'ground', '航站楼', 113.313000, 23.396000, '白云 T1', '白云机场 T1', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (14, 't-7', 'ground', '航站楼', 103.943000, 30.575000, '双流 T2', '双流 T2 航站楼', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (15, 't-8', 'ground', '航站楼', 113.815000, 22.635000, '宝安 T3', '深圳宝安 T3', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (16, 't-9', 'ground', '航站楼', 106.638000, 29.716000, '江北 T3A', '重庆江北 T3A', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (17, 'st-1', 'ground', '信号塔', 116.591000, 40.085000, '首都西区 VHF 塔', '西区甚高频通信', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (18, 'st-2', 'ground', '信号塔', 121.798000, 31.150000, '浦东北导航台', '北近台/信标', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (19, 'st-3', 'ground', '信号塔', 113.302000, 23.385000, '白云东信标台', '东侧信标/测距', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (20, 'st-4', 'ground', '信号塔', 103.951000, 30.583000, '双流南 VHF', '南侧甚高频', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (21, 'st-5', 'ground', '信号塔', 108.746000, 34.451000, '咸阳西 NDB', '西侧无方向信标', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (22, 'st-6', 'ground', '信号塔', 120.430000, 30.232000, '萧山东雷达站', '东侧二次雷达', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (23, 'sat-com-1', 'satellite', '通信卫星', 105.200000, 35.800000, '中星6E', 'C 波段通信，覆盖中国及周边', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (24, 'sat-com-2', 'satellite', '通信卫星', 125.000000, 28.500000, '亚太6C', 'Ku 波段，亚太区域', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (25, 'sat-com-3', 'satellite', '通信卫星', 110.300000, 32.100000, '中星11号', 'Ka 高通量，航空机载通信', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (26, 'sat-com-4', 'satellite', '通信卫星', 98.600000, 22.400000, '中星16', 'Ka 宽带，应急与机载', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (27, 'sat-com-5', 'satellite', '通信卫星', 115.700000, 38.200000, '中星19', '高通量，西部及一带一路', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (28, 'sat-com-6', 'satellite', '通信卫星', 87.400000, 30.200000, '天链中继', '数据中继，航天测控', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (29, 'sat-com-7', 'satellite', '通信卫星', 77.100000, 18.500000, '天通一号', 'S 波段移动通信', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (30, 'sat-nav-1', 'satellite', '导航卫星', 140.000000, 55.000000, '北斗 G1', 'GEO，东经 140°', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (31, 'sat-nav-2', 'satellite', '导航卫星', 110.500000, 2.000000, '北斗 G2', 'GEO，东经 110.5°', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (32, 'sat-nav-3', 'satellite', '导航卫星', 84.300000, -2.100000, '北斗 G3', 'GEO，东经 84°', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (33, 'sat-nav-4', 'satellite', '导航卫星', 58.800000, 18.200000, '北斗 M1', 'MEO 轨道', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (34, 'sat-nav-5', 'satellite', '导航卫星', 120.200000, 35.600000, '北斗 M2', 'MEO 轨道', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (35, 'sat-nav-6', 'satellite', '导航卫星', 95.400000, -12.300000, '北斗 M3', 'MEO 轨道', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (36, 'sat-nav-7', 'satellite', '导航卫星', 45.100000, 28.700000, '北斗 M4', 'MEO 轨道', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (37, 'sat-nav-8', 'satellite', '导航卫星', 168.200000, 40.100000, '北斗 IGSO-1', '倾斜地球同步', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (38, 'sat-rs-1', 'satellite', '遥感卫星', 116.400000, 39.900000, '高分一号', '2m 全色/8m 多光谱', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (39, 'sat-rs-2', 'satellite', '遥感卫星', 103.600000, 30.500000, '高分二号', '亚米级光学', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (40, 'sat-rs-3', 'satellite', '遥感卫星', 121.500000, 31.200000, '高分三号', 'C 波段 SAR', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (41, 'sat-rs-4', 'satellite', '遥感卫星', 113.200000, 23.100000, '高分四号', 'GEO 凝视，50m', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (42, 'sat-rs-5', 'satellite', '遥感卫星', 108.900000, 34.200000, '高分五号', '高光谱', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (43, 'sat-rs-6', 'satellite', '遥感卫星', 99.100000, 25.000000, '高分六号', '宽幅光学', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (44, 'sat-rs-7', 'satellite', '遥感卫星', 87.200000, 43.800000, '高分七号', '立体测绘', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (45, 'sat-rs-8', 'satellite', '遥感卫星', 118.600000, 32.000000, '环境二号 A', '环境减灾光学', NULL, NULL);
-INSERT INTO `spatial_facility` VALUES (46, 'sat-rs-9', 'satellite', '遥感卫星', 106.300000, 29.500000, '资源三号', '立体测绘', NULL, NULL);
+INSERT INTO `spatial_facility`
+(`code`, `category`, `type`, `longitude`, `latitude`, `name`, `altitude_m`, `image`, `size`, `offset_x`, `offset_y`, `info`, `info_source`, `cluster_id`, `cluster_name`, `cluster_center_longitude`, `cluster_center_latitude`)
+VALUES
+('sat-hts-01', 'satellite', 'satellite', 112.000000, 36.000000, 'HTS卫星', 1600000, 'img/satelliteIcon.png', 0.300, 0, 32,
+ '高通量卫星通信节点，承担飞机与地面之间的大容量高速数据传输，是\"云匣子\"空天链路的重要组成部分。', '文档摘要', NULL, NULL, NULL, NULL),
+('sat-leo-01', 'satellite', 'satellite', 114.000000, 38.000000, 'LEO卫星', 800000, 'img/satelliteIcon.png', 0.300, 0, 32,
+ '低轨通信卫星节点，作为空天网络的一部分补充广域覆盖与链路连续性，为实时数据传输提供支撑。', '补充说明', NULL, NULL, NULL, NULL),
+
+('dep-reconstruction', 'ground', 'ground_unit', 108.770117, 34.453236, '地面飞行场景实时重构系统', 0, 'img/planeBillBoardImg.png', 0.500, 0, -28,
+ '该系统基于民用航空器飞行数据和舱音数据，分析下传数据的变化趋势，并将重建结果共享给专家组与决策模块，实现高效的数据传输与态势支撑。', '文档摘要',
+ 'DEP_AIRPORT', '起点机场地面单位集群', 108.751900, 34.446756),
+('dep-expert-group', 'ground', 'ground_unit', 108.771811, 34.445005, '地面运营控制中心专家组', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '该系统从专家视角对飞机运行中的问题进行多方位分析，对机载预警设备和地面场景重构系统输出的告警进行认定，并制定或优化应急处置方案。', '文档摘要',
+ 'DEP_AIRPORT', '起点机场地面单位集群', 108.751900, 34.446756),
+('dep-atc', 'ground', 'ground_unit', 108.766361, 34.446522, '空管系统', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '空管系统负责空域调度、飞行引导与险情协同，接收处置方案后联动机场与机组执行应急流程。', '补充说明',
+ 'DEP_AIRPORT', '起点机场地面单位集群', 108.751900, 34.446756),
+('dep-airline', 'ground', 'ground_unit', 108.744077, 34.432633, '航司系统', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '航司系统负责从运行与技术支持视角参与应急处置，协调签派、技术和保障资源，支撑方案落地。', '补充说明',
+ 'DEP_AIRPORT', '起点机场地面单位集群', 108.751900, 34.446756),
+('dep-airport', 'ground', 'ground_unit', 108.758305, 34.439267, '机场系统', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '机场系统承担跑道、地面保障与现场应急资源协同，是处置方案落地执行的重要节点。', '补充说明',
+ 'DEP_AIRPORT', '起点机场地面单位集群', 108.751900, 34.446756),
+('route-atg-01', 'ground', 'ground_unit', 111.200000, 36.000000, '5G基站', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。', '文档摘要',
+ 'DEP_AIRPORT', '起点机场地面单位集群', 108.751900, 34.446756),
+('route-atg-02', 'ground', 'ground_unit', 113.800000, 37.500000, '5G基站', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。', '文档摘要',
+ 'DEP_AIRPORT', '起点机场地面单位集群', 108.751900, 34.446756),
+
+('arr-sim-system', 'ground', 'ground_unit', 116.404059, 39.470762, '体系应急决策推演系统', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '该系统依据航空器风险状态生成多个动态决策方案，在仿真场景中开展平行推演，评估处置路径优劣并辅助专家组形成最优方案。', '文档摘要',
+ 'ARR_AIRPORT', '终点机场地面单位集群', 116.429060, 39.485763),
+('arr-rescue', 'ground', 'ground_unit', 116.429059, 39.515763, '救援系统', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '救援系统负责承接机场侧下发的应急任务，参与人员疏散、伤员救治和现场处置等执行环节。', '补充说明',
+ 'ARR_AIRPORT', '终点机场地面单位集群', 116.429060, 39.485763),
+('arr-airport', 'ground', 'ground_unit', 116.459059, 39.505763, '机场系统', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '机场系统承担跑道、地面保障与现场应急资源协同，是处置方案落地执行的重要节点。', '补充说明',
+ 'ARR_AIRPORT', '终点机场地面单位集群', 116.429060, 39.485763),
+('arr-atg-station', 'ground', 'ground_unit', 116.449059, 39.525762, '5G基站', 0, 'img/planeBillBoardImg.png', NULL, NULL, NULL,
+ '5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。', '文档摘要',
+ 'ARR_AIRPORT', '终点机场地面单位集群', 116.429060, 39.485763);
+COMMIT;
+
+-- ----------------------------
+-- Table structure for spatial_relation
+-- 用于存储 links.json 的 relations
+-- ----------------------------
+DROP TABLE IF EXISTS `spatial_relation`;
+CREATE TABLE `spatial_relation` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `code` varchar(64) NOT NULL COMMENT '关系编码（links.json relations[].id）',
+  `name` varchar(256) NOT NULL COMMENT '关系名称（links.json relations[].name）',
+  `flow_label` varchar(32) DEFAULT NULL COMMENT '流向标签（links.json relations[].flowLabel）',
+  `edges_json` text NOT NULL COMMENT '边集合JSON，格式如 [["a","b"],["c","d"]]',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_spatial_relation_code` (`code`),
+  KEY `idx_spatial_relation_flow` (`flow_label`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点关系/连线配置（来源 links.json）';
+
+-- ----------------------------
+-- Records of spatial_relation
+-- ----------------------------
+BEGIN;
+INSERT INTO `spatial_relation` (`code`, `flow_label`, `name`, `edges_json`) VALUES
+('link-sat-ground', '信息流', '卫星链路与地面控制中心', '[[\"dep-airport-ops\",\"sat-hts-01\"],[\"dep-airport-ops\",\"sat-leo-01\"]]'),
+('link-flight-emergency', '控制流', '飞行控制与应急处置执行', '[[\"plane\",\"dep-emergency-exec\"]]'),
+('link-info-1', '信息流', '黑匣子→通感算一体机载感知预警设备→HTS/5G ATG', '[[\"plane\",\"sat-hts-01\"]]'),
+('link-info-2', '信息流', 'HTS/5G ATG→地面飞行场景实时重构系统', '[[\"sat-hts-01\",\"dep-reconstruction\"]]'),
+('link-info-3', '信息流', 'HTS/5G ATG→地面运营专家组系统', '[[\"sat-hts-01\",\"dep-expert-group\"]]'),
+('link-info-4', '信息流', '地面运营专家组系统→体系应急决策推演系统', '[[\"dep-expert-group\",\"arr-sim-system\"]]'),
+('link-info-5', '信息流', '地面飞行场景实时重构系统→体系应急决策推演系统', '[[\"dep-reconstruction\",\"arr-sim-system\"]]'),
+('link-info-6', '信息流', '体系应急决策推演系统→应急处置系统（空管系统等）', '[[\"arr-sim-system\",\"dep-atc\"]]'),
+('link-ctrl-1', '控制流', '通感算一体机载感知预警设备→机组系统', '[[\"plane\",\"plane\"]]'),
+('link-ctrl-2', '控制流', '体系应急决策推演系统→HTS/5G ATG→机组系统', '[[\"arr-sim-system\",\"sat-hts-01\"],[\"sat-hts-01\",\"plane\"]]'),
+('link-ctrl-3', '控制流', '应急处置系统→HTS/5G ATG→机组系统', '[[\"dep-atc\",\"sat-hts-01\"],[\"sat-hts-01\",\"plane\"]]'),
+('link-ctrl-4', '控制流', '通感算一体机载感知预警设备→HTS/5G ATG→地面飞行场景实时重构系统', '[[\"plane\",\"sat-hts-01\"],[\"sat-hts-01\",\"dep-reconstruction\"]]'),
+('no-crew-to-atc', 'INFO', '无云匣子：机组→空管', '[[\"no-crew\",\"dep-atc\"]]'),
+('no-atc-to-emergency', 'INFO', '无云匣子：空管→应急处理系统', '[[\"no-atc\",\"no-emergency-sys\"]]'),
+('no-airport-ops-to-tower', 'INFO', '无云匣子：机场运行→塔台', '[[\"no-airport-ops\",\"no-tower\"]]'),
+('no-dispatch-to-satgw', 'INFO', '无云匣子：签派→卫星地面站', '[[\"no-dispatch\",\"no-sat-gw\"]]'),
+('no-satgw-to-crew', 'INFO', '无云匣子：卫星地面站→机组', '[[\"no-sat-gw\",\"no-crew\"]]'),
+('no-maint-to-tech', 'CTRL', '无云匣子：机务→航司技术支援', '[[\"no-maint\",\"no-airline-tech\"]]'),
+('no-tech-to-safety', 'CTRL', '无云匣子：航司技术支援→航安部门', '[[\"no-airline-tech\",\"no-safety\"]]'),
+('yes-engine-to-warn', 'INFO', '有云匣子：发动机→机载预警', '[[\"yes-engine\",\"yes-onboard-warn\"]]'),
+('yes-warn-to-expert', 'INFO', '有云匣子：预警→专家组', '[[\"yes-onboard-warn\",\"yes-expert-group\"]]'),
+('yes-expert-to-sim', 'INFO', '有云匣子：专家组→体系推演', '[[\"yes-expert-group\",\"yes-sim-system\"]]'),
+('yes-sim-to-expert', 'CTRL', '有云匣子：体系推演→专家组', '[[\"yes-sim-system\",\"yes-expert-group\"]]'),
+('yes-expert-to-atc', 'CTRL', '有云匣子：专家组→空管', '[[\"yes-expert-group\",\"yes-atc\"]]'),
+('yes-atc-to-airport', 'CTRL', '有云匣子：空管→机场', '[[\"yes-atc\",\"yes-airport\"]]'),
+('no-crew-to-tower', 'INFO', '无云匣子：机组→塔台/进近', '[[\"no-crew\",\"no-tower\"]]'),
+('no-tower-to-atc', 'INFO', '无云匣子：塔台/进近→空管', '[[\"no-tower\",\"no-atc\"]]');
 COMMIT;
 
 -- ----------------------------

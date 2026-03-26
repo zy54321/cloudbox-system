@@ -1,0 +1,197 @@
+{
+  "relations": [
+    {
+      "id": "link-sat-ground",
+      "flowLabel": "信息流",
+      "name": "卫星链路与地面控制中心",
+      "edges": [
+        ["dep-airport-ops", "sat-hts-01"],
+        ["dep-airport-ops", "sat-leo-01"]
+      ]
+    },
+    {
+      "id": "link-flight-emergency",
+      "flowLabel": "控制流",
+      "name": "飞行控制与应急处置执行",
+      "edges": [
+        ["plane", "dep-emergency-exec"]
+      ]
+    },
+    {
+      "id": "link-info-1",
+      "flowLabel": "信息流",
+      "name": "黑匣子→通感算一体机载感知预警设备→HTS/5G ATG",
+      "edges": [
+        ["plane", "sat-hts-01"]
+      ]
+    },
+    {
+      "id": "link-info-2",
+      "flowLabel": "信息流",
+      "name": "HTS/5G ATG→地面飞行场景实时重构系统",
+      "edges": [
+        ["sat-hts-01", "dep-reconstruction"]
+      ]
+    },
+    {
+      "id": "link-info-3",
+      "flowLabel": "信息流",
+      "name": "HTS/5G ATG→地面运营专家组系统",
+      "edges": [
+        ["sat-hts-01", "dep-expert-group"]
+      ]
+    },
+    {
+      "id": "link-info-4",
+      "flowLabel": "信息流",
+      "name": "地面运营专家组系统→体系应急决策推演系统",
+      "edges": [
+        ["dep-expert-group", "arr-sim-system"]
+      ]
+    },
+    {
+      "id": "link-info-5",
+      "flowLabel": "信息流",
+      "name": "地面飞行场景实时重构系统→体系应急决策推演系统",
+      "edges": [
+        ["dep-reconstruction", "arr-sim-system"]
+      ]
+    },
+    {
+      "id": "link-info-6",
+      "flowLabel": "信息流",
+      "name": "体系应急决策推演系统→应急处置系统（空管系统等）",
+      "edges": [
+        ["arr-sim-system", "dep-atc"]
+      ]
+    },
+    {
+      "id": "link-ctrl-1",
+      "flowLabel": "控制流",
+      "name": "通感算一体机载感知预警设备→机组系统",
+      "edges": [
+        ["plane", "plane"]
+      ]
+    },
+    {
+      "id": "link-ctrl-2",
+      "flowLabel": "控制流",
+      "name": "体系应急决策推演系统→HTS/5G ATG→机组系统",
+      "edges": [
+        ["arr-sim-system", "sat-hts-01"],
+        ["sat-hts-01", "plane"]
+      ]
+    },
+    {
+      "id": "link-ctrl-3",
+      "flowLabel": "控制流",
+      "name": "应急处置系统→HTS/5G ATG→机组系统",
+      "edges": [
+        ["dep-atc", "sat-hts-01"],
+        ["sat-hts-01", "plane"]
+      ]
+    },
+    {
+      "id": "link-ctrl-4",
+      "flowLabel": "控制流",
+      "name": "通感算一体机载感知预警设备→HTS/5G ATG→地面飞行场景实时重构系统",
+      "edges": [
+        ["plane", "sat-hts-01"],
+        ["sat-hts-01", "dep-reconstruction"]
+      ]
+    },
+    {
+      "id": "no-crew-to-atc",
+      "name": "无云匣子：机组→空管",
+      "flowLabel": "INFO",
+      "edges": [["no-crew", "dep-atc"]]
+    },
+    {
+      "id": "no-atc-to-emergency",
+      "name": "无云匣子：空管→应急处理系统",
+      "flowLabel": "INFO",
+      "edges": [["no-atc", "no-emergency-sys"]]
+    },
+    {
+      "id": "no-airport-ops-to-tower",
+      "name": "无云匣子：机场运行→塔台",
+      "flowLabel": "INFO",
+      "edges": [["no-airport-ops", "no-tower"]]
+    },
+    {
+      "id": "no-dispatch-to-satgw",
+      "name": "无云匣子：签派→卫星地面站",
+      "flowLabel": "INFO",
+      "edges": [["no-dispatch", "no-sat-gw"]]
+    },
+    {
+      "id": "no-satgw-to-crew",
+      "name": "无云匣子：卫星地面站→机组",
+      "flowLabel": "INFO",
+      "edges": [["no-sat-gw", "no-crew"]]
+    },
+    {
+      "id": "no-maint-to-tech",
+      "name": "无云匣子：机务→航司技术支援",
+      "flowLabel": "CTRL",
+      "edges": [["no-maint", "no-airline-tech"]]
+    },
+    {
+      "id": "no-tech-to-safety",
+      "name": "无云匣子：航司技术支援→航安部门",
+      "flowLabel": "CTRL",
+      "edges": [["no-airline-tech", "no-safety"]]
+    },
+    
+    {
+      "id": "yes-engine-to-warn",
+      "name": "有云匣子：发动机→机载预警",
+      "flowLabel": "INFO",
+      "edges": [["yes-engine", "yes-onboard-warn"]]
+    },
+    {
+      "id": "yes-warn-to-expert",
+      "name": "有云匣子：预警→专家组",
+      "flowLabel": "INFO",
+      "edges": [["yes-onboard-warn", "yes-expert-group"]]
+    },
+    {
+      "id": "yes-expert-to-sim",
+      "name": "有云匣子：专家组→体系推演",
+      "flowLabel": "INFO",
+      "edges": [["yes-expert-group", "yes-sim-system"]]
+    },
+    {
+      "id": "yes-sim-to-expert",
+      "name": "有云匣子：体系推演→专家组",
+      "flowLabel": "CTRL",
+      "edges": [["yes-sim-system", "yes-expert-group"]]
+    },
+    {
+      "id": "yes-expert-to-atc",
+      "name": "有云匣子：专家组→空管",
+      "flowLabel": "CTRL",
+      "edges": [["yes-expert-group", "yes-atc"]]
+    },
+    {
+      "id": "yes-atc-to-airport",
+      "name": "有云匣子：空管→机场",
+      "flowLabel": "CTRL",
+      "edges": [["yes-atc", "yes-airport"]]
+    },
+
+    {
+      "id": "no-crew-to-tower",
+      "name": "无云匣子：机组→塔台/进近",
+      "flowLabel": "INFO",
+      "edges": [["no-crew", "no-tower"]]
+    },
+    {
+      "id": "no-tower-to-atc",
+      "name": "无云匣子：塔台/进近→空管",
+      "flowLabel": "INFO",
+      "edges": [["no-tower", "no-atc"]]
+    }
+    
+  ]
+}

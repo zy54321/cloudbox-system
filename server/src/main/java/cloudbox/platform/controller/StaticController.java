@@ -64,8 +64,12 @@ public class StaticController {
      */
     @PostMapping("/spatial")
     public ResponseEntity<Map<String, Object>> spatial(@RequestBody(required = false) Map<String, Object> requestBody) {
-        String category = requestBody != null && requestBody.get("category") != null
-                ? (String) requestBody.get("category") : "ground";
+        // 不传参/不传 category：返回完整（ground + satellite）
+        if (requestBody == null || requestBody.get("category") == null) {
+            Map<String, Object> data = staticArchService.getSpatialAll();
+            return ResponseEntity.ok(ApiResponse.success(data));
+        }
+        String category = (String) requestBody.get("category");
         category = "satellite".equalsIgnoreCase(category) ? "satellite" : "ground";
         Map<String, Object> data = staticArchService.getSpatialData(category);
         return ResponseEntity.ok(ApiResponse.success(data));
@@ -78,7 +82,23 @@ public class StaticController {
      */
     @PostMapping("/link")
     public ResponseEntity<Map<String, Object>> link(@RequestBody(required = false) Map<String, Object> requestBody) {
-        List<Map<String, Object>> data = staticArchService.getLinkTopology(requestBody);
+        // 兼容两种用法：
+        // 1) 传 from/to/type -> 返回原树状拓扑（旧前端）
+        // 2) 不传参数 -> 返回 links.json 风格的 relations（新前端）
+        boolean hasTopologyArgs = requestBody != null
+                && (requestBody.get("from") != null || requestBody.get("to") != null || requestBody.get("type") != null);
+        Object data = hasTopologyArgs
+                ? staticArchService.getLinkTopology(requestBody)
+                : staticArchService.getLinkRelations();
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    /**
+     * 返回 static/china_polyline.geojson（GeoJSON）
+     */
+    @PostMapping("/china/polyline")
+    public ResponseEntity<Map<String, Object>> chinaPolyline(@RequestBody(required = false) Map<String, Object> requestBody) {
+        Object data = staticArchService.getChinaPolylineGeoJson();
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 }

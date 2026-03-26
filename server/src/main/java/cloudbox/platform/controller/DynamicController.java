@@ -33,47 +33,24 @@ public class DynamicController {
     }
 
     /**
-     * 获取场景步骤与处置卡片
+     * 返回 static/dynamic_scenarios.json 的完整解析结果
      */
-    @PostMapping("/scenario/steps")
-    public ResponseEntity<Map<String, Object>> scenarioSteps(@RequestBody(required = false) Map<String, Object> requestBody) {
-        Map<String, Object> data = dynamicFlowService.getScenarioSteps(requestBody);
+    @PostMapping("/scenarios/config")
+    public ResponseEntity<Map<String, Object>> scenarioConfig(@RequestBody(required = false) Map<String, Object> requestBody) {
+        Map<String, Object> data = dynamicFlowService.getDynamicScenariosConfig();
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     /**
-     * 获取航班/任务信息
+     * 返回某个事件的单位/节点配置（static/<eventKey>_units.json）
+     * 例：eventKey=engine_failure -> static/engine_failure_units.json
      */
-    @PostMapping("/flight/info")
-    public ResponseEntity<Map<String, Object>> flightInfo(@RequestBody(required = false) Map<String, Object> requestBody) {
-        Map<String, Object> data = dynamicFlowService.getFlightInfo(requestBody);
-        return ResponseEntity.ok(ApiResponse.success(data));
-    }
-
-    /**
-     * 获取事件列表（按当前时间 T+ 过滤）
-     */
-    @PostMapping("/events")
-    public ResponseEntity<Map<String, Object>> events(@RequestBody(required = false) Map<String, Object> requestBody) {
-        List<Map<String, Object>> data = dynamicFlowService.getEvents(requestBody);
-        return ResponseEntity.ok(ApiResponse.success(data));
-    }
-
-    /**
-     * 获取风险与对比指标
-     */
-    @PostMapping("/risk-kpi")
-    public ResponseEntity<Map<String, Object>> riskKpi(@RequestBody(required = false) Map<String, Object> requestBody) {
-        Map<String, Object> data = dynamicFlowService.getRiskKpi(requestBody);
-        return ResponseEntity.ok(ApiResponse.success(data));
-    }
-
-    /**
-     * 历史回看 - 事件列表（完整时间线）
-     */
-    @PostMapping("/history")
-    public ResponseEntity<Map<String, Object>> history(@RequestBody(required = false) Map<String, Object> requestBody) {
-        List<Map<String, Object>> data = dynamicFlowService.getHistory(requestBody);
+    @PostMapping("/event/units")
+    public ResponseEntity<Map<String, Object>> eventUnits(@RequestBody(required = false) Map<String, Object> requestBody) {
+        String eventKey = requestBody != null && requestBody.get("eventKey") != null
+                ? String.valueOf(requestBody.get("eventKey"))
+                : "engine_failure";
+        Object data = dynamicFlowService.getEventUnits(eventKey);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 }

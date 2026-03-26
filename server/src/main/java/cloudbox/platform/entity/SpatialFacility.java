@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 /**
  * 空间设施（地面+卫星合一），与表 spatial_facility 对应
- * id：主键自增；code：业务唯一标识；category：大类型（ground/satellite）；type：小类型
+ * id：主键自增；code：节点 id（units.json）；category：大类型（ground/satellite）；type：节点类型（satellite/ground_unit）
  */
 @Getter
 @Setter
@@ -20,7 +20,17 @@ public class SpatialFacility {
     private Double longitude;
     private Double latitude;
     private String name;
-    private String remark;
+    private Integer altitudeM;
+    private String image;
+    private Double size;
+    private Integer offsetX;
+    private Integer offsetY;
+    private String info;
+    private String infoSource;
+    private String clusterId;
+    private String clusterName;
+    private Double clusterCenterLongitude;
+    private Double clusterCenterLatitude;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

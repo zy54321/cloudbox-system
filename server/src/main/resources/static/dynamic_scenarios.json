@@ -1,0 +1,142 @@
+{
+  "scenarios": {
+    "engine_failure": {
+      "name": "单发失效",
+      "durationSec": 1800,
+      "nodes": [
+        {
+          "nodeId": 0,
+          "yes": {
+            "t": 0.0,
+            "title": "发动机转速骤降至0%",
+            "phase": "触发",
+            "state": "异常触发",
+            "summary": "发动机 → 机载感知预警系统",
+            "desc": "信息流路径：发动机 → 机载感知预警系统",
+            "alert": "发动机异常：转速骤降",
+            "events": ["三维飞机模型显示界面提示异常"],
+            "evidence": ["机载监测参数（示意）"],
+            "actions": ["触发机载预警链路"],
+            "activeRelations": ["yes-engine-to-warn"]
+          },
+          "no": {
+            "t": 0.0,
+            "title": "机组发现仪表异常",
+            "phase": "发现",
+            "state": "MAYDAY",
+            "summary": "机组→塔台/进近",
+            "desc": "信息流：机组→塔台/进近管制（MAYDAY）",
+            "alert": "MAYDAY：单发失效（示意）",
+            "events": ["话音通信报告（示意）"],
+            "evidence": ["主飞行显示器红色警告（示意）"],
+            "actions": ["通报塔台/进近"],
+            "activeRelations": ["no-crew-to-tower"]
+          }
+        },
+        {
+          "nodeId": 1,
+          "yes": {
+            "t": 0.3,
+            "title": "机载感知预警系统",
+            "phase": "识别",
+            "state": "上报中",
+            "summary": "机载感知预警系统 → 地面专家组 → 体系推演系统",
+            "desc": "信息流路径：机载感知预警系统 → 地面专家组 → 体系推演系统",
+            "alert": "",
+            "events": ["机载感知预警系统节点亮起黄色边框"],
+            "evidence": ["机载识别特征（示意）"],
+            "actions": ["推送专家组与推演系统"],
+            "activeRelations": ["yes-warn-to-expert", "yes-expert-to-sim"]
+          },
+          "no": {
+            "t": 60.0,
+            "title": "塔台/进近管制接收 MAYDAY 并转报空管",
+            "phase": "空管",
+            "state": "应急启动",
+            "summary": "塔台/进近→空管",
+            "desc": "信息流：塔台/进近→空管",
+            "alert": "",
+            "events": ["转报空管（示意）"],
+            "evidence": ["管制通话记录（示意）"],
+            "actions": ["空管进入应急流程"],
+            "activeRelations": ["no-atc-to-emergency"]
+          }
+        },
+        {
+          "nodeId": 2,
+          "yes": {
+            "t": 10.3,
+            "title": "体系推演系统推演完成",
+            "phase": "推演",
+            "state": "推演完成",
+            "summary": "体系推演系统 → 地面专家组",
+            "desc": "控制流路径：体系推演系统 → 地面专家组",
+            "alert": "",
+            "events": ["体系推演系统节点亮起黄色边框"],
+            "evidence": ["推演结果（示意）"],
+            "actions": ["形成处置建议"],
+            "activeRelations": ["yes-sim-to-expert"]
+          },
+          "no": {
+            "t": 180.0,
+            "title": "空管启动应急处理系统并协调机场运行",
+            "phase": "空管",
+            "state": "应急协同",
+            "summary": "空管→应急处理系统 / 机场运行→塔台",
+            "desc": "信息流：空管→应急处理系统；信息流：机场运行→塔台",
+            "alert": "",
+            "events": ["应急系统进入处置流程（示意）"],
+            "evidence": ["应急流程记录（示意）"],
+            "actions": ["资源调度与通报"],
+            "activeRelations": ["no-atc-to-emergency", "no-airport-ops-to-tower"]
+          }
+        },
+        {
+          "nodeId": 3,
+          "yes": {
+            "t": 40.3,
+            "title": "地面专家组发送方案至各部门",
+            "phase": "下发",
+            "state": "协同中",
+            "summary": "地面专家组 → 空管 → 机场",
+            "desc": "控制流路径：地面专家组 → 空管 → 机场",
+            "alert": "",
+            "events": ["地面专家组节点亮起黄色边框"],
+            "evidence": ["方案摘要（示意）"],
+            "actions": ["空管/机场联动准备"],
+            "activeRelations": ["yes-expert-to-atc", "yes-atc-to-airport"]
+          },
+          "no": {
+            "t": 600.0,
+            "title": "航司签派完成性能计算并联系机组",
+            "phase": "航司",
+            "state": "建议下发",
+            "summary": "签派→卫星地面站→机组",
+            "desc": "信息流：航司签派→卫星地面站→机组",
+            "alert": "",
+            "events": ["性能计算完成（示意）"],
+            "evidence": ["飘降性能计算（示意）"],
+            "actions": ["下发备降建议"],
+            "activeRelations": ["no-dispatch-to-satgw", "no-satgw-to-crew"]
+          }
+        },
+        {
+          "nodeId": 4,
+          "no": {
+            "t": 1800.0,
+            "title": "安全备降落地，机务检查与数据准备",
+            "phase": "落地",
+            "state": "处置完成",
+            "summary": "机务→航司技术支援→航安部门",
+            "desc": "控制流：机务→航司技术支援→航安部门（QAR数据准备）",
+            "alert": "",
+            "events": ["机务登机检查（示意）"],
+            "evidence": ["故障代码/记录（示意）"],
+            "actions": ["复盘归档"],
+            "activeRelations": ["no-maint-to-tech", "no-tech-to-safety"]
+          }
+        }
+      ]
+    }
+  }
+}

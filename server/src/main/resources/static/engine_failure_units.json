@@ -1,0 +1,38 @@
+{
+  "space": { "satellites": [] },
+  "ground": {
+    "clusters": [
+      {
+        "clusterId": "DYN_YES",
+        "name": "有云匣子链路节点",
+        "center": { "lon": 108.7519, "lat": 34.446756 },
+        "units": [
+          { "id": "yes-engine", "type": "ground_unit", "name": "发动机", "lon": 113.782093, "lat": 36.458785, "alt": 9999.05, "image": "img/planeBillBoardImg.png", "info": "发动机是民航客机的核心动力单元，动态场景中用于模拟单发失效等典型风险源。", "infoSource": "补充说明" },
+          { "id": "yes-onboard-warn", "type": "ground_unit", "name": "机载感知预警系统", "lon": 113.782127, "lat": 36.458907, "alt": 10001.14, "image": "img/planeBillBoardImg.png", "info": "该模块融合通信与感知功能，能够获取精确的位置和轨迹信息，识别典型突发紧急场景，并发布告警信息，同时通过算法过滤噪声，保障数据准确性与及时性。", "infoSource": "文档摘要" },
+          { "id": "yes-expert-group", "type": "ground_unit", "name": "地面专家组", "lon": 108.771877, "lat": 34.444764, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "地面专家组负责对告警信息和飞行状态进行综合研判，必要时结合推演系统结果制定最优应急处置方案。", "infoSource": "补充说明" },
+          { "id": "yes-sim-system", "type": "ground_unit", "name": "体系推演系统", "lon": 108.764385, "lat": 34.445150, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "体系推演系统依据航空器风险状态生成多个动态决策方案，并在仿真场景中评估各方案的执行效果与实施时间。", "infoSource": "补充说明" },
+          { "id": "yes-atc", "type": "ground_unit", "name": "空管", "lon": 108.753483, "lat": 34.436707, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "空管节点负责空域调度、飞行引导与应急协同，是地面处置链条中的关键执行单元。", "infoSource": "补充说明" },
+          { "id": "yes-airport", "type": "ground_unit", "name": "机场", "lon": 108.755438, "lat": 34.441397, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "机场节点负责承接落地保障与现场应急处置，确保方案从指挥层落实到执行层。", "infoSource": "补充说明" }
+        ]
+      },
+      {
+        "clusterId": "DYN_NO",
+        "name": "无云匣子链路节点",
+        "center": { "lon": 116.42906, "lat": 39.485763 },
+        "units": [
+          { "id": "no-crew", "type": "ground_unit", "name": "机组", "lon": 113.782116, "lat": 36.458891, "alt": 10002.23, "image": "img/planeBillBoardImg.png", "info": "机组是机上处置的直接执行主体，负责接收指令、执行标准操作程序并持续反馈飞行状态。", "infoSource": "补充说明" },
+          { "id": "no-tower", "type": "ground_unit", "name": "塔台/进近管制", "lon": 108.769123, "lat": 34.452557, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "塔台/进近管制负责机场周边空域和进离场阶段的飞行指挥，保障起降、备降与流量衔接安全。", "infoSource": "补充说明" },
+          { "id": "no-atc", "type": "ground_unit", "name": "空管", "lon": 108.753483, "lat": 34.436707, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "空管节点负责空域调度、飞行引导与应急协同，是地面处置链条中的关键执行单元。", "infoSource": "补充说明" },
+          { "id": "no-emergency-sys", "type": "ground_unit", "name": "应急处理系统", "lon": 108.766150, "lat": 34.448481, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "应急处置系统根据推演结果协调机组、航司、空管、机场等应急部门，实现紧急事态的下达、通知与执行闭环。", "infoSource": "文档摘要" },
+          { "id": "no-airport-ops", "type": "ground_unit", "name": "机场运行控制中心", "lon": 108.765459, "lat": 34.440776, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "机场运行控制中心作为机场侧执行中枢，统筹跑道、地服、救援等资源，推动应急方案落地。", "infoSource": "补充说明" },
+          { "id": "no-dispatch", "type": "ground_unit", "name": "航司签派/运控中心", "lon": 108.743828, "lat": 34.432877, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "航司签派/运控中心负责航班运行监控、备降协调与运行支持，是航司侧应急处置的重要指挥节点。", "infoSource": "补充说明" },
+          { "id": "no-sat-gw", "type": "ground_unit", "name": "卫星通信地面站", "lon": 108.790894, "lat": 34.433823, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "卫星通信地面站承接卫星链路入地与转发，将空天链路接入地面业务系统，保障数据连续下传。", "infoSource": "补充说明" },
+          { "id": "no-maint", "type": "ground_unit", "name": "机务", "lon": 116.431346, "lat": 39.494977, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "机务负责飞机检修、故障排查与技术保障，为处置后的排故与恢复运行提供支持。", "infoSource": "补充说明" },
+          { "id": "no-airline-tech", "type": "ground_unit", "name": "航司技术支援", "lon": 116.406143, "lat": 39.519143, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "航司技术支援负责从技术层面对故障进行研判，向签派、机组和地面系统提供专业支持。", "infoSource": "补充说明" },
+          { "id": "no-safety", "type": "ground_unit", "name": "航安部门", "lon": 116.433551, "lat": 39.521643, "alt": 0, "image": "img/planeBillBoardImg.png", "info": "航安部门负责航空安全监督、风险研判与事件复盘，为重大异常事件提供安全管理支持。", "infoSource": "补充说明" }
+        ]
+      }
+    ]
+  }
+}
+
