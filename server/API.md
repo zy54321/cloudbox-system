@@ -5,8 +5,8 @@
 | 项目     | 说明           |
 |----------|----------------|
 | 基础路径 | `/api`         |
-| 默认端口 | `8080`         |
-| 完整地址 | `http://localhost:8080/api` |
+| 默认端口 | `7223`         |
+| 完整地址 | `http://localhost:7223/api` |
 | 请求格式 | JSON（`Content-Type: application/json`） |
 | 响应格式 | 统一 JSON 封装 |
 
@@ -34,7 +34,7 @@
 
 ## 一、静态架构接口 `/static`
 
-用于云匣子教学演示：体系结构与关联关系。**所有接口均为 POST**。
+用于云匣子教学演示：体系结构与关联关系。
 
 ### 1.1 获取仪表数据（按飞行阶段）
 
@@ -174,13 +174,17 @@
 
 **接口**：`POST /api/static/spatial`
 
-**说明**：按入参 **category**（大类型）返回地面或卫星数据。地面：操作塔、航站楼、信号塔；卫星：通信卫星、导航卫星、遥感卫星。每项含 id（业务 code）、经纬度、名称、备注。
+**说明**：返回空间节点（来源数据库 `spatial_facility`，数据结构贴近 `units.json`）。
+
+- 不传 `category`：返回 **ground + satellite 全量**
+- 传 `category=ground`：只返回地面集群
+- 传 `category=satellite`：只返回卫星节点列表
 
 **请求体**（可选）：
 
 | 字段      | 类型   | 必填 | 说明 |
 |-----------|--------|------|------|
-| category  | string | 否  | 大类型：**ground**（地面）/ **satellite**（卫星），默认 `ground` |
+| category  | string | 否  | **ground**（地面）/ **satellite**（卫星）。不传则返回全部 |
 
 **入参含义**：
 
@@ -188,33 +192,81 @@
 |-----------|------|
 | category  | 大类型。`ground` 返回操作塔、航站楼、信号塔；`satellite` 返回通信卫星、导航卫星、遥感卫星。不传或传空时按 `ground` 返回。 |
 
-**请求示例**：
+**请求示例**（返回全部）：
+```json
+{}
+```
+
+**请求示例**（仅地面）：
 ```json
 { "category": "ground" }
 ```
+
+**请求示例**（仅卫星）：
 ```json
 { "category": "satellite" }
 ```
 
-**响应 data**：**最外层 key 为中文**（按 category 不同为 操作塔/航站楼/信号塔 或 通信卫星/导航卫星/遥感卫星），每类为数组；**数组元素字段 key 为英文**（id、longitude、latitude、name、remark）。不返回「地面类型」「卫星类型」等 key。
+**响应 data**：
 
-**返参说明**（数组元素统一）：
+- **不传 category** 时：
 
-| 字段        | 类型   | 含义 |
-|-------------|--------|------|
-| id          | string | 业务唯一标识（code） |
-| longitude   | number | 经度（卫星为星下点） |
-| latitude    | number | 纬度 |
-| name        | string | 名称 |
-| remark      | string | 备注 |
+```json
+{
+  "space": { "star_based": [ /* 卫星节点 */ ] },
+  "ground": { "clusters": [ /* 地面集群 */ ] }
+}
+```
+
+- **category=ground** 时：
+
+```json
+{ "clusters": [ /* 地面集群 */ ] }
+```
+
+- **category=satellite** 时：
+
+```json
+{ "star_based": [ /* 卫星节点 */ ] }
+```
+
+**返参说明**
+
+- **卫星节点（space.star_based[]） / 地面节点（ground.clusters[].units[]）通用字段**
+
+| 字段        | 类型      | 含义 |
+|-------------|-----------|------|
+| id          | string    | 节点 id（数据库 code，对齐 units.json 的 id） |
+| type        | string    | 节点类型（如 satellite/ground_unit） |
+| longitude   | number    | 经度 |
+| latitude    | number    | 纬度 |
+| name        | string    | 名称 |
+| alt_m       | number    | 高度（米，可选） |
+| image       | string    | 图标路径（相对 static，可选） |
+| size        | number    | 图标缩放（可选） |
+| offset      | number[]  | 标注偏移 `[x,y]`（可选） |
+| info        | string    | 说明（可选） |
+| infoSource  | string    | 说明来源（可选） |
+
+- **地面集群（ground.clusters[]）**
+
+| 字段      | 类型   | 含义 |
+|-----------|--------|------|
+| clusterId | string | 集群 id |
+| name      | string | 集群名称 |
+| center    | object | 集群中心点 `{lon,lat}`（可选） |
+| units     | array  | 集群单位列表（字段见上表） |
 
 ---
 
-### 1.6 链路拓扑（树状结构）
+### 1.6 链路关系/拓扑（relations 结构）
 
 **接口**：`POST /api/static/link`
 
-**说明**：按起点端、终点端、关联类型生成「起点 → 链路 → 终点」的树状拓扑。星基取数据库卫星数据（经纬度），机载端取当前飞机位置（一个点），地面端取数据库地面设施（经纬度）；链路为虚拟节点，名称根据起止端自动区分为「卫星链路」或「5G ATG链路」。
+**说明**：统一返回 `{relations:[...]}` 结构，供前端按 edges 画线。
+
+- 不传 `from/to/type`：返回数据库 `spatial_relation` 中配置的 `relations`（等价于原 `links.json`）
+- 传 `from/to/type`：返回按入参动态生成的一组拓扑 relations（同样是 `{relations:[...]}`）
 
 **请求体**（可选）：
 
@@ -243,24 +295,49 @@
 }
 ```
 
-**响应 data**：树形数组。每个根节点为起点端节点，其 `children` 下为链路节点，链路节点的 `children` 为终点端节点。
+**响应 data**：
 
-**返参说明**（树节点通用）：
+```json
+{
+  "relations": [
+    {
+      "id": "xxx",
+      "flowLabel": "信息流",
+      "name": "链路名称",
+      "edges": [["fromId","toId"], ["fromId2","toId2"]]
+    }
+  ]
+}
+```
 
-| 字段       | 类型    | 含义 |
-|------------|---------|------|
-| id         | string  | 节点 id（星基/地面端为 code，机载端为 aircraft-1，链路为 link-xxx） |
-| name       | string  | 节点名称（中文，如设施名、当前航班描述、卫星链路/5G ATG链路） |
-| type       | string  | 节点类型：`satellite` / `aircraft` / `ground` / `link` |
-| longitude  | number  | 经度（链路节点无或可选） |
-| latitude   | number  | 纬度（链路节点无或可选） |
-| children   | array   | 子节点列表，叶子为 `[]` |
+**返参说明**（relations[] 元素）：
+
+| 字段      | 类型       | 含义 |
+|-----------|------------|------|
+| id        | string     | 关系组 id |
+| flowLabel | string     | 流标签（如 信息流/控制流/TOPOLOGY） |
+| name      | string     | 关系组名称 |
+| edges     | string[][] | 边集合，每条边为 `[fromId,toId]` |
+
+---
+
+### 1.7 返回中国边界折线（GeoJSON）
+
+**接口**：
+
+- `POST /api/static/china/polyline`
+
+**说明**：返回 `resources/static/china_polyline.geojson` 的完整 GeoJSON 内容。
+
+**请求体**：可选，可传 `{}` 或省略（POST）。
+
+**响应 data**：GeoJSON 对象（结构取决于文件内容）。
 
 ---
 
 ## 二、动态交互接口 `/dynamic`
 
-用于云匣子教学演示：五大场景脚本回放、处置卡片、事件/消息、时间轴、双屏对比。**所有接口均为 POST**。
+用于云匣子教学演示：动态场景配置与事件配置 JSON 下发。
 
 ### 2.1 获取场景列表
 
@@ -283,225 +360,43 @@
 
 ---
 
-### 2.2 获取场景步骤与处置卡片
+### 2.2 返回 dynamic_scenarios.json 完整配置
 
-**接口**：`POST /api/dynamic/scenario/steps`
+**接口**：`POST /api/dynamic/scenarios/config`
 
-**说明**：根据场景 key 获取场景步骤与处置卡片。
+**说明**：返回 `resources/static/dynamic_scenarios.json` 的完整解析结果。
 
-**请求体**（可选）：
-
-| 字段         | 类型   | 必填 | 说明 |
-|--------------|--------|------|------|
-| scenarioKey  | string | 否  | 场景 key，默认 `engine`。可选：`engine` / `smoke` / `nav` / `hijack` / `misop` / `generic` 等 |
-
-**入参含义**：
-
-| 参数         | 含义 |
-|--------------|------|
-| scenarioKey  | 场景唯一标识。`engine` 发动机相关，`smoke` 烟雾/火情，`nav` 导航，`hijack` 劫持，`misop` 误操作，`generic` 通用等。指定后返回该场景的脚本步骤及对应处置卡片内容。不传时默认按 `engine`。 |
-
-**请求示例**：
-```json
-{
-  "scenarioKey": "engine"
-}
-```
-
-**响应 data**：包含 `steps`（场景步骤列表）和 `disposalCards`（处置卡片列表）。
-
-**返参说明**：
-
-- **data.steps**（数组）：每个元素为一步脚本步骤。
-
-| 字段       | 类型     | 含义 |
-|------------|----------|------|
-| id         | number   | 步骤序号 |
-| nodeId     | number   | 节点 ID（与 id 一致） |
-| t          | number   | 该步时间点 T+（0～100） |
-| t_no       | number   | 未使用体系时的处置时间 T+ |
-| t_yes      | number   | 使用体系时的处置时间 T+ |
-| name       | string   | 步骤名称（如 起始、发现异常、证实完成） |
-| title      | string   | 步骤标题 |
-| phase      | string   | 阶段：证实 / 决策 / 协调 / 指挥 |
-| summary    | string   | 步骤摘要 |
-| state      | string   | 状态：待证实 / 证实中 / 已证实 / 决策中 / 协调中 / 执行中 / 完成 |
-| alert      | boolean  | 是否有告警 |
-| events     | string[] | 该步关联的事件描述列表 |
-| evidence   | string[] | 证据项列表 |
-| actions    | string[] | 处置动作列表 |
-| hops_no    | number   | 未使用体系时的跳数 |
-| hops_yes   | number   | 使用体系时的跳数 |
-| path_no    | string   | 未使用体系时的路径描述 |
-| path_yes   | string   | 使用体系时的路径描述 |
-
-- **data.disposalCards**（数组）：每个元素为一张处置卡片，字段包含上述步骤字段，以及：
-
-| 字段    | 类型   | 含义 |
-|---------|--------|------|
-| compare | object | 双屏对比数据：`t_no`、`t_yes`、`dt`（时间差）、`hops_no`、`hops_yes`、`dhops`（跳数差）、`path_no`、`path_yes` |
+**请求体**：可选，可传 `{}` 或省略。
 
 ---
 
-### 2.3 获取航班/任务信息
+### 2.3 返回某个事件的 units 配置（JSON）
 
-**接口**：`POST /api/dynamic/flight/info`
+**接口**：
 
-**说明**：根据场景获取航班/任务信息。
+- `POST /api/dynamic/event/units`
 
-**请求体**（可选）：
+**说明**：用于把静态目录下的“事件单位配置 JSON”直接返回给前端。
 
-| 字段         | 类型   | 必填 | 说明        |
-|--------------|--------|------|-------------|
-| scenarioKey  | string | 否  | 场景 key，默认 `engine` |
+读取规则：`resources/static/<eventKey>_units.json`
 
-**入参含义**：
-
-| 参数         | 含义 |
-|--------------|------|
-| scenarioKey  | 场景唯一标识，与 2.2 中取值一致。用于按场景获取当前演示对应的航班号、任务类型、航线等航班/任务信息。不传时默认 `engine`。 |
-
-**请求示例**：
-```json
-{
-  "scenarioKey": "engine"
-}
-```
-
-**响应 data**：航班/任务信息对象。
-
-**返参说明**：
-
-| 字段          | 类型   | 含义 |
-|---------------|--------|------|
-| f_no          | string | 航班号（如 MU0001） |
-| f_type        | string | 机型（如 A320（示意）） |
-| f_route       | string | 航线（如 WPT-1 → WPT-3（示意）） |
-| f_time        | string | 时间范围（如 T+0 ~ T+100（示意）） |
-| f_state       | string | 当前状态（如 待证实） |
-| f_node        | string | 当前节点名称（如 起始） |
-| scenarioKey   | string | 场景 key |
-| scenarioName  | string | 场景中文名称 |
-
----
-
-### 2.4 获取事件列表（按当前时间 T+ 过滤）
-
-**接口**：`POST /api/dynamic/events`
-
-**说明**：按场景与当前时间 T+ 获取事件列表。
+例如：`eventKey=engine_failure` → `static/engine_failure_units.json`
 
 **请求体**（可选）：
 
-| 字段         | 类型   | 必填 | 说明              |
-|--------------|--------|------|-------------------|
-| scenarioKey  | string | 否  | 场景 key，默认 `engine` |
-| currentTime  | int    | 否  | 当前时间 T+，0～100，默认 `0` |
+| 字段     | 类型   | 必填 | 说明 |
+|----------|--------|------|------|
+| eventKey | string | 否   | 事件 key，默认 `engine_failure`。仅允许 `a-z0-9_` |
 
-**入参含义**：
+**请求示例（POST）**：
 
-| 参数         | 含义 |
-|--------------|------|
-| scenarioKey  | 场景唯一标识，指定要查看哪个场景下的事件。不传时默认 `engine`。 |
-| currentTime  | 时间轴上的“当前时刻”T+，取值 0～100，表示脚本时间进度（如 0 为开始、100 为结束）。接口返回该时刻之前（或该时刻范围内）已发生的事件，用于时间轴/回放展示。不传时默认 `0`。 |
-
-**请求示例**：
 ```json
 {
-  "scenarioKey": "engine",
-  "currentTime": 50
+  "eventKey": "engine_failure"
 }
 ```
 
-**响应 data**：事件列表，每项为当前时间 T+ 之前已发生的事件。
-
-**返参说明**（列表中每个元素）：
-
-| 字段   | 类型   | 含义 |
-|--------|--------|------|
-| text   | string | 事件描述内容 |
-| time   | number | 事件发生时间点 T+（0～100） |
-| step   | string | 所属步骤名称 |
-| state  | string | 该步状态（待证实 / 证实中 / 已证实 等） |
-
----
-
-### 2.5 获取风险与对比指标
-
-**接口**：`POST /api/dynamic/risk-kpi`
-
-**说明**：根据场景获取风险与对比指标。
-
-**请求体**（可选）：
-
-| 字段         | 类型   | 必填 | 说明        |
-|--------------|--------|------|-------------|
-| scenarioKey  | string | 否  | 场景 key，默认 `engine` |
-
-**入参含义**：
-
-| 参数         | 含义 |
-|--------------|------|
-| scenarioKey  | 场景唯一标识，指定要查看哪个场景下的风险等级与 KPI 对比数据（如双屏对比、指标看板等）。不传时默认 `engine`。 |
-
-**请求示例**：
-```json
-{
-  "scenarioKey": "engine"
-}
-```
-
-**响应 data**：风险与对比指标对象。
-
-**返参说明**：
-
-| 字段     | 类型   | 含义 |
-|----------|--------|------|
-| riskType | string | 风险类型/场景名称（如 单发失效） |
-| riskPos  | string | 风险位置描述（如 WPT-2 附近（示意）） |
-| riskTime | string | 风险时间（如 T+10s（示意）） |
-| riskCmd  | string | 处置建议摘要（如 建议：证实 → 决策 → 协调 → 指挥（示意）） |
-| kpi1     | string | 对比指标 1（如 +15%（示意）） |
-| kpi2     | string | 对比指标 2（如 处置链路缩短（示意）） |
-| kpi3     | string | 对比指标 3（如 -35s（示意）） |
-
----
-
-### 2.6 历史回看 - 事件列表（完整时间线）
-
-**接口**：`POST /api/dynamic/history`
-
-**说明**：历史回看，获取完整时间线事件列表。
-
-**请求体**（可选）：
-
-| 字段         | 类型   | 必填 | 说明        |
-|--------------|--------|------|-------------|
-| scenarioKey  | string | 否  | 场景 key，默认 `engine` |
-
-**入参含义**：
-
-| 参数         | 含义 |
-|--------------|------|
-| scenarioKey  | 场景唯一标识，指定要回看哪个场景的完整事件时间线（不按 T+ 截断，返回该场景下全部事件）。不传时默认 `engine`。 |
-
-**请求示例**：
-```json
-{
-  "scenarioKey": "engine"
-}
-```
-
-**响应 data**：该场景完整时间线上的事件列表（等价于 T+ 取 100 时的 events）。
-
-**返参说明**（列表中每个元素）：与 **2.4 获取事件列表** 相同。
-
-| 字段   | 类型   | 含义 |
-|--------|--------|------|
-| text   | string | 事件描述内容 |
-| time   | number | 事件发生时间点 T+ |
-| step   | string | 所属步骤名称 |
-| state  | string | 该步状态 |
+**响应 data**：对应 JSON 文件的完整内容（结构不做强约束，由前端按需解析）。
 
 ---
 
@@ -513,13 +408,12 @@
 | 静态   | POST | /api/static/units         | 获取单元列表         |
 | 静态   | POST | /api/static/unit/detail   | 获取单元详情         |
 | 静态   | POST | /api/static/modules       | 获取模块列表         |
-| 静态   | POST | /api/static/spatial       | 获取空间设施数据（入参 category：ground/satellite） |
+| 静态   | POST | /api/static/spatial       | 获取空间节点（不传 category 返回全部） |
+| 静态   | POST | /api/static/link          | 获取链路关系/拓扑（relations 结构） |
+| 静态   | POST | /api/static/china/polyline| 返回中国边界折线（GeoJSON） |
 | 动态   | POST | /api/dynamic/scenarios    | 获取场景列表         |
-| 动态   | POST | /api/dynamic/scenario/steps | 获取场景步骤与处置卡片 |
-| 动态   | POST | /api/dynamic/flight/info | 获取航班/任务信息    |
-| 动态   | POST | /api/dynamic/events       | 获取事件列表（T+ 过滤） |
-| 动态   | POST | /api/dynamic/risk-kpi     | 获取风险与对比指标   |
-| 动态   | POST | /api/dynamic/history      | 历史回看事件列表     |
+| 动态   | POST | /api/dynamic/scenarios/config | 返回 dynamic_scenarios.json 完整配置 |
+| 动态   | POST | /api/dynamic/event/units  | 返回事件 units 配置（JSON） |
 
 ---
 
