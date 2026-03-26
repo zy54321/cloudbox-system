@@ -190,7 +190,7 @@
 
 | 参数      | 含义 |
 |-----------|------|
-| category  | 大类型。`ground` 返回操作塔、航站楼、信号塔；`satellite` 返回通信卫星、导航卫星、遥感卫星。不传或传空时按 `ground` 返回。 |
+| category  | 大类型。`ground` 返回地面集群（`clusters`）；`satellite` 返回卫星节点（`star_based`）；不传返回 `space + ground` 全量。 |
 
 **请求示例**（返回全部）：
 ```json
@@ -364,9 +364,35 @@
 
 **接口**：`POST /api/dynamic/scenarios/config`
 
-**说明**：返回 `resources/static/dynamic_scenarios.json` 的完整解析结果。
+**说明**：支持两种返回方式：
 
-**请求体**：可选，可传 `{}` 或省略。
+- 不传事件 key：返回 `resources/static/dynamic_scenarios.json` 的完整解析结果
+- 传事件 key：返回 `dynamic_scenarios.json` 的 `scenarios.<key>` 对象
+
+**请求体**（可选）：
+
+| 字段        | 类型   | 必填 | 说明 |
+|-------------|--------|------|------|
+| eventKey    | string | 否   | 事件 key，例如 `engine_failure` |
+
+**请求示例**（返回完整配置）：
+
+```json
+{}
+```
+
+**请求示例**（返回单个事件对象）：
+
+```json
+{
+  "eventKey": "engine_failure"
+}
+```
+
+**响应 data**：
+
+- 不传 key：完整 `dynamic_scenarios.json` 对象
+- 传 key：`scenarios.<key>` 对象（例如 `scenarios.engine_failure`）
 
 ---
 

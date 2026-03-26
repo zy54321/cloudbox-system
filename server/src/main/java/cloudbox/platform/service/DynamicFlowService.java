@@ -70,6 +70,21 @@ public class DynamicFlowService {
         }
     }
 
+    /**
+     * 按事件 key 返回 dynamic_scenarios.json 中 scenarios 下的某个对象。
+     * 例如：eventKey=engine_failure -> 返回 scenarios.engine_failure
+     */
+    public Object getDynamicScenarioByKey(String eventKey) {
+        String key = normalizeEventKey(eventKey);
+        Map<String, Object> cfg = getDynamicScenariosConfig();
+        Object scenariosObj = cfg.get("scenarios");
+        if (scenariosObj instanceof Map<?, ?> scenariosMap) {
+            Object scenario = scenariosMap.get(key);
+            if (scenario != null) return scenario;
+        }
+        return Map.of();
+    }
+
     private Map<String, Object> loadDynamicScenariosConfig() {
         try (InputStream in = new ClassPathResource(DYNAMIC_SCENARIOS_PATH).getInputStream()) {
             Map<String, Object> map = MAPPER.readValue(in, new TypeReference<>() {});

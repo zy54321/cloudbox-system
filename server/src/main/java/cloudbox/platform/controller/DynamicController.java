@@ -37,7 +37,17 @@ public class DynamicController {
      */
     @PostMapping("/scenarios/config")
     public ResponseEntity<Map<String, Object>> scenarioConfig(@RequestBody(required = false) Map<String, Object> requestBody) {
-        Map<String, Object> data = dynamicFlowService.getDynamicScenariosConfig();
+        // 兼容两种用法：
+        // 1) 不传 eventKey/scenarioKey -> 返回完整 dynamic_scenarios.json
+        // 2) 传 eventKey/scenarioKey -> 返回 scenarios.<key> 对象
+        String key = null;
+        if (requestBody != null) {
+            Object v = requestBody.get("eventKey");
+            if (v != null) key = String.valueOf(v);
+        }
+        Object data = (key == null || key.isBlank())
+                ? dynamicFlowService.getDynamicScenariosConfig()
+                : dynamicFlowService.getDynamicScenarioByKey(key);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
