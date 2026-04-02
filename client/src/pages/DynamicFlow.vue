@@ -133,12 +133,6 @@
           <template #compare-overlays>
             <div class="cb-split-col">
               <div class="cb-split-hint">双屏对比（有/无云匣子）｜左右同时间轴同步驱动</div>
-              <div class="cb-symbols cb-symbols--compare">
-                <div class="sym" :class="planeStateNoClass">✈️</div>
-                <div class="sym sym-text flow-no">{{ noFlowText }}</div>
-                <div class="sym sym-text">➜ 控制流</div>
-                <div class="sym sym-text">{{ noNodeText }}</div>
-              </div>
               <FloatingCard
                 id="disposalFloatingCardNo"
                 :card="{ ...currentCardYes, phase: '有云匣子' }"
@@ -150,13 +144,6 @@
               />
             </div>
             <div class="cb-split-col">
-              <div class="cb-symbols cb-symbols--compare">
-                <div class="sym" :class="planeStateYesClass">✈️</div>
-                <div class="sym sym-text flow-yes">{{ yesFlowText }}</div>
-                <div class="sym sym-text">➜ 控制流</div>
-                <div class="sym sym-text">{{ yesNodeText }}</div>
-                <div class="sym sym-badge">{{ deltaBadgeText }}</div>
-              </div>
               <FloatingCard
                 id="disposalFloatingCardYes"
                 :card="{ ...currentCardNo, phase: '无云匣子' }"
@@ -165,8 +152,7 @@
                 keyPrefix="yes-"
                 @toggle-collapsed="floatingCardYesCollapsed = !floatingCardYesCollapsed"
                 @toggle-details="detailsOpenYes = !detailsOpenYes"
-              >
-              </FloatingCard>
+              />
             </div>
             <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
               <div class="hd">
@@ -612,17 +598,6 @@ const markerYesLabel = ref('T_yes');
 const markerNoAlign = ref('center');
 const markerYesAlign = ref('center');
 
-const noNodeText = ref('节点：—');
-const yesNodeText = ref('节点：—');
-const deltaBadgeText = ref('Δt：-0s（示意）');
-const noFlowText = ref('• 信息流（较慢/缺失示意）');
-const yesFlowText = ref('• 信息流（更快/更完整示意）');
-const yesFlowColor = ref('#16a34a');
-const noFlowColor = ref('#fff');
-
-const planeStateNoClass = ref('');
-const planeStateYesClass = ref('');
-
 const infoFields = ref({
   f_no: 'MU0001',
   f_type: 'A320',
@@ -778,25 +753,6 @@ const toSideCard = (step, side = 'yes') => {
 
 const fallbackCard = (side = 'yes') => toSideCard(null, side);
 
-const setPlaneState = (side, state) => {
-  let cls = '';
-  if (state === '待证实' || state === '证实中') cls = 'yellow flash';
-  else if (state === '已证实') cls = 'red flash';
-  else if (state === '决策中' || state === '协调中' || state === '执行中') cls = 'blue';
-  else if (state === '已完成') cls = 'green';
-  if (side === 'no') planeStateNoClass.value = cls;
-  if (side === 'yes') planeStateYesClass.value = cls;
-};
-
-const updateLinkPresentation = () => {
-  if (!isCompare.value) return;
-  const node = steps.value[idxYes.value];
-  const meta = getCompareMeta(activeScenario.value, node?.nodeId ?? 0);
-  noFlowText.value = `• 信息流（较慢/缺失示意）${meta.hops_no > 2 ? `（${meta.hops_no}段中继）` : ''}`;
-  yesFlowText.value = `• 信息流（更快/更完整示意）${meta.hops_yes > 1 ? `（${meta.hops_yes}段中继）` : '（直连）'}`;
-  yesFlowColor.value = '#16a34a';
-};
-
 const updateCompareMarkersAt = (time) => {
   if (!isCompare.value) return;
   const rangeMax = timelineMax.value;
@@ -824,8 +780,6 @@ const render = () => {
   currentNodeName.value = nodeYes.title;
   infoFields.value.f_node = currentCard.value.title || '起始';
   infoFields.value.f_state = currentCard.value.state || '待证实';
-  setPlaneState('no', currentCardNo.value.state);
-  setPlaneState('yes', currentCardYes.value.state);
 };
 
 const updateFloatingCard = (node) => {
@@ -907,7 +861,6 @@ const refreshAll = (time, fromUser = false) => {
   } else {
     if (nodeNo && curIdxNo !== lastNodeIdNo.value) {
       lastNodeIdNo.value = curIdxNo;
-      setPlaneState('no', nodeNo.state);
     }
     if (nodeYes && curIdxYes !== lastNodeIdYes.value) {
       updateFloatingCard(nodeYes);
@@ -917,18 +870,6 @@ const refreshAll = (time, fromUser = false) => {
       if (rightTab.value === 'steps') {
         nextTick(() => autoScrollToCurrent());
       }
-    }
-  }
-
-  if (isCompare.value) {
-    const stNo = nodeNo || nodeYes;
-    const stYes = nodeYes || nodeNo;
-    if (stNo && stYes) {
-      noNodeText.value = `节点：${stNo.name}（T+${stNo.t_no}s）`;
-      yesNodeText.value = `节点：${stYes.name}（T+${stYes.t_yes}s）`;
-      const dt = Math.max(0, stNo.t_no - stYes.t_yes);
-      deltaBadgeText.value = `Δt：-${dt}s（示意）`;
-      updateLinkPresentation();
     }
   }
 

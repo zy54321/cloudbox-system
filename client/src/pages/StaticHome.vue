@@ -202,37 +202,37 @@
               </div>
             </template>
             <template v-else-if="activeTab === 'modules'">
-              <div class="cb-item">
+              <div class="cb-item cb-item--module">
                 <h4><span style="color:#ffd54a;">1，数据采集系统：</span></h4>
                 <p>记录民用航空器飞行数据和舱音数据。</p>
                 <p><span class="cb-link" @click="openModuleHighlight(0)">点击查看详细信息</span></p>
               </div>
-              <div class="cb-item">
+              <div class="cb-item cb-item--module">
                 <h4><span style="color:#ffd54a;">2，通感算一体机载感知预警系统：</span></h4>
                 <p>融合通信和感知能力，获得航空器位置和轨迹信息。</p>
                 <p><span class="cb-link" @click="openModuleHighlight(1)">点击查看详细信息</span></p>
               </div>
-              <div class="cb-item">
+              <div class="cb-item cb-item--module">
                 <h4><span style="color:#ffd54a;">3，HTS/5G ATG 通信系统：</span></h4>
                 <p>实现飞机数据和地面的双向同步传输。</p>
                 <p><span class="cb-link" @click="openModuleHighlight(2)">点击查看详细信息</span></p>
               </div>
-              <div class="cb-item">
+              <div class="cb-item cb-item--module">
                 <h4><span style="color:#ffd54a;">4，地面飞行场景实时重构系统：</span></h4>
                 <p>识别潜在安全隐患，为突发紧急场景下地面实时获取航空器安全态势提供数据分析手段。</p>
                 <p><span class="cb-link" @click="openModuleHighlight(3)">点击查看详细信息</span></p>
               </div>
-              <div class="cb-item">
+              <div class="cb-item cb-item--module">
                 <h4><span style="color:#ffd54a;">5，地面运营控制中心应急专家组系统：</span></h4>
                 <p>专家组讨论直接制定应急处置方案，并提出相关意见。</p>
                 <p><span class="cb-link" @click="openModuleHighlight(4)">点击查看详细信息</span></p>
               </div>
-              <div class="cb-item">
+              <div class="cb-item cb-item--module">
                 <h4><span style="color:#ffd54a;">6，体系应急决策推演系统：</span></h4>
                 <p>基于航空器风险状态生成动态决策方案，模拟处置过程并提供推演结果。</p>
                 <p><span class="cb-link" @click="openModuleHighlight(5)">点击查看详细信息</span></p>
               </div>
-              <div class="cb-item">
+              <div class="cb-item cb-item--module">
                 <h4><span style="color:#ffd54a;">7，应急处置系统：</span></h4>
                 <p>协调机组、航司、空管、机场等应急部门，实现紧急事态的下达和通知。</p>
                 <p><span class="cb-link" @click="openModuleHighlight(6)">点击查看详细信息</span></p>
@@ -421,6 +421,9 @@ const activePopup = ref(null);
 const detailModalType = ref(null); // 'star' | 'ground' | 'airborne' | null
 const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
 
+/** 跟随飞机 popup：仅在为 true 时允许显示（由「飞机」视角、阶段按钮或「沿线飞行」打开） */
+const planeFollowPopupAllowed = ref(false);
+
 /** 运行模块七大模块标题与说明（点击「点击查看详细信息」时高亮飞机并显示此内容） */
 const MODULE_DESCRIPTIONS = [
   { title: '1，数据采集系统', content: '记录民用航空器飞行数据和舱音数据。' },
@@ -434,22 +437,124 @@ const MODULE_DESCRIPTIONS = [
 const selectedModuleIndex = ref(null);
 const moduleHighlightScreen = ref(null);
 
+/** 取消进行中的「运行模块」聚光灯/飞行动画（与 closeModuleHighlight 同步递增） */
+let _moduleSpotlightSeq = 0;
+
 function openModuleHighlight(index) {
+  _moduleSpotlightSeq++;
+  const seq = _moduleSpotlightSeq;
+  const vp = vpStatic.value;
+
+  if (index === 0 || index === 1) {
+    selectedModuleIndex.value = index;
+    moduleHighlightScreen.value = null;
+    vp?.clearStaticModuleSpotlight?.();
+    vp?.setModuleHighlight?.(index);
+    vp?.flyToModuleCube?.(20);
+    return;
+  }
+
   selectedModuleIndex.value = index;
-  vpStatic.value?.setModuleHighlight?.(index);
-  vpStatic.value?.flyToModuleCube?.(20);
+  planeFollowPopupAllowed.value = false;
+  vp?.setModuleHighlight?.(null);
+  vp?.clearStaticModuleSpotlight?.();
+
+  moduleHighlightScreen.value = {
+    fixed: true,
+    x: Math.max(24, window.innerWidth - 400),
+    y: Math.max(80, window.innerHeight - 300)
+  };
+
+  if (!vp) return;
+
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const cancelled = () => seq !== _moduleSpotlightSeq;
+
+  (async () => {
+    try {
+      if (index === 2) {
+        mapMode.value = 'space';
+        vp.setStaticModuleSpotlight(true, ['sat-hts-01', 'sat-leo-01', 'route-atg-01'], false);
+        vp.flyCameraStaticSpaceView();
+        await wait(1150);
+        if (cancelled()) return;
+        for (const uid of ['sat-hts-01', 'sat-leo-01', 'route-atg-01']) {
+          if (cancelled()) return;
+          vp.flyCameraToUnitId(uid, { duration: 0.95 });
+          await wait(1000);
+          if (cancelled()) return;
+          await vp.flashUnitBillboards([uid], 3);
+          await wait(250);
+        }
+      } else if (index === 3) {
+        vp.setStaticModuleSpotlight(true, ['dep-reconstruction'], false);
+        vp.flyCameraToUnitId('dep-reconstruction', { duration: 1 });
+        await wait(1050);
+        if (cancelled()) return;
+        await vp.flashUnitBillboards(['dep-reconstruction'], 3);
+      } else if (index === 4) {
+        vp.setStaticModuleSpotlight(true, ['dep-expert-group'], false);
+        vp.flyCameraToUnitId('dep-expert-group', { duration: 1 });
+        await wait(1050);
+        if (cancelled()) return;
+        await vp.flashUnitBillboards(['dep-expert-group'], 3);
+      } else if (index === 5) {
+        vp.setStaticModuleSpotlight(true, ['arr-sim-system'], false);
+        vp.flyCameraToUnitId('arr-sim-system', { duration: 1 });
+        await wait(1050);
+        if (cancelled()) return;
+        await vp.flashUnitBillboards(['arr-sim-system'], 3);
+      } else if (index === 6) {
+        const ids = ['dep-atc', 'dep-airline', 'dep-airport'];
+        vp.setStaticModuleSpotlight(true, ids, true);
+        vp.flyCameraToUnitIdsBoundingSphere(ids, { includePlane: true, duration: 1.15 });
+        await wait(1200);
+        if (cancelled()) return;
+        await vp.flashPlaneModelBrief(3);
+        await wait(200);
+        if (cancelled()) return;
+        for (const uid of ids) {
+          if (cancelled()) return;
+          vp.flyCameraToUnitId(uid, { duration: 0.85, pitchDeg: -45, range: 14000 });
+          await wait(900);
+          if (cancelled()) return;
+          await vp.flashUnitBillboards([uid], 3);
+          await wait(200);
+        }
+      }
+    } catch (e) {
+      console.warn('[openModuleHighlight]', e);
+    } finally {
+      if (seq === _moduleSpotlightSeq) {
+        vp?.clearStaticModuleSpotlight?.();
+      }
+    }
+  })();
 }
 function closeModuleHighlight() {
+  _moduleSpotlightSeq++;
   selectedModuleIndex.value = null;
   moduleHighlightScreen.value = null;
   vpStatic.value?.setModuleHighlight?.(null);
+  vpStatic.value?.clearStaticModuleSpotlight?.();
 }
 function onModuleHighlightScreen(pos) {
-  if (selectedModuleIndex.value !== null) moduleHighlightScreen.value = pos;
+  const i = selectedModuleIndex.value;
+  if (i === null || i > 1 || !pos) return;
+  moduleHighlightScreen.value = { x: pos.x, y: pos.y, fixed: false };
 }
 const moduleHighlightPopupStyle = computed(() => {
   const s = moduleHighlightScreen.value;
   if (!s) return {};
+  if (s.fixed) {
+    return {
+      position: 'fixed',
+      left: `${s.x}px`,
+      top: `${s.y}px`,
+      transform: 'none',
+      zIndex: 200
+    };
+  }
   const offsetX = 14;
   const offsetY = 8;
   return { transform: `translate(${s.x + offsetX}px, ${s.y + offsetY}px)` };
@@ -555,6 +660,7 @@ function onPlaneScreenInfo(info) {
 }
 
 const showPlanePopup = computed(() => {
+  if (!planeFollowPopupAllowed.value) return false;
   const info = planeScreenInfo.value;
   if (!info) return false;
   return info.cameraHeight != null && info.cameraHeight <= POPUP_CAMERA_HEIGHT_THRESHOLD;
@@ -640,6 +746,7 @@ const togglePlanePath = () => {
   planePathEnabled.value = !planePathEnabled.value;
 
   if (!planePathEnabled.value) {
+    planeFollowPopupAllowed.value = false;
     viewer.clock.shouldAnimate = false;
     vpStatic.value?.applyPathAnimation?.(null);
     if (_tickUnsub) {
@@ -650,6 +757,8 @@ const togglePlanePath = () => {
     viewer.scene?.requestRender?.();
     return;
   }
+
+  planeFollowPopupAllowed.value = true;
 
   const { prop, start, stop } = buildSampledPositionFromPath(flightPath, 300);
 
@@ -898,12 +1007,17 @@ const onTool = (name) => {
   showWarn.value = false;
   vpStatic.value?.setPlaneFaultFlash?.(false);
 
+  if (name === '放大' || name === '缩小' || name === '巡航故障') {
+    planeFollowPopupAllowed.value = false;
+  }
+
   if (name === '起飞') { setPhase('takeoff'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.takeoff); }
   if (name === '爬升') { setPhase('climb'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.climb); }
   if (name === '巡航') { setPhase('cruise'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.cruise); }
   if (name === '进近') { setPhase('approach'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.approach); }
   if (name === '降落') { setPhase('landing'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.landing); }
   if (['起飞', '爬升', '巡航', '进近', '降落'].includes(name)) {
+    planeFollowPopupAllowed.value = true;
     const v = vpStatic.value?.getViewer?.();
     const plane = vpStatic.value?.getPlaneEntity?.();
     if (v && plane) v.flyTo(plane, { duration: 0.6 });
@@ -953,6 +1067,7 @@ const onMapMode = (m) => {
   console.log('[StaticMapMode]', m);
 
   if (m === 'plane') {
+    planeFollowPopupAllowed.value = true;
     const viewer = vpStatic.value?.getViewer?.();
     const plane = vpStatic.value?.getPlaneEntity?.();
     if (viewer && plane) {
@@ -968,6 +1083,7 @@ const onMapMode = (m) => {
   }
 
   if (m === 'ground') {
+    planeFollowPopupAllowed.value = false;
     const viewer = vpStatic.value?.getViewer?.();
     if (viewer) {
       viewer.camera.flyTo({
@@ -984,6 +1100,7 @@ const onMapMode = (m) => {
   }
 
   if (m === 'space') {
+    planeFollowPopupAllowed.value = false;
     const viewer = vpStatic.value?.getViewer?.();
     if (viewer) {
       viewer.camera.flyTo({
@@ -1339,113 +1456,5 @@ onBeforeUnmount(() => {
 .cb-detail-modal-bd::-webkit-scrollbar-thumb:hover,
 .cb-msg-panel .cb-panel-body::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 180, 255, 0.75);
-}
-
-/* 单元详情弹窗（与 marker-popup / cb-warn 风格统一） */
-.cb-detail-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.cb-detail-modal {
-  width: 100%;
-  max-width: 560px;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  background: rgba(0, 20, 40, 0.95);
-  border: 1px solid rgba(100, 180, 255, 0.5);
-  border-radius: 8px;
-  font-size: 13px;
-  color: #e0f0ff;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-.cb-detail-modal-hd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  flex-shrink: 0;
-}
-.cb-detail-modal-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #e0f0ff;
-}
-.cb-detail-modal-close {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 22px;
-  cursor: pointer;
-  padding: 0 6px;
-  line-height: 1;
-}
-.cb-detail-modal-close:hover {
-  color: #fff;
-}
-.cb-detail-modal-bd {
-  padding: 14px 16px 18px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.cb-detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cb-detail-label {
-  color: #ffd54a;
-  font-weight: 600;
-}
-.cb-detail-value {
-  color: #e0f0ff;
-}
-.cb-detail-sectitle {
-  color: #ffd54a;
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-.cb-detail-para {
-  margin: 0;
-  line-height: 1.6;
-  color: rgba(224, 240, 255, 0.95);
-}
-.cb-detail-list {
-  margin: 0;
-  padding-left: 18px;
-  line-height: 1.55;
-  color: rgba(224, 240, 255, 0.95);
-}
-.cb-detail-list li {
-  margin-bottom: 6px;
-}
-.cb-detail-list li:last-child {
-  margin-bottom: 0;
-}
-.cb-detail-list li strong {
-  color: #e0f0ff;
-  font-weight: 600;
-}
-.cb-detail-list--inline {
-  list-style: none;
-  padding-left: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-.cb-detail-list--inline li::before {
-  content: '·';
-  margin-right: 6px;
-  color: #ffd54a;
 }
 </style>

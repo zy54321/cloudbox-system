@@ -1,8 +1,8 @@
 <template>
   <div :id="id" class="floating-card" :class="{ 'is-collapsed': collapsed }">
     <div class="floating-card-header">
-      <span>{{ card?.phase }} · {{ card?.title }}</span>
-      <button class="btn-icon" type="button" @click="$emit('toggle-collapsed')">
+      <span class="floating-card-title">{{ card?.phase }} · {{ card?.title }}</span>
+      <button class="btn-icon floating-card-toggle" type="button" @click="$emit('toggle-collapsed')">
         {{ collapsed ? '展开' : '收起' }}
       </button>
     </div>

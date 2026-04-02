@@ -147,6 +147,20 @@ let planePositionCartesian = null;
 /** 含端点 "plane" 的关联 id 集合，这些链路在用户点击该关联时再按当前飞机位置重绘 */
 const RELATIONS_WITH_PLANE = new Set();
 
+/** 静态架构页「运行模块」聚光灯：仅显示指定 unit id，可选是否显示飞机模型/billboard */
+let staticSpotlightActive = false;
+let staticSpotlightUnitIds = new Set();
+let staticSpotlightShowPlane = false;
+let _staticBillboardFlashInterval = null;
+let _staticPlaneFlashInterval = null;
+
+const getEntityBaseUnitId = (entity, rawId) => {
+  if (entity?.__meta?.anchorId) return String(entity.__meta.anchorId);
+  const s = String(rawId || '');
+  if (s.endsWith('__text')) return s.slice(0, -7);
+  return s;
+};
+
 // --- 卷帘专用 Polyline 双色智能材质 (纯 GLSL 实现) ---
 const ensureSplitMaterials = () => {
   const cache = Cesium.Material._materialCache;
@@ -342,6 +356,18 @@ const updateUnitEntitiesVisibility = () => {
     applyUnitSplitDirection(e, dir);
   });
 
+  if (staticSpotlightActive) {
+    UNIT_ENTITY_IDS.forEach((id) => {
+      const e = viewer.entities.getById(id);
+      if (!e) return;
+      const baseId = getEntityBaseUnitId(e, id);
+      e.show = staticSpotlightUnitIds.has(baseId);
+      applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+    });
+    if (modelEntity) modelEntity.show = staticSpotlightShowPlane;
+    if (billboardEntity) billboardEntity.show = staticSpotlightShowPlane;
+  }
+
   viewer.scene.requestRender?.();
 };
 
@@ -495,6 +521,7 @@ const loadAndAddUnits = async () => {
 
     await loadAndAddLinks();
     updateUnitEntitiesVisibility();
+    ensureChinaBoundaryDataSourceBehind();
   } catch (e) {
     console.warn('[CesiumViewport] load units.json failed:', e);
   }
@@ -502,6 +529,8 @@ const loadAndAddUnits = async () => {
 
 /** 根据 visibleRelationId / visibleRelationIdsLeft|Right 更新链路显示/隐藏与 splitDirection */
 const updateLinkVisibility = () => {
+  // 暂时关闭双屏模式链路绘制
+  // if (props.splitMode) return;
   if (!viewer?.entities) return;
   const leftArr = props.visibleRelationId != null ? [props.visibleRelationId] : (props.visibleRelationIdsLeft || []);
   const rightArr = props.visibleRelationIdsRight || [];
@@ -1158,11 +1187,22 @@ const loadChinaBoundaryGeoJsonObject = async () => {
   return chinaBoundaryGeoJsonPromise;
 };
 
+/** 将行政区划数据源置于 dataSources 最底层，避免折线遮挡后续 entities（标点、飞机等） */
+const ensureChinaBoundaryDataSourceBehind = () => {
+  if (!viewer || !chinaBoundaryDataSource) return;
+  try {
+    viewer.dataSources.lowerToBottom(chinaBoundaryDataSource);
+  } catch (_) {}
+  viewer.scene?.requestRender?.();
+};
+
+/** 行政区划最远可见距离（米）：避免掠射角下远处国界仍被画出；太空俯视仍大致可见全国轮廓 */
+const CHINA_BOUNDARY_MAX_VIEW_DISTANCE_M = 9_000_000;
+
 const styleChinaBoundaryDataSource = (dataSource) => {
   if (!dataSource?.entities) return;
   const mainColor = Cesium.Color.fromCssColorString('#49D8FF').withAlpha(0.72);
   const outlineColor = Cesium.Color.fromCssColorString('#0A2A66').withAlpha(0.88);
-  const depthFailColor = Cesium.Color.fromCssColorString('#49D8FF').withAlpha(0.35);
   const entities = dataSource.entities.values;
   for (const entity of entities) {
     if (entity.label) entity.label.show = false;
@@ -1176,13 +1216,14 @@ const styleChinaBoundaryDataSource = (dataSource) => {
         outlineColor,
         outlineWidth: 2.0
       });
-      entity.polyline.depthFailMaterial = new Cesium.PolylineOutlineMaterialProperty({
-        color: depthFailColor,
-        outlineColor: outlineColor.withAlpha(0.42),
-        outlineWidth: 2.0
-      });
-      entity.polyline.clampToGround = false;
-      entity.polyline.distanceDisplayCondition = new Cesium.DistanceDisplayCondition(0.0, 2.5e7);
+      // 不设 depthFailMaterial：掠射角/地平线附近失败深度时不应再画一条「透过地表」的线，否则远处边界会不合理出现
+      entity.polyline.depthFailMaterial = undefined;
+      entity.polyline.clampToGround = true;
+      entity.polyline.arcType = Cesium.ArcType.GEODESIC;
+      entity.polyline.distanceDisplayCondition = new Cesium.DistanceDisplayCondition(
+        0.0,
+        CHINA_BOUNDARY_MAX_VIEW_DISTANCE_M
+      );
     }
 
     if (entity.polygon) {
@@ -1191,6 +1232,10 @@ const styleChinaBoundaryDataSource = (dataSource) => {
       entity.polygon.outlineColor = mainColor;
       entity.polygon.material = Cesium.Color.TRANSPARENT;
       entity.polygon.height = 0;
+      entity.polygon.distanceDisplayCondition = new Cesium.DistanceDisplayCondition(
+        0.0,
+        CHINA_BOUNDARY_MAX_VIEW_DISTANCE_M
+      );
     }
   }
 };
@@ -1200,7 +1245,7 @@ const loadChinaBoundaryLayer = async () => {
   try {
     const geojson = await loadChinaBoundaryGeoJsonObject();
     const dataSource = await Cesium.GeoJsonDataSource.load(geojson, {
-      clampToGround: false,
+      clampToGround: true,
       stroke: Cesium.Color.fromCssColorString('#49D8FF').withAlpha(0.72),
       fill: Cesium.Color.TRANSPARENT,
       strokeWidth: 2.8,
@@ -1209,6 +1254,7 @@ const loadChinaBoundaryLayer = async () => {
     styleChinaBoundaryDataSource(dataSource);
     chinaBoundaryDataSource = dataSource;
     await viewer.dataSources.add(dataSource);
+    ensureChinaBoundaryDataSourceBehind();
     viewer.scene.requestRender?.();
   } catch (err) {
     console.warn('[china boundary] load failed:', err);
@@ -1503,6 +1549,188 @@ const flyToModuleCube = (distance = 100) => {
   });
 };
 
+const clearStaticBillboardFlashTimers = () => {
+  if (_staticBillboardFlashInterval) {
+    clearInterval(_staticBillboardFlashInterval);
+    _staticBillboardFlashInterval = null;
+  }
+  if (_staticPlaneFlashInterval) {
+    clearInterval(_staticPlaneFlashInterval);
+    _staticPlaneFlashInterval = null;
+  }
+};
+
+/** 结束静态页模块聚光灯并恢复标点/飞机显示 */
+const clearStaticModuleSpotlight = () => {
+  clearStaticBillboardFlashTimers();
+  staticSpotlightActive = false;
+  staticSpotlightUnitIds.clear();
+  staticSpotlightShowPlane = false;
+  if (modelEntity?.model) {
+    modelEntity.model.silhouetteColor = undefined;
+    modelEntity.model.silhouetteSize = undefined;
+  }
+  UNIT_ENTITY_IDS.forEach((id) => {
+    const e = viewer?.entities?.getById(id);
+    if (e?.billboard && e.billboard.color) {
+      try { e.billboard.color = undefined; } catch (_) {}
+    }
+  });
+  if (modelEntity) modelEntity.show = true;
+  if (billboardEntity) billboardEntity.show = true;
+  updateUnitEntitiesVisibility();
+  viewer?.scene?.requestRender?.();
+};
+
+/**
+ * 静态页：仅显示给定 unit id 的标点（含 __text），可选显示飞机实体
+ * @param {boolean} active
+ * @param {string[]} unitIds
+ * @param {boolean} showPlane
+ */
+const setStaticModuleSpotlight = (active, unitIds = [], showPlane = false) => {
+  if (!active) {
+    clearStaticModuleSpotlight();
+    return;
+  }
+  clearStaticBillboardFlashTimers();
+  staticSpotlightActive = true;
+  staticSpotlightUnitIds = new Set((unitIds || []).map(String).filter(Boolean));
+  staticSpotlightShowPlane = !!showPlane;
+  updateUnitEntitiesVisibility();
+};
+
+/** 与静态页「太空」按钮一致的相机视角 */
+const flyCameraStaticSpaceView = (opts = {}) => {
+  if (!viewer?.camera) return;
+  const duration = opts.duration ?? 1.0;
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(120.901020, 26.363403, 3394682.08),
+    orientation: {
+      heading: Cesium.Math.toRadians(341.06),
+      pitch: Cesium.Math.toRadians(-59.67),
+      roll: Cesium.Math.toRadians(359.98)
+    },
+    duration,
+    easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+  });
+};
+
+const flyCameraToUnitId = (unitId, opts = {}) => {
+  if (!viewer?.camera) return;
+  const e = viewer.entities.getById(unitId);
+  if (!e?.position) return;
+  const time = viewer.clock.currentTime;
+  const pos = e.position.getValue(time);
+  if (!pos) return;
+  const carto = Cesium.Cartographic.fromCartesian(pos);
+  const h = carto.height ?? 0;
+  const range = h > 100000 ? Math.max(h * 0.35, 400000) : Math.max(h + 8000, 12000);
+  viewer.flyTo(e, {
+    duration: opts.duration ?? 0.9,
+    offset: new Cesium.HeadingPitchRange(
+      opts.heading ?? 0,
+      Cesium.Math.toRadians(opts.pitchDeg ?? -40),
+      opts.range ?? range
+    )
+  });
+};
+
+const flyCameraToUnitIdsBoundingSphere = (unitIds, opts = {}) => {
+  if (!viewer?.camera) return;
+  const time = viewer.clock.currentTime;
+  const points = [];
+  for (const uid of unitIds || []) {
+    const e = viewer.entities.getById(uid);
+    const p = e?.position?.getValue?.(time);
+    if (p) points.push(Cesium.Cartesian3.clone(p));
+  }
+  if (opts.includePlane && modelEntity?.position) {
+    const p = modelEntity.position.getValue(time);
+    if (p) points.push(Cesium.Cartesian3.clone(p));
+  }
+  if (points.length === 0) return;
+  const bs = Cesium.BoundingSphere.fromPoints(points);
+  const r = Math.max(bs.radius * 2.8, 25000);
+  viewer.camera.flyToBoundingSphere(bs, {
+    duration: opts.duration ?? 1.1,
+    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-35), r)
+  });
+};
+
+/** 指定 unit 的图标/文字 billboard 闪烁若干次（整组同步明灭） */
+const flashUnitBillboards = (unitIds, flashCount = 3) => {
+  return new Promise((resolve) => {
+    if (!viewer) {
+      resolve();
+      return;
+    }
+    clearStaticBillboardFlashTimers();
+    const entities = [];
+    for (const uid of unitIds || []) {
+      const icon = viewer.entities.getById(uid);
+      const text = viewer.entities.getById(`${uid}__text`);
+      if (icon?.billboard) entities.push(icon);
+      if (text?.billboard) entities.push(text);
+    }
+    if (entities.length === 0) {
+      resolve();
+      return;
+    }
+    let step = 0;
+    const total = Math.max(1, flashCount) * 2;
+    _staticBillboardFlashInterval = setInterval(() => {
+      const on = step % 2 === 0;
+      entities.forEach((ent) => {
+        if (!ent?.billboard) return;
+        ent.billboard.color = on
+          ? Cesium.Color.WHITE.withAlpha(1)
+          : Cesium.Color.YELLOW.withAlpha(0.45);
+      });
+      viewer.scene.requestRender?.();
+      step++;
+      if (step >= total) {
+        clearInterval(_staticBillboardFlashInterval);
+        _staticBillboardFlashInterval = null;
+        entities.forEach((ent) => {
+          if (ent?.billboard) try { ent.billboard.color = undefined; } catch (_) {}
+        });
+        viewer.scene.requestRender?.();
+        resolve();
+      }
+    }, 240);
+  });
+};
+
+/** 飞机模型轮廓短暂闪烁若干次（用于应急处置模块） */
+const flashPlaneModelBrief = (flashCount = 3) => {
+  return new Promise((resolve) => {
+    if (!viewer || !modelEntity?.model) {
+      resolve();
+      return;
+    }
+    clearStaticBillboardFlashTimers();
+    const model = modelEntity.model;
+    model.silhouetteColor = new Cesium.ConstantProperty(Cesium.Color.RED);
+    let step = 0;
+    const total = Math.max(1, flashCount) * 2;
+    _staticPlaneFlashInterval = setInterval(() => {
+      const on = step % 2 === 0;
+      model.silhouetteSize = new Cesium.ConstantProperty(on ? 2.8 : 0);
+      viewer.scene.requestRender?.();
+      step++;
+      if (step >= total) {
+        clearInterval(_staticPlaneFlashInterval);
+        _staticPlaneFlashInterval = null;
+        model.silhouetteColor = undefined;
+        model.silhouetteSize = undefined;
+        viewer.scene.requestRender?.();
+        resolve();
+      }
+    }, 260);
+  });
+};
+
 defineExpose({
   resize,
   requestRender,
@@ -1517,6 +1745,13 @@ defineExpose({
   setPlaneFaultFlash,
   setModuleHighlight,
   flyToModuleCube,
+  clearStaticModuleSpotlight,
+  setStaticModuleSpotlight,
+  flyCameraStaticSpaceView,
+  flyCameraToUnitId,
+  flyCameraToUnitIdsBoundingSphere,
+  flashUnitBillboards,
+  flashPlaneModelBrief,
   clearActiveMarker: () => { activeMarkerEntity = null; }
 });
 
@@ -1815,6 +2050,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  clearStaticModuleSpotlight();
   stopFlowLoop();
   if (_planeFaultFlashInterval) {
     clearInterval(_planeFaultFlashInterval);

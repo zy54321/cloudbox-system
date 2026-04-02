@@ -16,7 +16,7 @@ export async function createCesiumViewer(el, creditContainer) {
   if (ionToken) {
     Cesium.Ion.defaultAccessToken = ionToken;
   }
-
+  
   const viewer = new Cesium.Viewer(el, {
     timeline: false,
     animation: false,
