@@ -54,6 +54,7 @@
           :bindVpCompare="bindVpCompare"
           :model-url="boeingModelUrl"
           :units-url="engineFailureUnitsUrl"
+          :links-url="dynamicLinksUrl"
           :left-model-url="boeingModelUrl"
           :right-model-url="boeingModelUrl"
           :split-position="0.5"
@@ -271,6 +272,7 @@ const dvMsgTabSelected = new URL('../assets/dynamicViewport/msgpage_button_selec
 
 const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const engineFailureUnitsUrl = `${baseUrl}/config/dynamic/engine_failure_units.json`;
+const dynamicLinksUrl = `${baseUrl}/config/dynamic_links.json`;
 
 const vpSingle = ref(null);
 const vpCompare = ref(null);

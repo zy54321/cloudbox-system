@@ -37,16 +37,18 @@ const SCENE_LIGHT_INTENSITY = 3.4;
 const MODEL_ENV_BRIGHTNESS = 30.35;
 const MODEL_ENV_ATMOSPHERE_SCATTER = 3.1;
 const FOG_MIN_BRIGHTNESS = 0.18;
+const DEFAULT_DAYLIGHT_TIME_UTC = '2026-04-04T04:00:00Z';
 const AIRPORT_LABEL_HEIGHT_OFFSET_M = 12;
 const AIRPORT_LABEL_FADE_START = 1500000;
 const AIRPORT_LABEL_HIDE_DISTANCE = 12000000;
 const AIRPORT_LABEL_PIXEL_OFFSET = new Cesium.Cartesian2(0, -18);
 
-const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'plane-billboard-click', 'module-highlight-screen']);
+const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'plane-billboard-click', 'module-highlight-screen', 'camera-home']);
 
 const props = defineProps({
   modelUrl: { type: String, default: '' },
   unitsUrl: { type: String, default: `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/config/units.json` },
+  linksUrl: { type: String, default: `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/config/links.json` },
   autoFocus: { type: Boolean, default: false },
   readonly: { type: Boolean, default: false },
   splitMode: { type: Boolean, default: false },
@@ -63,6 +65,7 @@ const props = defineProps({
   showClusterArrAirport: { type: Boolean, default: true },
   /** 当前要显示的关联 id（来自 links.json relation.id），为 null 时所有链路隐藏；保留兼容：转为 Left */
   visibleRelationId: { type: String, default: null },
+  skipRelationNodeFocus: { type: Boolean, default: false },
   /** 左/右视口要显示的关联 id 列表（透传自 ViewerStage，双屏时使用） */
   visibleRelationIdsLeft: { type: Array, default: () => [] },
   visibleRelationIdsRight: { type: Array, default: () => [] },
@@ -91,6 +94,11 @@ let _moduleHighlightIndex = null;
 let _moduleCubeEntity = null;
 let _moduleCubeFlashInterval = null;
 let _moduleCubeFlashOn = true;
+let _airborneDetailCubeEntity = null;
+let _airborneDetailCubeFlashInterval = null;
+let _airborneDetailCubeFlashOn = true;
+let _staticAirborneDetailActive = false;
+let _planeAttachedMarkersVisible = true;
 const DEFAULT_HEADING_OFFSET_RAD = Cesium.Math.PI_OVER_TWO;
 /** 七大模块各自立方体相对飞机的位置（机体系：forward=X, right=Y, up=Z，单位米） */
 const MODULE_CUBE_OFFSETS = [
@@ -107,6 +115,9 @@ let flowRaf = 0;
 let flowStartMs = Date.now();
 let removeHudPostRender = null;
 let lastHudUpdateMs = 0;
+let _pendingBrightnessBoosts = new Map();
+let _brightnessBoostPostRenderAttached = false;
+const PLANE_ATTACHED_UNIT_OFFSETS = new Map();
 
 const startFlowLoop = () => {
   if (flowRaf || !viewer) return;
@@ -138,6 +149,10 @@ const LINK_ENTITY_RELATION_IDS = new Map(); // linkEntityId -> relationId
 const RELATION_UNIT_IDS = new Map();
 /** relationId -> flowLabel（INFO/CTRL/信息流/控制流等），用于选择材质 */
 const RELATION_FLOW_LABEL = new Map();
+/** relationId -> viewPreset，相机聚焦时优先采用配置预设 */
+const RELATION_VIEW_PRESET = new Map();
+/** relationId -> cam，全链路巡航结束后的全局视角 */
+const RELATION_CAMERA_VIEW = new Map();
 /** linkEntityId -> 'left' | 'right' | 'none'（用于 splitMode 下的 plane 链路） */
 const LINK_ENTITY_SIDE = new Map();
 /** linkId -> { parentId, childId }，用于阶段切换后按当前端点位置刷新链路（如飞机移动） */
@@ -146,6 +161,7 @@ const LINK_ENTITY_ENDPOINTS = new Map();
 let planePositionCartesian = null;
 /** 含端点 "plane" 的关联 id 集合，这些链路在用户点击该关联时再按当前飞机位置重绘 */
 const RELATIONS_WITH_PLANE = new Set();
+let _relationFocusSeq = 0;
 
 /** 静态架构页「运行模块」聚光灯：仅显示指定 unit id，可选是否显示飞机模型/billboard */
 let staticSpotlightActive = false;
@@ -279,7 +295,7 @@ class SplitLinkMaterialProperty {
 
 const getLinkMaterialByFlowLabel = (flowLabel) => {
   const f = String(flowLabel ?? '').toUpperCase();
-  const isArrow = (f === 'CTRL');
+  const isArrow = (f === 'CTRL' || f === '控制流');
   return new SplitLinkMaterialProperty(isArrow);
 };
 
@@ -322,6 +338,14 @@ const updateUnitEntitiesVisibility = () => {
   const leftSet = new Set((props.visibleUnitClusterIdsLeft || []).map(String).filter(Boolean));
   const rightSet = new Set((props.visibleUnitClusterIdsRight || []).map(String).filter(Boolean));
   const hasDynamicFilter = leftSet.size > 0 || rightSet.size > 0;
+  const activeRelationPlaneUnitIds = new Set();
+  if (props.visibleRelationId) {
+    const relData = RELATION_UNIT_IDS.get(props.visibleRelationId);
+    relData?.edges?.forEach(([fromId, toId]) => {
+      if (String(fromId || '').startsWith('plane-')) activeRelationPlaneUnitIds.add(String(fromId));
+      if (String(toId || '').startsWith('plane-')) activeRelationPlaneUnitIds.add(String(toId));
+    });
+  }
 
   UNIT_ENTITY_IDS.forEach((id) => {
     const e = viewer.entities.getById(id);
@@ -332,6 +356,11 @@ const updateUnitEntitiesVisibility = () => {
       let visible = true;
       if (clusterId === 'DEP_AIRPORT') visible = props.showClusterDepAirport;
       else if (clusterId === 'ARR_AIRPORT') visible = props.showClusterArrAirport;
+      else if (clusterId === 'PLANE') visible = _planeAttachedMarkersVisible;
+      if (e.__meta?.isPlaneAttachedCube) {
+        const baseId = getEntityBaseUnitId(e, id);
+        visible = _planeAttachedMarkersVisible && (_staticAirborneDetailActive || activeRelationPlaneUnitIds.has(baseId));
+      }
       e.show = visible;
       applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
       return;
@@ -360,6 +389,12 @@ const updateUnitEntitiesVisibility = () => {
     UNIT_ENTITY_IDS.forEach((id) => {
       const e = viewer.entities.getById(id);
       if (!e) return;
+      if (e.__meta?.isPlaneAttachedCube) {
+        const baseId = getEntityBaseUnitId(e, id);
+        e.show = staticSpotlightUnitIds.has(baseId);
+        applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+        return;
+      }
       const baseId = getEntityBaseUnitId(e, id);
       e.show = staticSpotlightUnitIds.has(baseId);
       applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
@@ -440,9 +475,12 @@ const loadAndAddUnits = async () => {
     const addBillboard = (unit, clusterId) => {
       const altM = unit.alt ?? unit.alt_m ?? 0;
       const imgUrl = unit.image ? _publicImg(unit.image) : unitBillboardImgUrl;
-      const scale = unit.size != null ? Number(unit.size) : 0.5;
+      const scale = unit.scale != null
+        ? Number(unit.scale)
+        : (unit.size != null ? Number(unit.size) : 0.5);
       const offsetX = unit.offset?.[0] ?? 0;
       const offsetY = (unit.offset?.[1] ?? -28) + 25;
+      const initialCartesian = Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, altM);
 
       const baseMeta = {
         id: unit.id,
@@ -458,15 +496,67 @@ const loadAndAddUnits = async () => {
         infoSource: unit.infoSource || ''
       };
 
+      const resolvePlaneAttachedPosition = (time, result) => {
+        if (clusterId !== 'PLANE') {
+          return Cesium.Cartesian3.clone(initialCartesian, result || new Cesium.Cartesian3());
+        }
+        if (!modelEntity?.position || !modelEntity?.orientation) {
+          return Cesium.Cartesian3.clone(initialCartesian, result || new Cesium.Cartesian3());
+        }
+        const planePos = modelEntity.position.getValue(time);
+        const planeOrientation = modelEntity.orientation.getValue(time);
+        if (!planePos || !planeOrientation) {
+          return Cesium.Cartesian3.clone(initialCartesian, result || new Cesium.Cartesian3());
+        }
+
+        let localOffset = PLANE_ATTACHED_UNIT_OFFSETS.get(unit.id);
+        if (!localOffset) {
+          const diff = Cesium.Cartesian3.subtract(initialCartesian, planePos, new Cesium.Cartesian3());
+          const rot = Cesium.Matrix3.fromQuaternion(planeOrientation, new Cesium.Matrix3());
+          const invRot = Cesium.Matrix3.transpose(rot, new Cesium.Matrix3());
+          localOffset = Cesium.Matrix3.multiplyByVector(invRot, diff, new Cesium.Cartesian3());
+          PLANE_ATTACHED_UNIT_OFFSETS.set(unit.id, localOffset);
+        }
+
+        const rotNow = Cesium.Matrix3.fromQuaternion(planeOrientation, new Cesium.Matrix3());
+        const worldOffset = Cesium.Matrix3.multiplyByVector(rotNow, localOffset, new Cesium.Cartesian3());
+        return Cesium.Cartesian3.add(planePos, worldOffset, result || new Cesium.Cartesian3());
+      };
+
+      const position = clusterId === 'PLANE'
+        ? new Cesium.CallbackProperty(resolvePlaneAttachedPosition, false)
+        : initialCartesian;
+      const planeBillboardShow = clusterId === 'PLANE'
+        ? new Cesium.CallbackProperty((time) => {
+            if (!viewer?.camera || !viewer?.scene?.globe) return true;
+            const pos = position?.getValue?.(time);
+            if (!pos) return true;
+            const occluder = new Cesium.EllipsoidalOccluder(
+              viewer.scene.globe.ellipsoid,
+              viewer.camera.positionWC
+            );
+            return occluder.isPointVisible(pos);
+          }, false)
+        : true;
+      const planeAttachedOrientation = clusterId === 'PLANE'
+        ? new Cesium.CallbackProperty((time, result) => {
+            if (!modelEntity?.orientation) return undefined;
+            return modelEntity.orientation.getValue(time, result || new Cesium.Quaternion());
+          }, false)
+        : undefined;
+
       const iconEntity = viewer.entities.add({
         id: unit.id,
-        position: Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, altM),
+        position,
         billboard: {
           image: imgUrl,
-          show: true,
+          show: planeBillboardShow,
           scale,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          pixelOffset: clusterId === 'PLANE'
+            ? new Cesium.Cartesian2(0, -8)
+            : Cesium.Cartesian2.ZERO,
           splitDirection: Cesium.SplitDirection.NONE
         }
       });
@@ -475,15 +565,34 @@ const loadAndAddUnits = async () => {
       UNIT_ENTITY_IDS.add(iconEntity.id);
       if (clusterId) UNIT_ENTITY_CLUSTER.set(iconEntity.id, clusterId);
 
+      if (clusterId === 'PLANE') {
+        const cubeEntityId = `${unit.id}__cube`;
+        const cubeEntity = viewer.entities.add({
+          id: cubeEntityId,
+          position,
+          orientation: planeAttachedOrientation,
+          box: {
+            dimensions: new Cesium.Cartesian3(0.5, 0.5, 0.5),
+            material: Cesium.Color.CYAN.withAlpha(0.95),
+            outline: true,
+            outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
+            outlineWidth: 1
+          }
+        });
+        cubeEntity.__meta = { ...baseMeta, isPlaneAttachedCube: true, anchorId: unit.id };
+        UNIT_ENTITY_IDS.add(cubeEntity.id);
+        UNIT_ENTITY_CLUSTER.set(cubeEntity.id, clusterId);
+      }
+
       const textTexture = buildUnitTextBillboardImage(unit.name);
       if (textTexture) {
         const textEntityId = `${unit.id}__text`;
         const textEntity = viewer.entities.add({
           id: textEntityId,
-          position: Cesium.Cartesian3.fromDegrees(unit.lon, unit.lat, altM),
+          position,
           billboard: {
             image: textTexture.image,
-            show: true,
+            show: planeBillboardShow,
             width: textTexture.width,
             height: textTexture.height,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
@@ -506,6 +615,13 @@ const loadAndAddUnits = async () => {
     if (space?.star_based?.length) {
       space.star_based.forEach((u) => {
         addBillboard({ ...u, alt: u.alt ?? u.alt_m ?? 0 }, null);
+      });
+    }
+
+    const plane = data.plane;
+    if (Array.isArray(plane) && plane.length) {
+      plane.forEach((u) => {
+        addBillboard({ ...u, alt: u.alt ?? u.alt_m ?? 0 }, 'PLANE');
       });
     }
 
@@ -634,10 +750,152 @@ const updateLinkVisibility = () => {
 };
 
 /** 飞行聚焦到指定关联的链路范围（链路折点 + 父/子标点，并留足边距以看到完整内容） */
+const getRelationCameraOffsetByPreset = (preset, points) => {
+  const boundingSphere = Cesium.BoundingSphere.fromPoints(points);
+  const radius = Math.max(boundingSphere.radius, 1);
+  switch (String(preset || '').trim()) {
+    case 'space-ground':
+      return null;
+    case 'plane-sat':
+      return new Cesium.HeadingPitchRange(
+        viewer?.camera?.heading ?? 0,
+        Cesium.Math.toRadians(-68),
+        Math.max(radius * 2.4, 120000)
+      );
+    case 'ground-local':
+      return new Cesium.HeadingPitchRange(
+        viewer?.camera?.heading ?? 0,
+        Cesium.Math.toRadians(-74),
+        Math.min(Math.max(radius * 1.75, 18000), 180000)
+      );
+    case 'plane-local':
+      return new Cesium.HeadingPitchRange(
+        viewer?.camera?.heading ?? 0,
+        Cesium.Math.toRadians(-28),
+        Math.min(Math.max(radius * 3.2, 1200), 24000)
+      );
+    default:
+      return null;
+  }
+};
+
+const flyToSpaceGroundRelation = (points) => {
+  if (!viewer?.camera || !Array.isArray(points) || points.length < 2) return false;
+
+  const cartographics = points
+    .map((p) => Cesium.Cartographic.fromCartesian(p))
+    .filter(Boolean);
+  if (!cartographics.length) return false;
+
+  let west = Number.POSITIVE_INFINITY;
+  let south = Number.POSITIVE_INFINITY;
+  let east = Number.NEGATIVE_INFINITY;
+  let north = Number.NEGATIVE_INFINITY;
+  let maxHeight = 0;
+
+  cartographics.forEach((c) => {
+    west = Math.min(west, c.longitude);
+    south = Math.min(south, c.latitude);
+    east = Math.max(east, c.longitude);
+    north = Math.max(north, c.latitude);
+    maxHeight = Math.max(maxHeight, Math.max(0, Number(c.height) || 0));
+  });
+
+  const lonSpan = Math.max(east - west, Cesium.Math.toRadians(0.35));
+  const latSpan = Math.max(north - south, Cesium.Math.toRadians(0.28));
+  const lonPad = lonSpan * 0.32;
+  const latPad = latSpan * 0.4;
+  const rectangle = Cesium.Rectangle.fromRadians(
+    west - lonPad,
+    south - latPad,
+    east + lonPad,
+    north + latPad
+  );
+
+  const rectDestination = viewer.camera.getRectangleCameraCoordinates(rectangle);
+  const rectCartographic = rectDestination
+    ? Cesium.Cartographic.fromCartesian(rectDestination)
+    : null;
+  const centerLon = (rectangle.west + rectangle.east) / 2;
+  const centerLat = (rectangle.south + rectangle.north) / 2;
+  const rectHeight = Math.max(0, rectCartographic?.height || 0);
+  const cameraHeight = Math.max(rectHeight * 1.08, maxHeight * 2.6, 320000);
+
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromRadians(centerLon, centerLat, cameraHeight),
+    orientation: {
+      heading: 0,
+      pitch: Cesium.Math.toRadians(-88.5),
+      roll: 0
+    },
+    duration: 1.2,
+    easingFunction: Cesium.EasingFunction.CUBIC_OUT
+  });
+  return true;
+};
+
+const getRelationCameraOffset = (points, preset) => {
+  if (!Array.isArray(points) || points.length < 2) {
+    return new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), 180000);
+  }
+
+  const presetOffset = getRelationCameraOffsetByPreset(preset, points);
+  if (presetOffset) return presetOffset;
+
+  const cartographics = points
+    .map((p) => Cesium.Cartographic.fromCartesian(p))
+    .filter(Boolean);
+
+  let minHeight = Number.POSITIVE_INFINITY;
+  let maxHeight = 0;
+  cartographics.forEach((c) => {
+    const h = Math.max(0, Number(c.height) || 0);
+    minHeight = Math.min(minHeight, h);
+    maxHeight = Math.max(maxHeight, h);
+  });
+  const heightSpan = Math.max(0, maxHeight - (Number.isFinite(minHeight) ? minHeight : 0));
+
+  let maxDistance = 0;
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      const d = Cesium.Cartesian3.distance(points[i], points[j]);
+      if (d > maxDistance) maxDistance = d;
+    }
+  }
+
+  const boundingSphere = Cesium.BoundingSphere.fromPoints(points);
+  const radius = Math.max(boundingSphere.radius, 1);
+  const isSpaceGroundLink = maxHeight >= 100000 || heightSpan >= 80000;
+  const isShortGroundLink = maxHeight < 30000 && maxDistance <= 250000;
+
+  let pitchDeg = -58;
+  let range = Math.max(radius * 2.4, maxDistance * 1.05, 45000);
+
+  if (isSpaceGroundLink) {
+    // 高差很大时改为更俯视并增大留白，保证卫星到地面的整条链路能完整进框。
+    pitchDeg = -72;
+    range = Math.max(radius * 2.8, maxDistance * 1.1, heightSpan * 1.8, 180000);
+  } else if (isShortGroundLink) {
+    // 纯地面短链路时收近视角，避免“看得到但太远不清楚”。
+    pitchDeg = -74;
+    range = Math.max(radius * 1.8, maxDistance * 1.35, 12000);
+    range = Math.min(range, 180000);
+  } else {
+    range = Math.max(radius * 2.2, maxDistance * 1.0, 60000);
+  }
+
+  return new Cesium.HeadingPitchRange(
+    viewer?.camera?.heading ?? 0,
+    Cesium.Math.toRadians(pitchDeg),
+    range
+  );
+};
+
 const flyToRelationBounds = (relationId) => {
   if (!viewer?.scene?.camera || !relationId) return;
   const points = [];
   const time = viewer.clock.currentTime;
+  const preset = RELATION_VIEW_PRESET.get(relationId);
   // 1) 该关联下所有链路的折点
   LINK_ENTITY_IDS.forEach((linkId) => {
     if (LINK_ENTITY_RELATION_IDS.get(linkId) !== relationId) return;
@@ -665,13 +923,107 @@ const flyToRelationBounds = (relationId) => {
     }
   }
   if (points.length < 2) return;
+  if (preset === 'space-ground' && flyToSpaceGroundRelation(points)) {
+    return;
+  }
   const boundingSphere = Cesium.BoundingSphere.fromPoints(points);
-  const radius = Math.max(boundingSphere.radius, 50000);
   viewer.camera.flyToBoundingSphere(boundingSphere, {
     duration: 1.2,
-    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), radius * 3.5),
+    offset: getRelationCameraOffset(points, preset),
     easingFunction: Cesium.EasingFunction.CUBIC_OUT
   });
+};
+
+const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getRelationNodeOrder = (relationId) => {
+  const relData = RELATION_UNIT_IDS.get(relationId);
+  const edges = relData?.edges || [];
+  const order = [];
+  const seen = new Set();
+  edges.forEach(([fromId, toId]) => {
+    [fromId, toId].forEach((nodeId) => {
+      const id = String(nodeId || '').trim();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      order.push(id);
+    });
+  });
+  return order;
+};
+
+const isValidRelationCameraView = (cam) => {
+  if (!cam || typeof cam !== 'object') return false;
+  return ['lon', 'lat', 'height', 'heading', 'pitch', 'roll'].every((key) => Number.isFinite(Number(cam[key])));
+};
+
+const flyCameraToRelationCameraView = (relationId, opts = {}) => {
+  if (!viewer?.camera) return false;
+  const cam = RELATION_CAMERA_VIEW.get(relationId);
+  if (!isValidRelationCameraView(cam)) return false;
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(Number(cam.lon), Number(cam.lat), Number(cam.height)),
+    orientation: {
+      heading: Cesium.Math.toRadians(Number(cam.heading)),
+      pitch: Cesium.Math.toRadians(Number(cam.pitch)),
+      roll: Cesium.Math.toRadians(Number(cam.roll))
+    },
+    duration: opts.duration ?? 1.2,
+    easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+  });
+  return true;
+};
+
+const flyCameraToPlaneNode = (opts = {}) => {
+  if (!viewer?.camera || !modelEntity) return false;
+  viewer.flyTo(modelEntity, {
+    duration: opts.duration ?? 0.9,
+    offset: new Cesium.HeadingPitchRange(
+      opts.heading ?? 0,
+      Cesium.Math.toRadians(opts.pitchDeg ?? -24),
+      opts.range ?? 5
+    )
+  });
+  return true;
+};
+
+const focusRelationNode = async (nodeId, seq) => {
+  if (seq !== _relationFocusSeq) return;
+  const isPlaneNode = nodeId === 'plane';
+  if (isPlaneNode) {
+    if (!flyCameraToPlaneNode()) return;
+    await waitMs(1100);
+    if (seq !== _relationFocusSeq) return;
+    await flashPlaneModelBrief(3);
+    return;
+  }
+
+  const entity = viewer?.entities?.getById(nodeId);
+  if (!entity?.position) return;
+  flyCameraToUnitId(nodeId, {
+    duration: 0.9,
+    pitchDeg: -24,
+    range: 30
+  });
+  await waitMs(1100);
+  if (seq !== _relationFocusSeq) return;
+  await flashUnitBillboards([nodeId], 3);
+};
+
+const playRelationNodeFocusSequence = async (relationId) => {
+  if (!relationId) return;
+  const seq = ++_relationFocusSeq;
+  const order = getRelationNodeOrder(relationId);
+  if (!order.length) return;
+
+  for (const nodeId of order) {
+    if (seq !== _relationFocusSeq) return;
+    await focusRelationNode(nodeId, seq);
+    if (seq !== _relationFocusSeq) return;
+    await waitMs(180);
+  }
+  if (seq !== _relationFocusSeq) return;
+  flyCameraToRelationCameraView(relationId);
 };
 
 /**
@@ -764,9 +1116,11 @@ const loadAndAddLinks = async () => {
   LINK_ENTITY_ENDPOINTS.clear();
   RELATION_UNIT_IDS.clear();
   RELATION_FLOW_LABEL.clear();
+  RELATION_VIEW_PRESET.clear();
+  RELATION_CAMERA_VIEW.clear();
   RELATIONS_WITH_PLANE.clear();
   try {
-    const res = await fetch(`${_base ? _base + '/' : '/'}config/links.json`);
+    const res = await fetch(props.linksUrl || `${_base ? _base + '/' : '/'}config/links.json`);
     if (!res.ok) return;
     const data = await res.json();
     const relations = data.relations || [];
@@ -775,6 +1129,17 @@ const loadAndAddLinks = async () => {
       if (!edges.length) continue;
       RELATION_UNIT_IDS.set(rel.id, { edges: edges.map((e) => [...e]) });
       RELATION_FLOW_LABEL.set(rel.id, rel.flowLabel);
+      RELATION_VIEW_PRESET.set(rel.id, rel.viewPreset || '');
+      if (isValidRelationCameraView(rel.cam)) {
+        RELATION_CAMERA_VIEW.set(rel.id, {
+          lon: Number(rel.cam.lon),
+          lat: Number(rel.cam.lat),
+          height: Number(rel.cam.height),
+          heading: Number(rel.cam.heading),
+          pitch: Number(rel.cam.pitch),
+          roll: Number(rel.cam.roll)
+        });
+      }
       const hasPlane = edges.some(([a, b]) => a === 'plane' || b === 'plane');
       if (hasPlane) {
         RELATIONS_WITH_PLANE.add(rel.id);
@@ -965,8 +1330,63 @@ const findModelForEntity = (primitives, entity) => {
   return null;
 };
 
+const detachBrightnessBoostWatcher = () => {
+  if (!_brightnessBoostPostRenderAttached || !viewer?.scene?.postRender) return;
+  try { viewer.scene.postRender.removeEventListener(processPendingBrightnessBoosts); } catch (_) {}
+  _brightnessBoostPostRenderAttached = false;
+};
+
+function processPendingBrightnessBoosts() {
+  if (!viewer?.scene || _pendingBrightnessBoosts.size === 0) {
+    detachBrightnessBoostWatcher();
+    return;
+  }
+
+  for (const [key, task] of _pendingBrightnessBoosts.entries()) {
+    const entity = task?.entity;
+    if (!entity) {
+      _pendingBrightnessBoosts.delete(key);
+      continue;
+    }
+
+    const runtimeModel = findModelForEntity(viewer.scene.primitives, entity);
+    if (runtimeModel) {
+      boostModelBrightness(runtimeModel);
+      task.holdFrames -= 1;
+      if (task.holdFrames <= 0) {
+        _pendingBrightnessBoosts.delete(key);
+      }
+      continue;
+    }
+
+    task.attempts += 1;
+    if (task.attempts >= task.maxAttempts) {
+      _pendingBrightnessBoosts.delete(key);
+    }
+  }
+
+  if (_pendingBrightnessBoosts.size === 0) {
+    detachBrightnessBoostWatcher();
+  }
+}
+
+const queueBrightnessBoost = (entity, opts = {}) => {
+  if (!viewer?.scene?.postRender || !entity) return;
+  const key = entity.id || Cesium.createGuid();
+  _pendingBrightnessBoosts.set(key, {
+    entity,
+    attempts: 0,
+    maxAttempts: opts.maxAttempts ?? 600,
+    holdFrames: opts.holdFrames ?? 90
+  });
+  if (_brightnessBoostPostRenderAttached) return;
+  viewer.scene.postRender.addEventListener(processPendingBrightnessBoosts);
+  _brightnessBoostPostRenderAttached = true;
+};
+
 const loadGlbModelEntity = async (uri) => {
   if (!viewer || !uri) return;
+  PLANE_ATTACHED_UNIT_OFFSETS.clear();
   if (modelEntity) {
     try { viewer.entities.remove(modelEntity); } catch {}
     modelEntity = null;
@@ -1012,22 +1432,8 @@ const loadGlbModelEntity = async (uri) => {
       shadows: Cesium.ShadowMode.DISABLED
     }
   });
-  // Model 由 ModelVisualizer 异步加载，entity.model 仅为 ModelGraphics 不含 environmentMapManager。
-  // 模型加载完成后会加入 scene.primitives 且 model.id === entity，需在 postRender 中延后查找并应用亮度。
-  let boostAttempts = 0;
-  const MAX_BOOST_ATTEMPTS = 300;
-  const tryBoostModel = () => {
-    if (boostAttempts++ >= MAX_BOOST_ATTEMPTS) {
-      try { viewer.scene.postRender.removeEventListener(tryBoostModel); } catch (_) {}
-      return;
-    }
-    const found = findModelForEntity(viewer.scene.primitives, planeEntity);
-    if (found) {
-      try { viewer.scene.postRender.removeEventListener(tryBoostModel); } catch (_) {}
-      boostModelBrightness(found);
-    }
-  };
-  viewer.scene.postRender.addEventListener(tryBoostModel);
+  // ModelVisualizer 挂 runtime model 存在异步时序，这里改为统一排队并连续补几帧亮度，避免偶发失效。
+  queueBrightnessBoost(planeEntity);
   modelEntity = planeEntity;
 
   billboardEntity = viewer.entities.add({
@@ -1316,6 +1722,9 @@ const syncAirportEndpointLabels = () => {
 
 const applySceneBrightnessBoost = () => {
   if (!viewer?.scene) return;
+  try {
+    viewer.clock.currentTime = Cesium.JulianDate.fromIso8601(DEFAULT_DAYLIGHT_TIME_UTC);
+  } catch (_) {}
   viewer.scene.light = new Cesium.SunLight({
     color: Cesium.Color.WHITE,
     intensity: SCENE_LIGHT_INTENSITY
@@ -1332,11 +1741,40 @@ const applySceneBrightnessBoost = () => {
 const boostModelBrightness = (runtimeModel) => {
   if (!runtimeModel) return;
   try {
+    runtimeModel.color = undefined;
+    runtimeModel.colorBlendMode = undefined;
+    runtimeModel.colorBlendAmount = undefined;
     if (runtimeModel.environmentMapManager) {
       runtimeModel.environmentMapManager.brightness = MODEL_ENV_BRIGHTNESS;
       runtimeModel.environmentMapManager.atmosphereScatteringIntensity = MODEL_ENV_ATMOSPHERE_SCATTER;
     }
   } catch (_) {}
+};
+
+const clearPlaneHighlightVisual = () => {
+  if (!modelEntity?.model) return;
+  modelEntity.model.color = undefined;
+  modelEntity.model.colorBlendMode = undefined;
+  modelEntity.model.colorBlendAmount = undefined;
+  viewer?.scene?.requestRender?.();
+};
+
+const applyPlaneDimHighlightVisual = () => {
+  if (!modelEntity?.model) return;
+  modelEntity.model.color = new Cesium.ConstantProperty(Cesium.Color.WHITE.withAlpha(0.4));
+  modelEntity.model.colorBlendMode = new Cesium.ConstantProperty(Cesium.ColorBlendMode.MIX);
+  modelEntity.model.colorBlendAmount = new Cesium.ConstantProperty(0.35);
+  viewer?.scene?.requestRender?.();
+};
+
+const setPlaneDimmed = (active) => {
+  if (active) applyPlaneDimHighlightVisual();
+  else clearPlaneHighlightVisual();
+};
+
+const setPlaneAttachedMarkersVisible = (visible) => {
+  _planeAttachedMarkersVisible = visible !== false;
+  updateUnitEntitiesVisibility();
 };
 
 const formatScaleDistance = (meters) => {
@@ -1410,8 +1848,37 @@ const updateMapHud = (force = false) => {
   updateScaleBar();
 };
 
+const exitStaticAirborneOrbit = () => {
+  if (!viewer?.camera) return;
+  try {
+    viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  } catch (_) {}
+};
+
+const enterStaticAirborneOrbit = (range = 70) => {
+  if (!viewer?.camera || !modelEntity?.position) return false;
+  const time = viewer.clock.currentTime;
+  const pos = modelEntity.position.getValue(time);
+  if (!pos) return false;
+  const transform = Cesium.Transforms.eastNorthUpToFixedFrame(pos);
+  viewer.trackedEntity = undefined;
+  viewer.camera.lookAtTransform(
+    transform,
+    new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-25), range)
+  );
+  viewer.scene.requestRender?.();
+  return true;
+};
+
 const resetCameraHome = () => {
   if (!viewer) return;
+  emit('camera-home');
+  if (_staticAirborneDetailActive) {
+    clearStaticAirborneDetailCube();
+    clearPlaneHighlightVisual();
+    _staticAirborneDetailActive = false;
+    exitStaticAirborneOrbit();
+  }
   if (modelEntity) {
     viewer.flyTo(modelEntity, {
       duration: 0.8,
@@ -1485,15 +1952,13 @@ const setModuleHighlight = (index) => {
     viewer.entities.remove(_moduleCubeEntity);
     _moduleCubeEntity = null;
   }
-  if (modelEntity?.model) {
-    modelEntity.model.color = undefined;
-  }
+  clearPlaneHighlightVisual();
 
   if (_moduleHighlightIndex === null) return;
 
   if (!viewer?.entities || !modelEntity) return;
 
-  modelEntity.model.color = new Cesium.ConstantProperty(Cesium.Color.WHITE.withAlpha(0.4));
+  applyPlaneDimHighlightVisual();
 
   const scratchForward = new Cesium.Cartesian3();
   const scratchRight = new Cesium.Cartesian3();
@@ -1560,13 +2025,27 @@ const clearStaticBillboardFlashTimers = () => {
   }
 };
 
+const clearStaticAirborneDetailCube = () => {
+  if (_airborneDetailCubeFlashInterval) {
+    clearInterval(_airborneDetailCubeFlashInterval);
+    _airborneDetailCubeFlashInterval = null;
+  }
+  if (_airborneDetailCubeEntity && viewer?.entities) {
+    viewer.entities.remove(_airborneDetailCubeEntity);
+    _airborneDetailCubeEntity = null;
+  }
+  _staticAirborneDetailActive = false;
+};
+
 /** 结束静态页模块聚光灯并恢复标点/飞机显示 */
 const clearStaticModuleSpotlight = () => {
   clearStaticBillboardFlashTimers();
+  clearStaticAirborneDetailCube();
   staticSpotlightActive = false;
   staticSpotlightUnitIds.clear();
   staticSpotlightShowPlane = false;
   if (modelEntity?.model) {
+    clearPlaneHighlightVisual();
     modelEntity.model.silhouetteColor = undefined;
     modelEntity.model.silhouetteSize = undefined;
   }
@@ -1598,6 +2077,24 @@ const setStaticModuleSpotlight = (active, unitIds = [], showPlane = false) => {
   staticSpotlightUnitIds = new Set((unitIds || []).map(String).filter(Boolean));
   staticSpotlightShowPlane = !!showPlane;
   updateUnitEntitiesVisibility();
+};
+
+/** 静态页：机载详情高亮，仅保持当前相机，飞机半透明并显示持续闪烁的小立方体 */
+const setStaticAirborneDetailHighlight = (active, unitIds = []) => {
+  if (!active) {
+    clearStaticAirborneDetailCube();
+    _staticAirborneDetailActive = false;
+    clearPlaneHighlightVisual();
+    exitStaticAirborneOrbit();
+    updateUnitEntitiesVisibility();
+    viewer?.scene?.requestRender?.();
+    return;
+  }
+  clearStaticAirborneDetailCube();
+  _staticAirborneDetailActive = true;
+  applyPlaneDimHighlightVisual();
+  updateUnitEntitiesVisibility();
+  viewer?.scene?.requestRender?.();
 };
 
 /** 与静态页「太空」按钮一致的相机视角 */
@@ -1679,6 +2176,18 @@ const flashUnitBillboards = (unitIds, flashCount = 3) => {
     }
     let step = 0;
     const total = Math.max(1, flashCount) * 2;
+    const textBillboardRestore = new Map();
+    entities.forEach((ent) => {
+      if (!ent?.billboard || !ent.__meta?.isTextBillboard) return;
+      textBillboardRestore.set(ent.id, {
+        distanceDisplayCondition: ent.billboard.distanceDisplayCondition,
+        translucencyByDistance: ent.billboard.translucencyByDistance,
+        scaleByDistance: ent.billboard.scaleByDistance
+      });
+      ent.billboard.distanceDisplayCondition = undefined;
+      ent.billboard.translucencyByDistance = undefined;
+      ent.billboard.scaleByDistance = undefined;
+    });
     _staticBillboardFlashInterval = setInterval(() => {
       const on = step % 2 === 0;
       entities.forEach((ent) => {
@@ -1693,7 +2202,13 @@ const flashUnitBillboards = (unitIds, flashCount = 3) => {
         clearInterval(_staticBillboardFlashInterval);
         _staticBillboardFlashInterval = null;
         entities.forEach((ent) => {
-          if (ent?.billboard) try { ent.billboard.color = undefined; } catch (_) {}
+          if (!ent?.billboard) return;
+          try { ent.billboard.color = undefined; } catch (_) {}
+          const restore = textBillboardRestore.get(ent.id);
+          if (!restore) return;
+          ent.billboard.distanceDisplayCondition = restore.distanceDisplayCondition;
+          ent.billboard.translucencyByDistance = restore.translucencyByDistance;
+          ent.billboard.scaleByDistance = restore.scaleByDistance;
         });
         viewer.scene.requestRender?.();
         resolve();
@@ -1743,10 +2258,16 @@ defineExpose({
   getPlaneScreenInfo,
   getCameraHeight,
   setPlaneFaultFlash,
+  setPlaneDimmed,
+  setPlaneAttachedMarkersVisible,
+  flyCameraToRelationCameraView,
   setModuleHighlight,
   flyToModuleCube,
   clearStaticModuleSpotlight,
   setStaticModuleSpotlight,
+  setStaticAirborneDetailHighlight,
+  enterStaticAirborneOrbit,
+  exitStaticAirborneOrbit,
   flyCameraStaticSpaceView,
   flyCameraToUnitId,
   flyCameraToUnitIdsBoundingSphere,
@@ -1906,7 +2427,8 @@ onMounted(async () => {
           return Cesium.Cartesian3.fromRadians(c0.longitude, c0.latitude, c0.height + BILLBOARD_WORLD_OFFSET_M);
         })();
 
-    viewer.entities.add({
+    const splitLeftPlaneEntity = viewer.entities.add({
+      id: 'planeEntitySplitLeft',
       position: basePosition,
       orientation: initSplitOrientation,
       model: {
@@ -1916,7 +2438,8 @@ onMounted(async () => {
       },
       splitDirection: Cesium.SplitDirection.LEFT
     });
-    viewer.entities.add({
+    const splitLeftBillboardEntity = viewer.entities.add({
+      id: 'planeBillboardSplitLeft',
       position: billboardPosition,
       billboard: {
         image: planeBillboardImgUrl,
@@ -1927,7 +2450,8 @@ onMounted(async () => {
       splitDirection: Cesium.SplitDirection.LEFT
     });
 
-    viewer.entities.add({
+    const splitRightPlaneEntity = viewer.entities.add({
+      id: 'planeEntitySplitRight',
       position: basePosition,
       orientation: initSplitOrientation,
       model: {
@@ -1938,6 +2462,7 @@ onMounted(async () => {
       splitDirection: Cesium.SplitDirection.RIGHT
     });
     viewer.entities.add({
+      id: 'planeBillboardSplitRight',
       position: billboardPosition,
       billboard: {
         image: planeBillboardImgUrl,
@@ -1947,6 +2472,12 @@ onMounted(async () => {
       },
       splitDirection: Cesium.SplitDirection.RIGHT
     });
+
+    // 双屏模式下仍复用“主飞机实体”给复位按钮、飞机跟随信息等通用逻辑。
+    modelEntity = splitLeftPlaneEntity;
+    billboardEntity = splitLeftBillboardEntity;
+    queueBrightnessBoost(splitLeftPlaneEntity);
+    queueBrightnessBoost(splitRightPlaneEntity);
 
     viewer.scene.requestRender();
     window.addEventListener('resize', onWindowResize, { passive: true });
@@ -2027,18 +2558,24 @@ watch(
 watch(
   () => props.visibleRelationId,
   (newVal) => {
+    _relationFocusSeq++;
     if (newVal == null) {
+      clearPlaneHighlightVisual();
       RELATIONS_WITH_PLANE.forEach((rid) => removeLinkEntitiesForRelation(rid));
       updateLinkVisibility();
+      updateUnitEntitiesVisibility();
       return;
     }
+    applyPlaneDimHighlightVisual();
     if (RELATIONS_WITH_PLANE.has(newVal)) {
       removeLinkEntitiesForRelation(newVal);
       drawPlaneRelationLinks(newVal);
-      flyToRelationBounds(newVal);
     } else {
       updateLinkVisibility();
-      flyToRelationBounds(newVal);
+    }
+    updateUnitEntitiesVisibility();
+    if (!props.skipRelationNodeFocus) {
+      playRelationNodeFocusSequence(newVal);
     }
   }
 );
@@ -2050,8 +2587,12 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  _relationFocusSeq++;
   clearStaticModuleSpotlight();
   stopFlowLoop();
+  PLANE_ATTACHED_UNIT_OFFSETS.clear();
+  _pendingBrightnessBoosts.clear();
+  detachBrightnessBoostWatcher();
   if (_planeFaultFlashInterval) {
     clearInterval(_planeFaultFlashInterval);
     _planeFaultFlashInterval = null;

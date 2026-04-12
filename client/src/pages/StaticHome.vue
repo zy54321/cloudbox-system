@@ -39,7 +39,7 @@
 
               <!-- Cesium 视口 + 飞机跟随 popup（相机高度≤阈值时显示） -->
               <div class="cb-cesium-layer cb-cesium-layer--with-popup">
-                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :dep-airport-label="depAirportLabel" :arr-airport-label="arrAirportLabel" :visible-relation-id="selectedRelationId" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @plane-billboard-click="onPlaneBillboardClick" @module-highlight-screen="onModuleHighlightScreen" />
+                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :dep-airport-label="depAirportLabel" :arr-airport-label="arrAirportLabel" :visible-relation-id="selectedRelationId" :skip-relation-node-focus="relationSequencePlaying" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @plane-billboard-click="onPlaneBillboardClick" @module-highlight-screen="onModuleHighlightScreen" @camera-home="onCameraHome" />
                 <div
                   v-if="showPlanePopup && planeScreenInfo"
                   class="cb-plane-follow-popup"
@@ -180,7 +180,7 @@
               <span class="cb-chip-text">运行模块</span>
             </button>
           </div>
-          <div class="cb-panel-body">
+          <div ref="panelBodyRef" class="cb-panel-body">
             <template v-if="activeTab === 'base'">
               <div class="cb-item">
                 <h4><span style="color:#ffd54a;">星基：</span>高通量通信卫星、低轨通信卫星</h4>
@@ -196,9 +196,23 @@
               </div>
             </template>
             <template v-else-if="activeTab === 'relation'">
-              <div v-for="rel in panelRelations" :key="rel.id" class="cb-item" :class="{ 'cb-item--relation-selected': selectedRelationId === rel.id }">
-                <h4><span style="color:#ffd54a;">{{ rel.flowLabel || '关联' }}：</span>{{ rel.name }}</h4>
-                <p><span class="cb-link" @click="toggleRelationDetail(rel.id)">点击查看详细信息</span></p>
+              <div class="cb-relation-actions">
+                <button class="cb-relation-action" type="button" :disabled="relationSequencePlaying" @click="playAllRelationsSequence">
+                  {{ relationSequencePlaying ? '播放中...' : '完整交互关系' }}
+                </button>
+                <button class="cb-relation-action cb-relation-action--ghost" type="button" @click="openStaticArchitectureImageViewer">
+                  查看静态架构图
+                </button>
+              </div>
+              <div
+                v-for="rel in panelRelations"
+                :key="rel.id"
+                :ref="(el) => setRelationItemRef(rel.id, el)"
+                class="cb-item"
+                :class="{ 'cb-item--relation-selected': selectedRelationId === rel.id }"
+              >
+                <h4><span style="color:#ffd54a;">{{ rel.displayFlowLabel }}：</span>{{ rel.name }}</h4>
+                <p><span class="cb-link" @click="openRelationDetail(rel.id)">点击查看详细信息</span></p>
               </div>
             </template>
             <template v-else-if="activeTab === 'modules'">
@@ -246,7 +260,7 @@
 
   <!-- 单元详情弹窗（基本单元 tab 内点击「点击查看详细信息」） -->
   <Teleport to="body">
-    <div v-if="detailModalType" class="cb-detail-modal-backdrop" @click.self="closeDetailModal">
+    <div v-if="detailModalType" class="cb-detail-modal-backdrop">
       <div class="cb-detail-modal">
         <div class="cb-detail-modal-hd">
           <h2 class="cb-detail-modal-title">{{ detailModalTitle }}</h2>
@@ -391,10 +405,29 @@
       </div>
     </div>
   </Teleport>
+
+  <Teleport to="body">
+    <div v-if="showArchitectureImageViewer" class="cb-arch-image-backdrop">
+      <div ref="architectureImageDialog" class="cb-arch-image-dialog">
+        <div class="cb-arch-image-hd">
+          <h2 class="cb-arch-image-title">静态架构图</h2>
+          <div class="cb-arch-image-actions">
+            <button type="button" class="cb-arch-image-btn" @click="toggleArchitectureImageFullscreen">
+              {{ architectureImageFullscreen ? '恢复原样' : '放大全屏' }}
+            </button>
+            <button type="button" class="cb-arch-image-close" aria-label="关闭" @click="closeStaticArchitectureImageViewer">×</button>
+          </div>
+        </div>
+        <div class="cb-arch-image-bd">
+          <img class="cb-arch-image" :src="staticArchitectureImageUrl" alt="静态架构图" />
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import CesiumViewport from '../components/CesiumViewport.vue';
@@ -415,6 +448,14 @@ const planeProgress = ref(0);
 let _planeMoveRaf = 0;
 const planePathEnabled = ref(false);
 let _tickUnsub = null;
+const relationSequencePlaying = ref(false);
+let _relationSequenceToken = 0;
+const showArchitectureImageViewer = ref(false);
+const architectureImageFullscreen = ref(false);
+const architectureImageDialog = ref(null);
+const panelBodyRef = ref(null);
+const relationItemRefs = new Map();
+const staticArchitectureImageUrl = `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/img/jingTaiJiaGouTu.png`;
 
 const planeScreenInfo = ref(null);
 const activePopup = ref(null);
@@ -439,31 +480,18 @@ const moduleHighlightScreen = ref(null);
 
 /** 取消进行中的「运行模块」聚光灯/飞行动画（与 closeModuleHighlight 同步递增） */
 let _moduleSpotlightSeq = 0;
+const AIRBORNE_DETAIL_UNIT_IDS = ['plane-sensing-warning-01'];
 
 function openModuleHighlight(index) {
   _moduleSpotlightSeq++;
   const seq = _moduleSpotlightSeq;
   const vp = vpStatic.value;
 
-  if (index === 0 || index === 1) {
-    selectedModuleIndex.value = index;
-    moduleHighlightScreen.value = null;
-    vp?.clearStaticModuleSpotlight?.();
-    vp?.setModuleHighlight?.(index);
-    vp?.flyToModuleCube?.(20);
-    return;
-  }
-
   selectedModuleIndex.value = index;
   planeFollowPopupAllowed.value = false;
+  moduleHighlightScreen.value = null;
   vp?.setModuleHighlight?.(null);
   vp?.clearStaticModuleSpotlight?.();
-
-  moduleHighlightScreen.value = {
-    fixed: true,
-    x: Math.max(24, window.innerWidth - 400),
-    y: Math.max(80, window.innerHeight - 300)
-  };
 
   if (!vp) return;
 
@@ -472,7 +500,23 @@ function openModuleHighlight(index) {
 
   (async () => {
     try {
-      if (index === 2) {
+      if (index === 0) {
+        const unitId = 'plane-fdr-01';
+        vp.setStaticModuleSpotlight(true, [unitId], true);
+        vp.setPlaneDimmed?.(true);
+        vp.flyCameraToUnitId(unitId, { duration: 0.9, pitchDeg: -42, range: 35 });
+        await wait(1000);
+        if (cancelled()) return;
+        await vp.flashUnitBillboards([unitId], 3);
+      } else if (index === 1) {
+        const unitId = 'plane-sensing-warning-01';
+        vp.setStaticModuleSpotlight(true, [unitId], true);
+        vp.setPlaneDimmed?.(true);
+        vp.flyCameraToUnitId(unitId, { duration: 0.9, pitchDeg: -42, range: 35 });
+        await wait(1000);
+        if (cancelled()) return;
+        await vp.flashUnitBillboards([unitId], 3);
+      } else if (index === 2) {
         mapMode.value = 'space';
         vp.setStaticModuleSpotlight(true, ['sat-hts-01', 'sat-leo-01', 'route-atg-01'], false);
         vp.flyCameraStaticSpaceView();
@@ -525,7 +569,7 @@ function openModuleHighlight(index) {
     } catch (e) {
       console.warn('[openModuleHighlight]', e);
     } finally {
-      if (seq === _moduleSpotlightSeq) {
+      if (seq === _moduleSpotlightSeq && index !== 0 && index !== 1) {
         vp?.clearStaticModuleSpotlight?.();
       }
     }
@@ -535,6 +579,7 @@ function closeModuleHighlight() {
   _moduleSpotlightSeq++;
   selectedModuleIndex.value = null;
   moduleHighlightScreen.value = null;
+  vpStatic.value?.setPlaneDimmed?.(false);
   vpStatic.value?.setModuleHighlight?.(null);
   vpStatic.value?.clearStaticModuleSpotlight?.();
 }
@@ -574,14 +619,92 @@ const unitsConfig = ref(null);
 const linksConfig = ref(null);
 /** 信息面板「交互关系」里不展示的演示链路（链路本体仍保留） */
 const PANEL_RELATION_HIDDEN_IDS = new Set(['link-sat-ground', 'link-flight-emergency']);
+const normalizeRelationFlowLabel = (flowLabel) => {
+  const label = String(flowLabel || '').trim().toUpperCase();
+  if (label === '信息流') return '信息流';
+  if (label === '控制流') return '控制流';
+  return '';
+};
 const panelRelations = computed(() => {
   const rels = linksConfig.value?.relations || [];
-  return rels.filter((r) => r?.id && !PANEL_RELATION_HIDDEN_IDS.has(r.id));
+  return rels
+    .filter((r) => r?.id && !PANEL_RELATION_HIDDEN_IDS.has(r.id))
+    .map((r) => ({
+      ...r,
+      displayFlowLabel: normalizeRelationFlowLabel(r.flowLabel)
+    }))
+    .filter((r) => r.displayFlowLabel);
 });
-/** 当前选中的关联 id，用于显示对应链路并高亮该项；再次点击同一项则隐藏 */
+/** 当前选中的关联 id，用于显示对应链路并高亮该项 */
 const selectedRelationId = ref(null);
-function toggleRelationDetail(relationId) {
+function setRelationItemRef(relationId, el) {
+  if (!relationId) return;
+  if (el) relationItemRefs.set(relationId, el);
+  else relationItemRefs.delete(relationId);
+}
+async function scrollSelectedRelationIntoView() {
+  if (activeTab.value !== 'relation' || !selectedRelationId.value) return;
+  await nextTick();
+  const itemEl = relationItemRefs.get(selectedRelationId.value);
+  const panelEl = panelBodyRef.value;
+  if (!(itemEl instanceof HTMLElement) || !(panelEl instanceof HTMLElement)) return;
+  const itemTop = itemEl.offsetTop;
+  const itemBottom = itemTop + itemEl.offsetHeight;
+  const viewTop = panelEl.scrollTop;
+  const viewBottom = viewTop + panelEl.clientHeight;
+  const pad = 12;
+  if (itemTop - pad < viewTop) {
+    panelEl.scrollTo({ top: Math.max(0, itemTop - pad), behavior: 'smooth' });
+    return;
+  }
+  if (itemBottom + pad > viewBottom) {
+    panelEl.scrollTo({ top: itemBottom - panelEl.clientHeight + pad, behavior: 'smooth' });
+  }
+}
+function openRelationDetail(relationId) {
+  relationSequencePlaying.value = false;
+  _relationSequenceToken++;
   selectedRelationId.value = selectedRelationId.value === relationId ? null : relationId;
+}
+function openStaticArchitectureImageViewer() {
+  showArchitectureImageViewer.value = true;
+}
+function closeStaticArchitectureImageViewer() {
+  showArchitectureImageViewer.value = false;
+  relationSequencePlaying.value = false;
+  _relationSequenceToken++;
+  selectedRelationId.value = null;
+}
+async function toggleArchitectureImageFullscreen() {
+  const el = architectureImageDialog.value;
+  if (!el) return;
+  if (document.fullscreenElement) {
+    await document.exitFullscreen?.();
+    return;
+  }
+  await el.requestFullscreen?.();
+}
+async function playAllRelationsSequence() {
+  const relations = panelRelations.value;
+  const vp = vpStatic.value;
+  if (!vp || !relations.length) return;
+  relationSequencePlaying.value = true;
+  const token = ++_relationSequenceToken;
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  try {
+    for (const rel of relations) {
+      if (token !== _relationSequenceToken) return;
+      selectedRelationId.value = rel.id;
+      vp.flyCameraToRelationCameraView?.(rel.id, { duration: 2.1 });
+      await wait(2700);
+    }
+    if (token !== _relationSequenceToken) return;
+    openStaticArchitectureImageViewer();
+  } finally {
+    if (token === _relationSequenceToken) {
+      relationSequencePlaying.value = false;
+    }
+  }
 }
 const unitsGroups = computed(() => {
   const cfg = unitsConfig.value;
@@ -604,10 +727,107 @@ const onClickDynamicTab = () => {
   return;
 };
 
+const STATIC_GROUND_VIEW = {
+  destination: Cesium.Cartesian3.fromDegrees(116.199545, 28.245891, 1528514.64),
+  orientation: {
+    heading: Cesium.Math.toRadians(353.31),
+    pitch: Cesium.Math.toRadians(-52.41),
+    roll: Cesium.Math.toRadians(0.01)
+  }
+};
+
+const STATIC_SPACE_VIEW = {
+  destination: Cesium.Cartesian3.fromDegrees(120.901020, 26.363403, 3394682.08),
+  orientation: {
+    heading: Cesium.Math.toRadians(341.06),
+    pitch: Cesium.Math.toRadians(-59.67),
+    roll: Cesium.Math.toRadians(359.98)
+  }
+};
+
+const STATIC_AIRBORNE_DETAIL_VIEW = {
+  destination: Cesium.Cartesian3.fromDegrees(108.742576, 34.439330, 35.20),
+  orientation: {
+    heading: Cesium.Math.toRadians(353.31),
+    pitch: Cesium.Math.toRadians(-25.00),
+    roll: Cesium.Math.toRadians(0.00)
+  }
+};
+
+function applyStaticMapModeView(mode, duration = 1.0) {
+  const viewer = vpStatic.value?.getViewer?.();
+  if (!viewer) return;
+  vpStatic.value?.exitStaticAirborneOrbit?.();
+
+  if (mode === 'plane') {
+    planeFollowPopupAllowed.value = false;
+    const plane = vpStatic.value?.getPlaneEntity?.();
+    if (plane) {
+      viewer.flyTo(plane, {
+        duration: 0.8,
+        offset: new Cesium.HeadingPitchRange(
+          viewer.camera.heading,
+          Cesium.Math.toRadians(-25),
+          200
+        )
+      });
+    }
+    return;
+  }
+
+  planeFollowPopupAllowed.value = false;
+  if (mode === 'ground') {
+    viewer.camera.flyTo({
+      ...STATIC_GROUND_VIEW,
+      duration,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+    });
+    return;
+  }
+
+  if (mode === 'space') {
+    viewer.camera.flyTo({
+      ...STATIC_SPACE_VIEW,
+      duration,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+    });
+    return;
+  }
+
+  if (mode === 'airborne-detail') {
+    planeFollowPopupAllowed.value = false;
+    if (vpStatic.value?.enterStaticAirborneOrbit?.(50)) {
+      return;
+    }
+    viewer.camera.flyTo({
+      ...STATIC_AIRBORNE_DETAIL_VIEW,
+      duration,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+    });
+  }
+}
+
 function openDetailModal(kind) {
+  vpStatic.value?.setStaticAirborneDetailHighlight?.(false);
   detailModalType.value = kind;
+  if (kind === 'star') {
+    mapMode.value = 'space';
+    applyStaticMapModeView('space');
+    return;
+  }
+  if (kind === 'ground') {
+    mapMode.value = 'ground';
+    applyStaticMapModeView('ground');
+    return;
+  }
+  if (kind === 'airborne') {
+    mapMode.value = 'plane';
+    applyStaticMapModeView('airborne-detail');
+    vpStatic.value?.setStaticAirborneDetailHighlight?.(true, AIRBORNE_DETAIL_UNIT_IDS);
+  }
 }
 function closeDetailModal() {
+  vpStatic.value?.setStaticAirborneDetailHighlight?.(false);
   detailModalType.value = null;
 }
 const detailModalTitle = computed(() => {
@@ -635,6 +855,9 @@ function onPlaneBillboardClick() {
 }
 function closeAirbornePopup() {
   showAirbornePopup.value = false;
+}
+function onCameraHome() {
+  planeFollowPopupAllowed.value = false;
 }
 // 与跟随飞机的 popup 同源：用 planeScreenInfo 实时定位，放在 billboard 右上角
 const airbornePopupStyle = computed(() => {
@@ -682,6 +905,7 @@ const planeEnvText = computed(() => phaseText.value || '—');
 const FOLLOW_RANGE_M = 400;
 const FOLLOW_UP_M = 60;
 let _camPos = null;
+const STATIC_DAYLIGHT_TIME_UTC = '2026-04-04T04:00:00Z';
 
 const lerpCartesian = (a, b, t) => {
   return Cesium.Cartesian3.add(
@@ -747,6 +971,7 @@ const togglePlanePath = () => {
 
   if (!planePathEnabled.value) {
     planeFollowPopupAllowed.value = false;
+    vpStatic.value?.setPlaneAttachedMarkersVisible?.(true);
     viewer.clock.shouldAnimate = false;
     vpStatic.value?.applyPathAnimation?.(null);
     if (_tickUnsub) {
@@ -759,8 +984,10 @@ const togglePlanePath = () => {
   }
 
   planeFollowPopupAllowed.value = true;
+  vpStatic.value?.setPlaneAttachedMarkersVisible?.(false);
 
-  const { prop, start, stop } = buildSampledPositionFromPath(flightPath, 300);
+  const daylightStart = Cesium.JulianDate.fromIso8601(STATIC_DAYLIGHT_TIME_UTC);
+  const { prop, start, stop } = buildSampledPositionFromPath(flightPath, 300, daylightStart);
 
   vpStatic.value?.applyPathAnimation?.(prop, { trailSeconds: 12 / 50 });
 
@@ -1006,17 +1233,16 @@ const onTool = (name) => {
   console.log('[StaticTool]', name);
   showWarn.value = false;
   vpStatic.value?.setPlaneFaultFlash?.(false);
-
-  if (name === '放大' || name === '缩小' || name === '巡航故障') {
-    planeFollowPopupAllowed.value = false;
-  }
+  const shouldShowPlaneFollowPopup = ['起飞', '爬升', '巡航', '进近', '降落'].includes(name);
+  planeFollowPopupAllowed.value = shouldShowPlaneFollowPopup;
 
   if (name === '起飞') { setPhase('takeoff'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.takeoff); }
   if (name === '爬升') { setPhase('climb'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.climb); }
   if (name === '巡航') { setPhase('cruise'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.cruise); }
   if (name === '进近') { setPhase('approach'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.approach); }
   if (name === '降落') { setPhase('landing'); vpStatic.value?.setPlanePoseAtIndex(phaseIndexMap.value.landing); }
-  if (['起飞', '爬升', '巡航', '进近', '降落'].includes(name)) {
+  if (shouldShowPlaneFollowPopup) {
+    vpStatic.value?.setPlaneAttachedMarkersVisible?.(true);
     planeFollowPopupAllowed.value = true;
     const v = vpStatic.value?.getViewer?.();
     const plane = vpStatic.value?.getPlaneEntity?.();
@@ -1065,61 +1291,23 @@ function flyToUnit(unit) {
 const onMapMode = (m) => {
   mapMode.value = m;
   console.log('[StaticMapMode]', m);
-
-  if (m === 'plane') {
-    planeFollowPopupAllowed.value = true;
-    const viewer = vpStatic.value?.getViewer?.();
-    const plane = vpStatic.value?.getPlaneEntity?.();
-    if (viewer && plane) {
-      viewer.flyTo(plane, {
-        duration: 0.8,
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          Cesium.Math.toRadians(-25),
-          200
-        )
-      });
-    }
-  }
-
-  if (m === 'ground') {
-    planeFollowPopupAllowed.value = false;
-    const viewer = vpStatic.value?.getViewer?.();
-    if (viewer) {
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(113.714584, 33.749261, 1098475.91),
-        orientation: {
-          heading: Cesium.Math.toRadians(351.75),
-          pitch: Cesium.Math.toRadians(-69.4),
-          roll: Cesium.Math.toRadians(360.0)
-        },
-        duration: 1.0,
-        easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
-      });
-    }
-  }
-
-  if (m === 'space') {
-    planeFollowPopupAllowed.value = false;
-    const viewer = vpStatic.value?.getViewer?.();
-    if (viewer) {
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(120.901020, 26.363403, 3394682.08),
-        orientation: {
-          heading: Cesium.Math.toRadians(341.06),
-          pitch: Cesium.Math.toRadians(-59.67),
-          roll: Cesium.Math.toRadians(359.98)
-        },
-        duration: 1.0,
-        easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
-      });
-    }
-  }
+  applyStaticMapModeView(m);
 };
 
 watch(activeTab, (tab) => {
   if (tab !== 'modules') closeModuleHighlight();
 });
+
+watch(
+  () => selectedRelationId.value,
+  () => {
+    scrollSelectedRelationIntoView();
+  }
+);
+
+const syncArchitectureImageFullscreenState = () => {
+  architectureImageFullscreen.value = !!document.fullscreenElement;
+};
 
 onMounted(() => {
   // CesiumViewport 内部 onMounted 才创建 viewer，这里用 raf 等待一次就绪
@@ -1148,9 +1336,13 @@ onMounted(() => {
       if (data) linksConfig.value = data;
     })
     .catch(() => {});
+  document.addEventListener('fullscreenchange', syncArchitectureImageFullscreenState);
 });
 
 onBeforeUnmount(() => {
+  _relationSequenceToken++;
+  relationSequencePlaying.value = false;
+  document.removeEventListener('fullscreenchange', syncArchitectureImageFullscreenState);
   planeScreenInfo.value = null;
 });
 </script>
@@ -1167,6 +1359,112 @@ onBeforeUnmount(() => {
 .cb-item.cb-item--relation-selected .cb-link {
   color: #7dd3fc;
   font-weight: 600;
+}
+.cb-relation-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.cb-relation-action {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(42, 116, 201, 0.85);
+  border-radius: 8px;
+  background: rgba(8, 48, 109, 0.68);
+  color: #e8f2ff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cb-relation-action:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.cb-relation-action--ghost {
+  border-color: rgba(125, 211, 252, 0.5);
+  background: rgba(8, 48, 109, 0.45);
+}
+.cb-arch-image-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 10, 28, 0.74);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.cb-arch-image-dialog {
+  width: min(1100px, calc(100vw - 48px));
+  height: min(760px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(8, 25, 65, 0.92);
+  border: 1px solid rgba(42, 116, 201, 0.65);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+.cb-arch-image-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: rgba(18, 72, 155, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cb-arch-image-title {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+}
+.cb-arch-image-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cb-arch-image-btn,
+.cb-arch-image-close {
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.cb-arch-image-btn {
+  height: 34px;
+  padding: 0 14px;
+  background: rgba(0, 175, 255, 0.18);
+  color: #e8f2ff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cb-arch-image-close {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 22px;
+  line-height: 1;
+}
+.cb-arch-image-bd {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  overflow: auto;
+}
+.cb-arch-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
 /* 让 cb-viewport 与地图层铺满可用高度，地图铺满 viewport */
@@ -1387,7 +1685,7 @@ onBeforeUnmount(() => {
   font-size: 16px;
 }
 .cb-map-popup--units .cb-float-bd.cb-units-list-bd {
-  max-height: 320px;
+  max-height: 220px;
   overflow-y: auto;
   padding: 12px 14px;
   background: transparent;

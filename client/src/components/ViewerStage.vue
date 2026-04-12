@@ -10,6 +10,7 @@
             class="cb-dv-cesium"
             :model-url="modelUrl"
             :units-url="unitsUrl"
+            :links-url="linksUrl"
             :auto-focus="autoFocus"
             :split-mode="false"
             :path-points="pathPoints"
@@ -41,6 +42,7 @@
                 :readonly="readonly"
                 :auto-focus="autoFocus"
                 :units-url="unitsUrl"
+                :links-url="linksUrl"
                 :path-points="pathPoints"
                 :path-progress="pathProgress"
                 :follow-path="followPath"
@@ -73,6 +75,7 @@ const props = defineProps({
   bindVpCompare: { type: Function, required: true },
   modelUrl: { type: String, default: '' },
   unitsUrl: { type: String, default: '' },
+  linksUrl: { type: String, default: '' },
   leftModelUrl: { type: String, default: '' },
   rightModelUrl: { type: String, default: '' },
   splitPosition: { type: Number, default: 0.5 },

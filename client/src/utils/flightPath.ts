@@ -239,7 +239,8 @@ export function buildFlightPathFromRunways(
  */
 export function buildSampledPositionFromPath(
   path: PathPoint[],
-  totalSeconds?: number
+  totalSeconds?: number,
+  startTime?: Cesium.JulianDate
 ): {
   prop: Cesium.SampledPositionProperty;
   start: Cesium.JulianDate;
@@ -265,7 +266,7 @@ export function buildSampledPositionFromPath(
   }
   const totalDist = cumDist[n - 1] || 1;
   const total = totalSeconds ?? totalDist / 200;
-  const start = Cesium.JulianDate.now();
+  const start = startTime ? Cesium.JulianDate.clone(startTime, new Cesium.JulianDate()) : Cesium.JulianDate.now();
   const prop = new Cesium.SampledPositionProperty();
   prop.setInterpolationOptions({
     interpolationDegree: 1,
