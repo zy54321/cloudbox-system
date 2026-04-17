@@ -431,7 +431,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import CesiumViewport from '../components/CesiumViewport.vue';
-import { buildFlightPathFromRunways, buildSampledPositionFromPath } from '../utils/flightPath';
+import { buildFlightPathFromRunways, buildSampledPositionFromPath, getPhaseAtPathProgress } from '../utils/flightPath';
 import mapPopup from '../assets/staticPage/map_popup.png';
 import warnIcon from '../assets/staticPage/map_warnicon.png';
 
@@ -858,6 +858,7 @@ function closeAirbornePopup() {
 }
 function onCameraHome() {
   planeFollowPopupAllowed.value = false;
+  syncPhaseFromFlightProgress(planeProgress.value);
 }
 // 与跟随飞机的 popup 同源：用 planeScreenInfo 实时定位，放在 billboard 右上角
 const airbornePopupStyle = computed(() => {
@@ -979,6 +980,13 @@ const togglePlanePath = () => {
       _tickUnsub = null;
     }
     viewer.trackedEntity = undefined;
+    const start = viewer.clock.startTime;
+    const stop = viewer.clock.stopTime;
+    const cur = viewer.clock.currentTime;
+    const total = Cesium.JulianDate.secondsDifference(stop, start);
+    const elapsed = Cesium.JulianDate.secondsDifference(cur, start);
+    const u = total > 0 ? Math.min(1, Math.max(0, elapsed / total)) : 0;
+    syncPhaseFromFlightProgress(u);
     viewer.scene?.requestRender?.();
     return;
   }
@@ -1001,9 +1009,19 @@ const togglePlanePath = () => {
   const plane = vpStatic.value?.getPlaneEntity?.();
   if (plane) viewer.trackedEntity = plane;
 
-  const onTick = () => viewer.scene?.requestRender?.();
+  const onTick = () => {
+    const start = viewer.clock.startTime;
+    const stop = viewer.clock.stopTime;
+    const cur = viewer.clock.currentTime;
+    const total = Cesium.JulianDate.secondsDifference(stop, start);
+    const elapsed = Cesium.JulianDate.secondsDifference(cur, start);
+    const u = total > 0 ? Math.min(1, Math.max(0, elapsed / total)) : 0;
+    syncPhaseFromFlightProgress(u);
+    viewer.scene?.requestRender?.();
+  };
   viewer.clock.onTick.addEventListener(onTick);
   _tickUnsub = () => viewer.clock.onTick.removeEventListener(onTick);
+  syncPhaseFromFlightProgress(0);
 };
 
 const togglePlaneMove = () => {
@@ -1011,6 +1029,7 @@ const togglePlaneMove = () => {
   if (!planeMoveEnabled.value) {
     if (_planeMoveRaf) cancelAnimationFrame(_planeMoveRaf);
     _planeMoveRaf = 0;
+    syncPhaseFromFlightProgress(planeProgress.value);
     return;
   }
   const start = performance.now();
@@ -1019,6 +1038,7 @@ const togglePlaneMove = () => {
     if (!planeMoveEnabled.value) return;
     const u = ((performance.now() - start) % durationMs) / durationMs;
     planeProgress.value = u;
+    syncPhaseFromFlightProgress(u);
     followPlaneOnce();
     _planeMoveRaf = requestAnimationFrame(tick);
   };
@@ -1044,6 +1064,16 @@ const phaseConfig = {
   approach: { name: '进近', level: '城市级' },
   landing:  { name: '降落', level: '机场级' }
 };
+
+/** 按当前沿线进度 u∈[0,1] 用航迹点 phase 刷新浮窗阶段文案 */
+function syncPhaseFromFlightProgress(u) {
+  const ph = getPhaseAtPathProgress(flightPath, u);
+  const cfg = phaseConfig[ph];
+  if (cfg) {
+    phaseText.value = cfg.name;
+    levelText.value = cfg.level;
+  }
+}
 
 const pathPointsForViewer = flightPath;
 
@@ -1292,6 +1322,9 @@ const onMapMode = (m) => {
   mapMode.value = m;
   console.log('[StaticMapMode]', m);
   applyStaticMapModeView(m);
+  if (m !== 'plane') {
+    syncPhaseFromFlightProgress(planeProgress.value);
+  }
 };
 
 watch(activeTab, (tab) => {

@@ -1,0 +1,82 @@
+{
+  "relations": [
+    {
+      "id": "yes-engine-to-warn",
+      "flowLabel": "信息流",
+      "name": "发动机异常至机载预警",
+      "edges": [["plane", "yes-engine"], ["yes-engine", "yes-onboard-warn"]]
+    },
+    {
+      "id": "yes-warn-to-expert",
+      "flowLabel": "信息流",
+      "name": "机载预警至地面专家组",
+      "edges": [["yes-onboard-warn", "yes-expert-group"]]
+    },
+    {
+      "id": "yes-expert-to-sim",
+      "flowLabel": "信息流",
+      "name": "专家组至体系推演",
+      "edges": [["yes-expert-group", "yes-sim-system"]]
+    },
+    {
+      "id": "yes-sim-to-expert",
+      "flowLabel": "控制流",
+      "name": "推演结果回传专家组",
+      "edges": [["yes-sim-system", "yes-expert-group"]]
+    },
+    {
+      "id": "yes-expert-to-atc",
+      "flowLabel": "控制流",
+      "name": "专家组指令至空管",
+      "edges": [["yes-expert-group", "yes-atc"]]
+    },
+    {
+      "id": "yes-atc-to-airport",
+      "flowLabel": "控制流",
+      "name": "空管协同至机场",
+      "edges": [["yes-atc", "yes-airport"]]
+    },
+    {
+      "id": "no-crew-to-tower",
+      "flowLabel": "信息流",
+      "name": "机组 MAYDAY 至塔台/进近",
+      "edges": [["plane", "no-crew"], ["no-crew", "no-tower"]]
+    },
+    {
+      "id": "no-atc-to-emergency",
+      "flowLabel": "信息流",
+      "name": "空管至应急处置系统",
+      "edges": [["no-atc", "no-emergency-sys"]]
+    },
+    {
+      "id": "no-airport-ops-to-tower",
+      "flowLabel": "信息流",
+      "name": "机场运行至塔台协同",
+      "edges": [["no-airport-ops", "no-tower"]]
+    },
+    {
+      "id": "no-dispatch-to-satgw",
+      "flowLabel": "信息流",
+      "name": "签派至卫星地面站",
+      "edges": [["no-dispatch", "no-sat-gw"]]
+    },
+    {
+      "id": "no-satgw-to-crew",
+      "flowLabel": "信息流",
+      "name": "卫星地面站至机组",
+      "edges": [["no-sat-gw", "no-crew"]]
+    },
+    {
+      "id": "no-maint-to-tech",
+      "flowLabel": "控制流",
+      "name": "机务至航司技术支援",
+      "edges": [["no-maint", "no-airline-tech"]]
+    },
+    {
+      "id": "no-tech-to-safety",
+      "flowLabel": "控制流",
+      "name": "技术支援至航安归档",
+      "edges": [["no-airline-tech", "no-safety"]]
+    }
+  ]
+}

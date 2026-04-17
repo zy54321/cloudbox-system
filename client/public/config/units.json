@@ -11,7 +11,10 @@
         "image": "img/satelliteIcon.png",
         "size": 0.3,
         "scale": 0.3,
-        "offset": [0, 32],
+        "offset": [
+          0,
+          32
+        ],
         "info": "高通量卫星通信节点，承担飞机与地面之间的大容量高速数据传输，是\"云匣子\"空天链路的重要组成部分。",
         "infoSource": "文档摘要"
       },
@@ -25,7 +28,10 @@
         "image": "img/satelliteIcon.png",
         "size": 0.3,
         "scale": 0.3,
-        "offset": [0, 32],
+        "offset": [
+          0,
+          32
+        ],
         "info": "低轨通信卫星节点，作为空天网络的一部分补充广域覆盖与链路连续性，为实时数据传输提供支撑。",
         "infoSource": "补充说明"
       }
@@ -39,10 +45,13 @@
       "lon": 108.742412,
       "lat": 34.439887,
       "alt": 0.3,
-      "image": "img/planeBillBoardImg.png",
+      "image": "img/01_通感算一体机载感知预警系统.png",
       "size": 0.5,
-      "scale": 0.5,
-      "offset": [0, -38],
+      "scale": 0.3,
+      "offset": [
+        0,
+        10
+      ],
       "info": "机载侧通感算一体机载感知预警系统示意标点，当前用于静态架构页机载详情高亮演示。",
       "infoSource": "文档摘要"
     },
@@ -53,10 +62,13 @@
       "lon": 108.742535,
       "lat": 34.439979,
       "alt": 1.8,
-      "image": "img/planeBillBoardImg.png",
+      "image": "img/02_机组.png",
       "size": 0.5,
-      "scale": 0.5,
-      "offset": [0, -38],
+      "scale": 0.3,
+      "offset": [
+        0,
+        10
+      ],
       "info": "机组承担飞行操纵、告警处置与空地协同沟通任务，是机载应急处置链路中的核心执行主体。",
       "infoSource": "文档摘要"
     },
@@ -65,12 +77,15 @@
       "type": "aircraft",
       "name": "黑匣子",
       "lon": 108.742471,
-      "lat": 34.439920,
+      "lat": 34.43992,
       "alt": 0.1,
-      "image": "img/planeBillBoardImg.png",
+      "image": "img/03_黑匣子.png",
       "size": 0.5,
-      "scale": 0.5,
-      "offset": [0, -38],
+      "scale": 0.3,
+      "offset": [
+        0,
+        10
+      ],
       "info": "黑匣子用于记录飞行数据与关键语音信息，为飞行状态追溯、事件复盘和风险分析提供基础数据支撑。",
       "infoSource": "文档摘要"
     },
@@ -78,13 +93,16 @@
       "id": "plane-cvr-01",
       "type": "aircraft",
       "name": "舱音采集",
-      "lon": 108.742480,
+      "lon": 108.74248,
       "lat": 34.439945,
       "alt": 2.4,
-      "image": "img/planeBillBoardImg.png",
+      "image": "img/04_舱音采集.png",
       "size": 0.5,
-      "scale": 0.5,
-      "offset": [0, -38],
+      "scale": 0.3,
+      "offset": [
+        0,
+        10
+      ],
       "info": "舱音采集装置负责持续采集驾驶舱语音、告警音与关键通话内容，为地面研判提供实时语音信息依据。",
       "infoSource": "文档摘要"
     },
@@ -95,10 +113,13 @@
       "lon": 108.742424,
       "lat": 34.439912,
       "alt": 2.3,
-      "image": "img/planeBillBoardImg.png",
+      "image": "img/05_数字飞行数据采集装置.png",
       "size": 0.5,
-      "scale": 0.5,
-      "offset": [0, -38],
+      "scale": 0.3,
+      "offset": [
+        0,
+        10
+      ],
       "info": "数字飞行数据采集装置负责采集高度、速度、姿态、发动机等关键飞行参数，并向机载与地面系统提供标准化数据输入。",
       "infoSource": "文档摘要"
     },
@@ -109,10 +130,13 @@
       "lon": 108.742547,
       "lat": 34.439989,
       "alt": 0.1,
-      "image": "img/planeBillBoardImg.png",
+      "image": "img/06_空地通信卫星_ATG网关.png",
       "size": 0.5,
-      "scale": 0.5,
-      "offset": [0, -38],
+      "scale": 0.3,
+      "offset": [
+        0,
+        10
+      ],
       "info": "空地通信卫星/ATG网关负责承接机上数据与空天地链路接入，实现机载系统与地面系统之间的双向通信转发。",
       "infoSource": "文档摘要"
     },
@@ -123,10 +147,13 @@
       "lon": 108.742519,
       "lat": 34.439966,
       "alt": 2.3,
-      "image": "img/planeBillBoardImg.png",
+      "image": "img/08_机上网络接入点.png",
       "size": 0.5,
-      "scale": 0.5,
-      "offset": [0, -38],
+      "scale": 0.3,
+      "offset": [
+        0,
+        10
+      ],
       "info": "机上网络接入点用于连接机载终端、数据采集与预警设备，保障机内数据在各子系统之间稳定传输与汇聚。",
       "infoSource": "文档摘要"
     }
@@ -136,7 +163,10 @@
       {
         "clusterId": "DEP_AIRPORT",
         "name": "起点机场地面单位集群",
-        "center": { "lon": 108.7519, "lat": 34.446756 },
+        "center": {
+          "lon": 108.7519,
+          "lat": 34.446756
+        },
         "units": [
           {
             "id": "dep-reconstruction",
@@ -144,11 +174,14 @@
             "name": "地面飞行场景实时重构系统",
             "lon": 108.770117,
             "lat": 34.453236,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/07_地面飞行场景实时重构系统.png",
             "alt": 0,
             "size": 0.5,
-            "scale": 0.5,
-            "offset": [0, -28],
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "该系统基于民用航空器飞行数据和舱音数据，分析下传数据的变化趋势，并将重建结果共享给专家组与决策模块，实现高效的数据传输与态势支撑。",
             "infoSource": "文档摘要"
           },
@@ -158,9 +191,13 @@
             "name": "地面运营控制中心专家组",
             "lon": 108.771811,
             "lat": 34.445005,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/06_地面运营控制中心专家组.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "该系统从专家视角对飞机运行中的问题进行多方位分析，对机载预警设备和地面场景重构系统输出的告警进行认定，并制定或优化应急处置方案。",
             "infoSource": "文档摘要"
           },
@@ -169,10 +206,14 @@
             "type": "ground_unit",
             "name": "救援系统",
             "lon": 108.752621,
-            "lat": 34.434860,
-            "image": "img/planeBillBoardImg.png",
+            "lat": 34.43486,
+            "image": "img/02_救援系统.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "救援系统负责承接机场侧下发的应急任务，参与人员疏散、伤员救治和现场处置等执行环节。",
             "infoSource": "补充说明"
           },
@@ -182,9 +223,13 @@
             "name": "体系应急决策推演系统",
             "lon": 108.764833,
             "lat": 34.439928,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/05_体系应急决策推演系统.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "该系统依据航空器风险状态生成多个动态决策方案，在仿真场景中开展平行推演，评估处置路径优劣并辅助专家组形成最优方案。",
             "infoSource": "文档摘要"
           },
@@ -194,9 +239,13 @@
             "name": "空管",
             "lon": 108.766361,
             "lat": 34.446522,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/04_空管.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "空管负责空域调度、飞行引导与险情协同，接收处置方案后联动机场与机组执行应急流程。",
             "infoSource": "补充说明"
           },
@@ -206,9 +255,13 @@
             "name": "航空公司",
             "lon": 108.744077,
             "lat": 34.432633,
-            "image": "img/hangKongGongSi.png",
+            "image": "img/01_航空公司.png",
             "alt": 0,
-            "scale": 0.06,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "航空公司负责从运行与技术支持视角参与应急处置，协调签派、技术和保障资源，支撑方案落地。",
             "infoSource": "补充说明"
           },
@@ -218,9 +271,13 @@
             "name": "机场",
             "lon": 108.758305,
             "lat": 34.439267,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/03_机场.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "机场承担跑道、地面保障与现场应急资源协同，是处置方案落地执行的重要节点。",
             "infoSource": "补充说明"
           },
@@ -230,9 +287,13 @@
             "name": "5G基站",
             "lon": 111.2,
             "lat": 36.0,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/08_5G基站.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。",
             "infoSource": "文档摘要"
           },
@@ -242,9 +303,13 @@
             "name": "5G基站",
             "lon": 113.8,
             "lat": 37.5,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/08_5G基站.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。",
             "infoSource": "文档摘要"
           }
@@ -253,17 +318,24 @@
       {
         "clusterId": "ARR_AIRPORT",
         "name": "终点机场地面单位集群",
-        "center": { "lon": 116.42906, "lat": 39.485763 },
+        "center": {
+          "lon": 116.42906,
+          "lat": 39.485763
+        },
         "units": [
           {
             "id": "arr-sim-system",
             "type": "ground_unit",
             "name": "体系应急决策推演系统",
-            "lon": 116.379800,
+            "lon": 116.3798,
             "lat": 39.515555,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/05_体系应急决策推演系统.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "该系统依据航空器风险状态生成多个动态决策方案，在仿真场景中开展平行推演，评估处置路径优劣并辅助专家组形成最优方案。",
             "infoSource": "文档摘要"
           },
@@ -273,9 +345,13 @@
             "name": "航空公司",
             "lon": 116.413751,
             "lat": 39.518911,
-            "image": "img/hangKongGongSi.png",
+            "image": "img/01_航空公司.png",
             "alt": 0,
-            "scale": 0.06,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "航空公司负责从运行与技术支持视角参与应急处置，协调签派、技术和保障资源，支撑方案落地。",
             "infoSource": "补充说明"
           },
@@ -285,9 +361,13 @@
             "name": "空管",
             "lon": 116.395703,
             "lat": 39.494101,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/04_空管.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "空管负责空域调度、飞行引导与险情协同，接收处置方案后联动机场与机组执行应急流程。",
             "infoSource": "补充说明"
           },
@@ -297,9 +377,13 @@
             "name": "地面飞行场景实时重构系统",
             "lon": 116.406156,
             "lat": 39.519035,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/07_地面飞行场景实时重构系统.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "该系统基于民用航空器飞行数据和舱音数据，分析下传数据的变化趋势，并将重建结果共享给专家组与决策模块，实现高效的数据传输与态势支撑。",
             "infoSource": "文档摘要"
           },
@@ -309,9 +393,13 @@
             "name": "地面运营控制中心专家组",
             "lon": 116.423655,
             "lat": 39.521626,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/06_地面运营控制中心专家组.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "该系统从专家视角对飞机运行中的问题进行多方位分析，对机载预警设备和地面场景重构系统输出的告警进行认定，并制定或优化应急处置方案。",
             "infoSource": "文档摘要"
           },
@@ -321,9 +409,13 @@
             "name": "救援系统",
             "lon": 116.429059,
             "lat": 39.515763,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/02_救援系统.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "救援系统负责承接机场侧下发的应急任务，参与人员疏散、伤员救治和现场处置等执行环节。",
             "infoSource": "补充说明"
           },
@@ -332,10 +424,14 @@
             "type": "ground_unit",
             "name": "机场",
             "lon": 116.410944,
-            "lat": 39.510200,
-            "image": "img/planeBillBoardImg.png",
+            "lat": 39.5102,
+            "image": "img/03_机场.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "机场承担跑道、地面保障与现场应急资源协同，是处置方案落地执行的重要节点。",
             "infoSource": "补充说明"
           },
@@ -345,9 +441,13 @@
             "name": "5G基站",
             "lon": 116.449059,
             "lat": 39.525762,
-            "image": "img/planeBillBoardImg.png",
+            "image": "img/08_5G基站.png",
             "alt": 0,
-            "scale": 0.5,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "info": "5G ATG 地空通信节点，利用 5G 网络技术为飞行器提供低延迟、高带宽的数据传输能力，与卫星链路共同保障实时同步传输。",
             "infoSource": "文档摘要"
           }

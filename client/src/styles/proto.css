@@ -875,6 +875,273 @@ header {
   min-height: 0;
 }
 
+/* 双 iframe：地图 host 铺满；侧栏 overlay 绝对叠在各自半屏上，不参与文档流撑高 */
+.cb-wrap--dynamic .cb-viewer-split--iframe-absolute {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.cb-wrap--dynamic .cb-viewport--iframe-split-host {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cb-wrap--dynamic .cb-viewport--iframe-split-host .cb-compare-iframe-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.cb-wrap--dynamic .cb-compare-iframe-col {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cb-wrap--dynamic .cb-compare-iframe-hd {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.cb-wrap--dynamic .cb-compare-iframe-map-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.cb-wrap--dynamic .cb-compare-iframe-map-wrap .cb-compare-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: #0b1020;
+}
+
+.cb-wrap--dynamic .cb-compare-iframe-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.cb-wrap--dynamic .cb-compare-iframe-overlay .cb-time-dock--embed,
+.cb-wrap--dynamic .cb-compare-iframe-overlay .floating-card {
+  pointer-events: auto;
+}
+
+.cb-wrap--dynamic .cb-compare-side-overlay-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  /* 底部多留 10px，时间轴不贴边 */
+  padding: 0 6px 18px;
+  box-sizing: border-box;
+}
+
+.cb-wrap--dynamic .cb-compare-side-overlay-inner .cb-split-hint {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-bottom: 6px;
+  pointer-events: none;
+}
+
+.cb-wrap--dynamic .cb-compare-side-overlay-inner .floating-card {
+  position: absolute;
+  right: 8px;
+  bottom: 118px;
+  top: auto;
+  width: min(252px, calc(100% - 16px));
+}
+
+.cb-wrap--dynamic .cb-compare-side-overlay-inner .cb-time-dock--embed {
+  flex-shrink: 0;
+  width: 100%;
+  margin-top: auto;
+}
+
+.cb-wrap--dynamic .cb-compare-map-overlays {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.cb-wrap--dynamic .cb-compare-map-overlays .cb-dv-infobox {
+  pointer-events: auto;
+}
+
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col--with-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1 1 0;
+  padding-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* 双屏 embed 时间轴：与单屏 overlay 风格统一 */
+.cb-wrap--dynamic .cb-compare-side-overlay-inner .cb-time-dock--embed,
+.cb-wrap--dynamic .cb-compare-iframe-overlay .cb-time-dock--embed {
+  background: rgba(14, 44, 123, 0.42);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 116, 201, 0.55);
+  border-radius: 16px;
+}
+
+/* 双屏 embed-split：单行 标题|按钮|轨道；轨道内关键帧在上、进度条略下移 */
+.cb-wrap--dynamic .cb-compare-side-overlay-inner .cb-time-dock--embed-split,
+.cb-wrap--dynamic .cb-compare-iframe-overlay .cb-time-dock--embed-split,
+.cb-wrap--dynamic .cb-viewer-split .cb-split-col--with-timeline .cb-time-dock--embed-split {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 12.8px;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-time-dock__embed-split-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: nowrap;
+  width: 100%;
+  min-width: 0;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-dv-title--embed-split {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-dv-title-icon {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-dv-title-line1 {
+  font-family: 'Source Han Sans', 'Source Han Sans CN', sans-serif;
+  font-weight: 700;
+  font-size: 17.6px;
+  line-height: 1.15;
+  color: #FFFFFF;
+  text-shadow: 0 0 6px #00AFFF;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-dv-title-line2 {
+  font-size: 12.8px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-time-actions--embed-split {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-time-actions--embed-split .cb-time-btn {
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-time-dock__embed-split-track {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 48px;
+  min-height: 0;
+}
+
+/* 进度条相对关键帧下移量 = 关键帧按钮总高度增加量（同步 +4px） */
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-time-slider--embed-split-inline {
+  width: 100%;
+  min-width: 0 !important;
+  margin-top: 9px;
+  flex: 0 0 auto;
+}
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-time-dock__embed-split-track--no-marks .cb-time-slider--embed-split-inline {
+  margin-top: 0;
+}
+
+.cb-wrap--dynamic .cb-time-dock--embed-split .cb-time-marks--embed-split-seq .mark--embed-seq {
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* 取消全局时间轴 transform 对 embed-split 的干扰（勿对 embed-split-inline 清 margin，否则会吃掉进度条下移） */
+.cb-wrap--dynamic .cb-dv-timeline.cb-time-dock--embed-split .cb-time-actions {
+  transform: none !important;
+  margin: 0 !important;
+}
+.cb-wrap--dynamic .cb-dv-timeline.cb-time-dock--embed-split .cb-time-slider:not(.cb-time-slider--embed-split-inline) {
+  transform: none !important;
+  margin: 0 !important;
+}
+.cb-wrap--dynamic .cb-dv-timeline.cb-time-dock--embed-split .cb-time-slider.cb-time-slider--embed-split-inline {
+  transform: none !important;
+}
+.cb-wrap--dynamic .cb-dv-timeline.cb-time-dock--embed-split .cb-time-marks {
+  transform: none !important;
+}
+
 .cb-wrap--dynamic .cb-dv-cesium {
   flex: 1 1 auto;
   min-height: 0;
@@ -1475,7 +1742,8 @@ body {
 /* ===== 动态交互（单屏）目标稿 ===== */
 .cb-wrap--dynamic .cb-scene-panel {
   width: 1880px;
-  height: 88px;
+  min-height: 88px;
+  height: auto;
   background: #0E2C7B;
   /* border: 1px solid #2A74C9; */
   border-radius: 6px;
@@ -1490,8 +1758,24 @@ body {
 .cb-wrap--dynamic .cb-scene-head {
   display: flex;
   align-items: center;
-  gap: 14px;
-  height: 32px;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  min-height: 32px;
+  height: auto;
+}
+
+.cb-wrap--dynamic .cb-scene-global-playback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+}
+
+.cb-wrap--dynamic .cb-scene-global-playback .cb-action-btn {
+  white-space: nowrap;
 }
 
 .cb-wrap--dynamic .cb-scene-title {

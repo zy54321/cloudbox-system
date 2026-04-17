@@ -19,6 +19,12 @@
           <img class="cb-scene-title-icon" :src="dvTitleIconLeft" alt="" />
           <span class="cb-scene-title-text">场景选择</span>
         </div>
+        <div v-if="isCompare" class="cb-scene-global-playback">
+          <button type="button" class="cb-action-btn" @click="toggleGlobalComparePlay">
+            {{ playingGlobal ? '⏸ 全局暂停' : '▶ 全局播放' }}
+          </button>
+          <button type="button" class="cb-action-btn ghost" @click="resetCompareAll">⟲ 全局复位</button>
+        </div>
         <div class="cb-scene-current" :style="{ backgroundImage: `url(${dvTitleBkRight})` }">
           <span class="cb-scene-current-text">当前：{{ currentScenarioName }}</span>
         </div>
@@ -50,18 +56,14 @@
       <div class="cb-grid cb-grid--dynamic cb-dv-mainrow cb-dv-mainrow--screen">
         <ViewerStage
           :isCompare="isCompare"
+          :compare-bridge="compareBridgeRef"
           :bindVpSingle="bindVpSingle"
-          :bindVpCompare="bindVpCompare"
           :model-url="boeingModelUrl"
           :units-url="engineFailureUnitsUrl"
           :links-url="dynamicLinksUrl"
-          :left-model-url="boeingModelUrl"
-          :right-model-url="boeingModelUrl"
-          :split-position="0.5"
-          :readonly="false"
           :auto-focus="true"
           :path-points="pathPointsForViewer"
-          :path-progress="planeProgress"
+          :path-progress="pathProgressForViewerStage"
           :follow-path="true"
           :dep-airport-label="depAirportLabel"
           :arr-airport-label="arrAirportLabel"
@@ -131,9 +133,9 @@
             </div>
           </template>
 
-          <template #compare-overlays>
-            <div class="cb-split-col">
-              <div class="cb-split-hint">双屏对比（有/无云匣子）｜左右同时间轴同步驱动</div>
+          <template #compare-left-overlay>
+            <div class="cb-compare-side-overlay-inner">
+              <div class="cb-split-hint">双屏对比（有/无云匣子）｜全局播放双机同飞；侧栏各自 T+</div>
               <FloatingCard
                 id="disposalFloatingCardNo"
                 :card="{ ...currentCardYes, phase: '有云匣子' }"
@@ -143,8 +145,36 @@
                 @toggle-collapsed="floatingCardNoCollapsed = !floatingCardNoCollapsed"
                 @toggle-details="detailsOpenNo = !detailsOpenNo"
               />
+              <TimelineDock
+                embed
+                embed-title-main="时间轴"
+                embed-subtitle="有云匣子侧"
+                dock-title="时间轴 · 有云匣子侧"
+                v-model.number="tYes"
+                :maxTime="timelineMax"
+                :step="0.1"
+                :keyframeMarks="keyframeMarksYes"
+                :dvTitleIconLeft="dvTitleIconLeft"
+                :playing="playingGlobal || playingLeft"
+                :currentTimeLabel="currentTimeLabelYes"
+                :isCompare="false"
+                :markerNoAlign="markerNoAlign"
+                :markerNoLeft="markerNoLeft"
+                :markerNoTitle="markerNoTitle"
+                :markerNoLabel="markerNoLabel"
+                :markerYesAlign="markerYesAlign"
+                :markerYesLeft="markerYesLeft"
+                :markerYesTitle="markerYesTitle"
+                :markerYesLabel="markerYesLabel"
+                @togglePlay="toggleCompareSidePlay('left')"
+                @reset="resetCompareSide('left')"
+                @scrub="onScrubCompareYes"
+              />
             </div>
-            <div class="cb-split-col">
+          </template>
+
+          <template #compare-right-overlay>
+            <div class="cb-compare-side-overlay-inner">
               <FloatingCard
                 id="disposalFloatingCardYes"
                 :card="{ ...currentCardNo, phase: '无云匣子' }"
@@ -154,7 +184,35 @@
                 @toggle-collapsed="floatingCardYesCollapsed = !floatingCardYesCollapsed"
                 @toggle-details="detailsOpenYes = !detailsOpenYes"
               />
+              <TimelineDock
+                embed
+                embed-title-main="时间轴"
+                embed-subtitle="无云匣子侧"
+                dock-title="时间轴 · 无云匣子侧"
+                v-model.number="tNo"
+                :maxTime="timelineMax"
+                :step="0.1"
+                :keyframeMarks="keyframeMarksNo"
+                :dvTitleIconLeft="dvTitleIconLeft"
+                :playing="playingGlobal || playingRight"
+                :currentTimeLabel="currentTimeLabelNo"
+                :isCompare="false"
+                :markerNoAlign="markerNoAlign"
+                :markerNoLeft="markerNoLeft"
+                :markerNoTitle="markerNoTitle"
+                :markerNoLabel="markerNoLabel"
+                :markerYesAlign="markerYesAlign"
+                :markerYesLeft="markerYesLeft"
+                :markerYesTitle="markerYesTitle"
+                :markerYesLabel="markerYesLabel"
+                @togglePlay="toggleCompareSidePlay('right')"
+                @reset="resetCompareSide('right')"
+                @scrub="onScrubCompareNo"
+              />
             </div>
+          </template>
+
+          <template #compare-map-overlays>
             <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
               <div class="hd">
                 <div class="title">{{ infoBoxTitle }}</div>
@@ -162,12 +220,12 @@
               </div>
               <div class="bd">
                 <ul>
-                  <li v-for="(x, i) in infoBoxLines" :key="i">{{ x }}</li>
+                  <li v-for="(x, i) in infoBoxLines" :key="'map-' + i">{{ x }}</li>
                 </ul>
                 <div class="compare" v-if="isCompare && infoBoxCompareLines.length">
                   <div class="small">对比信息（示意）</div>
                   <ul>
-                    <li v-for="(x, i) in infoBoxCompareLines" :key="i">{{ x }}</li>
+                    <li v-for="(x, i) in infoBoxCompareLines" :key="'map-c-' + i">{{ x }}</li>
                   </ul>
                 </div>
               </div>
@@ -221,6 +279,7 @@
       </div>
 
       <TimelineDock
+        v-if="!isCompare"
         v-model.number="t"
         :maxTime="timelineMax"
         :step="0.1"
@@ -228,7 +287,7 @@
         :dvTitleIconLeft="dvTitleIconLeft"
         :playing="playing"
         :currentTimeLabel="currentTimeLabel"
-        :isCompare="isCompare"
+        :isCompare="false"
         :markerNoAlign="markerNoAlign"
         :markerNoLeft="markerNoLeft"
         :markerNoTitle="markerNoTitle"
@@ -253,10 +312,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import { buildFlightPathFromRunways, buildSampledPositionFromPath } from '../utils/flightPath';
+import { createCompareFrameBridge } from '../utils/compareFrameBridge.js';
 import ViewerStage from '../components/ViewerStage.vue';
 import FloatingCard from '../components/FloatingCard.vue';
 import AlertToast from '../components/AlertToast.vue';
@@ -272,13 +332,55 @@ const dvMsgTabSelected = new URL('../assets/dynamicViewport/msgpage_button_selec
 
 const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const engineFailureUnitsUrl = `${baseUrl}/config/dynamic/engine_failure_units.json`;
-const dynamicLinksUrl = `${baseUrl}/config/dynamic_links.json`;
+const dynamicLinksUrl = `${baseUrl}/config/dynamic/engine_failure_links.json`;
 
 const vpSingle = ref(null);
-const vpCompare = ref(null);
+
+/** 对比模式：全局 / 左单屏 / 右单屏 互斥；idle 表示未在自动沿线+场景驱动 */
+const playbackMode = ref('idle'); // 'idle' | 'global' | 'left' | 'right'
+
+const playingGlobal = ref(false);
+const playingLeft = ref(false);
+const playingRight = ref(false);
+
+/** 子页关键点叙事中（由 SIDE_STATE 同步，仅观察，不参与裁决） */
+const narrativeBusyLeft = ref(false);
+const narrativeBusyRight = ref(false);
+/** 父页全局 narrative 闭环（仅全局自动播放） */
+const globalNarrativeRunning = ref(false);
+const globalNarrativePendingLeft = ref(false);
+const globalNarrativePendingRight = ref(false);
+const globalNarrativeStepIndexLeft = ref(null);
+const globalNarrativeStepIndexRight = ref(null);
+const globalNarrativeRoundDemoT = ref(null);
+const compareGlobalDisplayT = ref(0);
+const firedMarkStepIndexYes = ref(new Set());
+const firedMarkStepIndexNo = ref(new Set());
+
+/** 对比：左=有云匣子时间，右=无云匣子时间 */
+const tYes = ref(0);
+const tNo = ref(0);
+
+/** 对比：左右 iframe 各自沿线进度 0..1 */
+const planeProgressLeft = ref(0);
+const planeProgressRight = ref(0);
+
+/** 用户拖动对比时间轴后，允许在未巡航时也应用链路（与自动全局播放门控区分） */
+const forceSceneUnlocked = ref(false);
+
+/** postMessage 结构化克隆：输出纯对象数组，避免 Proxy/引用在子 iframe 侧不稳定 */
+function clonePathPointsForCompareSync() {
+  const pts = pathPointsForViewer;
+  if (!Array.isArray(pts) || !pts.length) return [];
+  return pts.map((p) => ({
+    lon: Number(p.lon),
+    lat: Number(p.lat),
+    alt: p.alt != null ? Number(p.alt) : 0
+  }));
+}
 
 const planeMoveEnabled = ref(false);
-const planeProgress = ref(0.55);
+const planeProgress = ref(0);
 let _planeMoveRaf = 0;
 
 const planePathEnabled = ref(false);
@@ -291,10 +393,20 @@ function onMarkerClick(payload) {
 function onMarkerMove(p) {
   if (activePopup.value) activePopup.value.screen = { x: p.x, y: p.y };
 }
+
+/** iframe 子页经 bridge 回流：只更新浮层，不触发 refresh / push / 重载 */
+function onCompareBridgeMarkerClick(p) {
+  if (!isCompare.value) return;
+  activePopup.value = { meta: p.meta, screen: p.screen };
+}
+function onCompareBridgeMarkerMove(p) {
+  if (!isCompare.value) return;
+  if (activePopup.value) activePopup.value.screen = { x: p.x, y: p.y };
+}
 function closePopup() {
   activePopup.value = null;
   vpSingle.value?.clearActiveMarker?.();
-  vpCompare.value?.clearActiveMarker?.();
+  if (isCompare.value) compareBridgeRef.value?.clearActiveMarkerBoth?.();
 }
 function onPlaneBillboardClick() {
   showAirbornePopup.value = true;
@@ -334,6 +446,158 @@ const flightPath = buildFlightPathFromRunways(startRunway, endRunway, { cruiseAl
 
 const ROUTE_ENTITY_ID = 'flightRouteXA_BJDX';
 const pathPointsForViewer = flightPath;
+
+/** 与 StaticHome phaseIndexMap.cruise 一致：约 55% 航路点索引 → 归一化为弧长进度 */
+const CRUISE_PATH_PROGRESS = Math.min(
+  0.95,
+  pathPointsForViewer.length > 1
+    ? Math.floor(pathPointsForViewer.length * 0.55) / (pathPointsForViewer.length - 1)
+    : 0.55
+);
+
+const FLIGHT_ANIM_MS = (60000 * 5) / 2; // 与 StaticHome togglePlaneMove 同量级
+
+function buildIframeScenarioPayload(side) {
+  return {
+    side,
+    scenarioKey: activeScenario.value,
+    timelineMax: timelineMax.value,
+    pathPoints: clonePathPointsForCompareSync(),
+    cruisePathProgress: CRUISE_PATH_PROGRESS,
+    flightAnimMs: FLIGHT_ANIM_MS,
+    narrativeT0: 10,
+    parentControlsNarrative: true,
+    steps: (steps.value || []).map((s) => ({
+      t_yes: Number(s.t_yes ?? 0),
+      t_no: Number(s.t_no ?? 0),
+      activeRelations_yes: Array.isArray(s.activeRelations_yes) ? [...s.activeRelations_yes] : [],
+      activeRelations_no: Array.isArray(s.activeRelations_no) ? [...s.activeRelations_no] : []
+    })),
+    modelUrl: boeingModelUrl,
+    unitsUrl: engineFailureUnitsUrl,
+    linksUrl: dynamicLinksUrl,
+    depAirportLabel,
+    arrAirportLabel
+  };
+}
+
+let lastCompareInitPushKey = '';
+let pushLoadScenarioToIframesCount = 0;
+let onReadyHitCount = 0;
+
+/**
+ * 显式推送 LOAD_SCENARIO；onReady 去重仅当 fromReady:true 且 frame 对与场景键未变。
+ * 双 iframe 静态子页（public/yxz/dual-iframe-poc）MVP 仅消费 timelineMax 等字段，不加载业务 JSON 模型。
+ */
+function pushLoadScenarioToIframes(opts = {}) {
+  const fromReady = !!opts.fromReady;
+  const b = compareBridgeRef.value;
+  if (!b || !isCompare.value) return;
+  const l = b.getFrameId?.('left') ?? '';
+  const r = b.getFrameId?.('right') ?? '';
+  const key = `${l}|${r}|${activeScenario.value}`;
+  if (fromReady && key && key === lastCompareInitPushKey) {
+    console.log('[DynamicFlowCompare]', 'skip duplicate init', key);
+    return;
+  }
+  pushLoadScenarioToIframesCount += 1;
+  console.log('[DynamicFlowCompare]', 'pushLoadScenarioToIframes', {
+    n: pushLoadScenarioToIframesCount,
+    key,
+    fromReady
+  });
+  lastCompareInitPushKey = key;
+  b.loadScenarioBoth(buildIframeScenarioPayload('left'), buildIframeScenarioPayload('right'));
+  console.log('[compare-obs]', b.getObservationSnapshot?.());
+}
+
+function clearCompareGlobalNarrativeState() {
+  narrativeBusyLeft.value = false;
+  narrativeBusyRight.value = false;
+  globalNarrativeRunning.value = false;
+  globalNarrativePendingLeft.value = false;
+  globalNarrativePendingRight.value = false;
+  globalNarrativeStepIndexLeft.value = null;
+  globalNarrativeStepIndexRight.value = null;
+  globalNarrativeRoundDemoT.value = null;
+  firedMarkStepIndexYes.value = new Set();
+  firedMarkStepIndexNo.value = new Set();
+  compareGlobalDisplayT.value = Math.max(tYes.value, tNo.value, 0);
+}
+
+function onNarrativeDoneFromChild(p) {
+  const side = p.side;
+  const stepIdx = Number(p.stepIndex);
+  if (!globalNarrativeRunning.value || !Number.isFinite(stepIdx)) return;
+  if (side === 'left') {
+    if (globalNarrativePendingLeft.value) {
+      globalNarrativePendingLeft.value = false;
+      const sy = new Set(firedMarkStepIndexYes.value);
+      sy.add(stepIdx);
+      firedMarkStepIndexYes.value = sy;
+    }
+  } else if (side === 'right') {
+    if (globalNarrativePendingRight.value) {
+      globalNarrativePendingRight.value = false;
+      const sn = new Set(firedMarkStepIndexNo.value);
+      sn.add(stepIdx);
+      firedMarkStepIndexNo.value = sn;
+    }
+  }
+  if (!globalNarrativePendingLeft.value && !globalNarrativePendingRight.value) {
+    globalNarrativeRunning.value = false;
+    globalNarrativeStepIndexLeft.value = null;
+    globalNarrativeStepIndexRight.value = null;
+    globalNarrativeRoundDemoT.value = null;
+    compareGlobalDisplayT.value = Math.max(tYes.value, tNo.value, 0);
+    compareBridgeRef.value?.playBoth?.({ parentControlsNarrative: true });
+  }
+}
+
+const compareBridgeRef = shallowRef(
+  createCompareFrameBridge({
+    onReady() {
+      onReadyHitCount += 1;
+      const b = compareBridgeRef.value;
+      const l = b?.getFrameId?.('left') ?? '';
+      const r = b?.getFrameId?.('right') ?? '';
+      const key = `${l}|${r}|${activeScenario.value}`;
+      console.log('[DynamicFlowCompare]', 'onReady', {
+        hit: onReadyHitCount,
+        bothReady: b?.isBothReady?.(),
+        key
+      });
+      if (!b?.isBothReady?.()) return;
+      pushLoadScenarioToIframes({ fromReady: true });
+    },
+    onSideState(p) {
+      if (p.side === 'left') {
+        tYes.value = Number(p.timelineT) || 0;
+        planeProgressLeft.value = Number(p.pathProgress) || 0;
+        playingLeft.value = !!p.playing;
+        narrativeBusyLeft.value = !!p.narrativeBusy;
+      } else if (p.side === 'right') {
+        tNo.value = Number(p.timelineT) || 0;
+        planeProgressRight.value = Number(p.pathProgress) || 0;
+        playingRight.value = !!p.playing;
+        narrativeBusyRight.value = !!p.narrativeBusy;
+      }
+      if (isCompare.value && playbackMode.value === 'global') {
+        if (globalNarrativeRunning.value && globalNarrativeRoundDemoT.value != null) {
+          compareGlobalDisplayT.value = globalNarrativeRoundDemoT.value;
+        } else {
+          compareGlobalDisplayT.value = Math.max(tYes.value, tNo.value);
+        }
+      }
+      updateCompareMarkers();
+      maybeStartGlobalNarrativeRound();
+    },
+    onNarrativeDone: onNarrativeDoneFromChild,
+    onMarkerClick: onCompareBridgeMarkerClick,
+    onMarkerMove: onCompareBridgeMarkerMove
+  })
+);
+compareBridgeRef.value.setPushLoadScenarioCountGetter(() => pushLoadScenarioToIframesCount);
 
 const startClock = (viewer, start, stop) => {
   viewer.clock.startTime = start;
@@ -449,12 +713,11 @@ const applyPlanePathToVp = (vp, unsubRefSetter) => {
 };
 
 const _unsub1 = { current: null };
-const _unsub2 = { current: null };
 
 const togglePlanePath = () => {
   planePathEnabled.value = !planePathEnabled.value;
   applyPlanePathToVp(vpSingle.value, _unsub1);
-  applyPlanePathToVp(vpCompare.value, _unsub2);
+  if (isCompare.value) pushLoadScenarioToIframes();
 };
 
 // 全局渲染驱动：单屏/双屏都持续刷新航线流动纹理
@@ -465,12 +728,8 @@ const startRouteRenderLoop = () => {
 
   const loop = () => {
     const v1 = vpSingle.value?.getViewer?.();
-    const v2 = vpCompare.value?.getViewer?.();
     if (v1 && v1.entities?.getById?.(ROUTE_ENTITY_ID)) {
       v1.scene?.requestRender?.();
-    }
-    if (v2 && v2.entities?.getById?.(ROUTE_ENTITY_ID)) {
-      v2.scene?.requestRender?.();
     }
     requestAnimationFrame(loop);
   };
@@ -498,16 +757,6 @@ const bindVpSingle = (el) => {
     if (planePathEnabled.value) applyPlanePathToVp(el, _unsub1);
   });
 };
-
-const bindVpCompare = (el) => {
-  if (vpCompare.value === el) return;
-  vpCompare.value = el;
-  whenViewerReady(el, (viewer) => {
-    drawFlightRoute(viewer);
-    startRouteRenderLoop();
-    if (planePathEnabled.value) applyPlanePathToVp(el, _unsub2);
-  });
-};
 const compareMarkersEl = ref(null);
 const stepListEl = ref(null);
 const onStepListReady = (el) => {
@@ -523,6 +772,12 @@ const scenarios = [
 ];
 
 const isCompare = ref(false);
+
+const pathProgressForViewerStage = computed(() => {
+  if (!isCompare.value) return planeProgress.value;
+  return planeProgressLeft.value;
+});
+
 // 以下与静态架构页完全一致：仅接收 plane-screen-info 刷新 popup，与沿线运动无耦合
 const planeScreenInfo = ref(null);
 const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
@@ -554,6 +809,35 @@ const planeEnvText = computed(() => {
 });
 
 const timelineMax = ref(100);
+/** 与 iframe scene.js narrativeT0 对齐：语义时间轴「T+0」对应 demo 时间起点 */
+const compareNarrativeBaseT = 10;
+/** 语义秒 → demo 秒压缩比（与 scene.js SEMANTIC_TIME_COMPRESS 一致）；只调此项可整体快慢联动 */
+const SEMANTIC_TIME_COMPRESS = 10;
+
+/** raw：叙事基准后的语义秒（与 steps / scenarioNodes 中 t 一致）→ demo 时间（父页时间轴 scrub / iframe 共用） */
+function semanticToDemoT(rawSemanticAfterBase) {
+  return compareNarrativeBaseT + Number(rawSemanticAfterBase) / SEMANTIC_TIME_COMPRESS;
+}
+/** demo 时间 → 叙事基准后的语义秒（用于节点判断、与 rawT 比较） */
+function demoToSemanticAfterBase(demoT) {
+  return Math.max(0, (Number(demoT) - compareNarrativeBaseT) * SEMANTIC_TIME_COMPRESS);
+}
+
+/** compare 主时钟/浮标用的「语义绝对时间」：≤base 仍为 demo；>base 则还原为 10+语义展开 */
+function toCompareSemanticAbsT(demoT) {
+  const d = Number(demoT);
+  if (d <= compareNarrativeBaseT) return d;
+  return compareNarrativeBaseT + demoToSemanticAfterBase(d);
+}
+
+function marksWithActive(sideMarks, demoT) {
+  const cur = toCompareSemanticAbsT(demoT);
+  let last = -1;
+  for (let i = 0; i < sideMarks.length; i++) {
+    if (sideMarks[i].semanticAbsT <= cur + 1e-6) last = i;
+  }
+  return sideMarks.map((m, i) => ({ ...m, active: i === last && last >= 0 }));
+}
 const t = ref(0);
 const lastNodeIdNo = ref(-1);
 const lastNodeIdYes = ref(-1);
@@ -613,7 +897,7 @@ const firedAlerts = reactive(new Set());
 
 const currentScenarioName = computed(() => scenarios.find((s) => s.key === activeScenario.value)?.name || '单发失效');
 
-const currentTimeLabel = computed(() => t.value.toFixed(1));
+const currentTimeLabel = computed(() => `T+ ${t.value.toFixed(1)}`);
 
 const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
 
@@ -624,7 +908,8 @@ function getCurrentNodeIndexByTime(time, side) {
   let idx = 0;
   for (let i = 0; i < arr.length; i++) {
     const ti = Number(arr[i][key] ?? 0);
-    if (time >= ti) idx = i;
+    const threshold = isCompare.value ? compareNarrativeBaseT + ti : ti;
+    if (time >= threshold) idx = i;
   }
   return idx;
 }
@@ -634,8 +919,12 @@ function getCurrentNodeByTime(time, side) {
   return steps.value[idx];
 }
 
-const idxNo = computed(() => getCurrentNodeIndexByTime(t.value, 'no'));
-const idxYes = computed(() => getCurrentNodeIndexByTime(t.value, 'yes'));
+const idxNo = computed(() =>
+  getCurrentNodeIndexByTime(isCompare.value ? tNo.value : t.value, 'no')
+);
+const idxYes = computed(() =>
+  getCurrentNodeIndexByTime(isCompare.value ? tYes.value : t.value, 'yes')
+);
 
 const getCompareMeta = (scenarioKey, nodeId) => {
   const node = steps.value.find((s) => s.nodeId === nodeId) || steps.value[nodeId];
@@ -658,16 +947,14 @@ const getCompareMeta = (scenarioKey, nodeId) => {
   };
 };
 
-const currentCardNo = computed(() => toSideCard(steps.value[getCurrentNodeIndexByTime(t.value, 'no')], 'no'));
-const currentCardYes = computed(() => toSideCard(steps.value[getCurrentNodeIndexByTime(t.value, 'yes')], 'yes'));
+const currentCardNo = computed(() => toSideCard(steps.value[idxNo.value], 'no'));
+const currentCardYes = computed(() => toSideCard(steps.value[idxYes.value], 'yes'));
 const currentCard = computed(() => currentCardYes.value || fallbackCard('yes'));
 const currentCompareMeta = computed(() => getCompareMeta(activeScenario.value, currentCardYes.value?.nodeId ?? 0));
 
 const keyframeMarks = computed(() => {
   const nodes = scenarioNodes.value || [];
-
-  const YES_ALLOWED = new Set(['0.0', '0.3', '10.3', '40.3']);
-  const NO_ALLOWED = new Set([0, 60, 180, 600, 1800]);
+  const arr = steps.value || [];
 
   const yesTimes = Array.from(
     new Set(
@@ -677,7 +964,6 @@ const keyframeMarks = computed(() => {
         .map((v) => Number(v))
         .filter((v) => Number.isFinite(v))
         .map((v) => v.toFixed(1))
-        .filter((s) => YES_ALLOWED.has(s))
     )
   )
     .map((s) => Number(s))
@@ -690,25 +976,197 @@ const keyframeMarks = computed(() => {
         .filter((v) => v != null)
         .map((v) => Number(v))
         .filter((v) => Number.isFinite(v))
-        .filter((v) => NO_ALLOWED.has(v))
     )
   ).sort((a, b) => a - b);
 
-  const yesMarks = yesTimes.map((t) => ({
-    side: 'yes',
-    t,
-    label: `T+${t.toFixed(1)}s`,
-    title: `T+${t.toFixed(1)}s`
-  }));
+  const base = compareNarrativeBaseT;
 
-  const noMarks = noTimes.map((t) => ({
-    side: 'no',
-    t,
-    label: t === 0 ? 'T+0.0s' : `T+${(t / 60).toFixed(1)}min`,
-    title: t === 0 ? 'T+0.0s' : `T+${t.toFixed(1)}s`
-  }));
+  function iframeStepIndexForSideRawT(side, rawT) {
+    const key = side === 'yes' ? 't_yes' : 't_no';
+    const order = arr.map((_, i) => i).sort((a, b) => Number(arr[a][key]) - Number(arr[b][key]));
+    for (let k = 0; k < order.length; k++) {
+      if (Math.abs(Number(arr[order[k]][key]) - rawT) < 1e-6) return k;
+    }
+    return -1;
+  }
+
+  const yesMarks = yesTimes.map((rawT) => {
+    const semanticAbsT = base + rawT;
+    const demoT = semanticToDemoT(rawT);
+    const nodeIndex = nodes.findIndex(
+      (n) => n?.yes?.t != null && Math.abs(Number(n.yes.t) - rawT) < 1e-6
+    );
+    return {
+      side: 'yes',
+      rawT,
+      t: demoT,
+      semanticAbsT,
+      stepIndex: iframeStepIndexForSideRawT('yes', rawT),
+      nodeIndex,
+      label: `10+${rawT.toFixed(1)}s`,
+      title: `10+${rawT.toFixed(1)}s`
+    };
+  });
+
+  const noMarks = noTimes.map((rawT) => {
+    const semanticAbsT = base + rawT;
+    const demoT = semanticToDemoT(rawT);
+    const nodeIndex = nodes.findIndex(
+      (n) => n?.no?.t != null && Math.abs(Number(n.no.t) - rawT) < 1e-6
+    );
+    return {
+      side: 'no',
+      rawT,
+      t: demoT,
+      semanticAbsT,
+      stepIndex: iframeStepIndexForSideRawT('no', rawT),
+      nodeIndex,
+      label: `10+${rawT.toFixed(1)}s`,
+      title: `10+${rawT.toFixed(1)}s`
+    };
+  });
 
   return [...yesMarks, ...noMarks];
+});
+
+/** 每侧按 semanticAbsT 排序后的第一个尚未 fired 的 mark（stepIndex 与 iframe scenarioStepRows 排序一致） */
+function peekNextUnfiredMark(side) {
+  const list = (keyframeMarks.value || [])
+    .filter((m) => m.side === (side === 'yes' ? 'yes' : 'no'))
+    .slice()
+    .sort((a, b) => a.semanticAbsT - b.semanticAbsT);
+  const fired = side === 'yes' ? firedMarkStepIndexYes.value : firedMarkStepIndexNo.value;
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    if (m.stepIndex < 0 || fired.has(m.stepIndex)) continue;
+    return m;
+  }
+  return null;
+}
+
+function maybeStartGlobalNarrativeRound() {
+  if (!isCompare.value || playbackMode.value !== 'global' || !playingGlobal.value || globalNarrativeRunning.value)
+    return;
+  const b = compareBridgeRef.value;
+  if (!b) return;
+
+  const leftNext = peekNextUnfiredMark('yes');
+  const rightNext = peekNextUnfiredMark('no');
+  const eps = 1e-6;
+  const maxT = Math.max(tYes.value, tNo.value);
+  const minT = Math.min(tYes.value, tNo.value);
+
+  if (!leftNext && !rightNext) return;
+
+  if (
+    leftNext &&
+    rightNext &&
+    Math.abs(leftNext.semanticAbsT - rightNext.semanticAbsT) <= eps &&
+    maxT >= Math.min(leftNext.t, rightNext.t) - eps
+  ) {
+    globalNarrativeRunning.value = true;
+    globalNarrativePendingLeft.value = true;
+    globalNarrativePendingRight.value = true;
+    globalNarrativeStepIndexLeft.value = leftNext.stepIndex;
+    globalNarrativeStepIndexRight.value = rightNext.stepIndex;
+    globalNarrativeRoundDemoT.value = Math.max(leftNext.t, rightNext.t);
+    compareGlobalDisplayT.value = globalNarrativeRoundDemoT.value;
+    b.pauseBoth();
+    b.scrub('left', leftNext.t, { silent: true });
+    b.scrub('right', rightNext.t, { silent: true });
+    b.runNarrativeBoth(
+      { stepIndex: leftNext.stepIndex, t: leftNext.t },
+      { stepIndex: rightNext.stepIndex, t: rightNext.t }
+    );
+    return;
+  }
+
+  if (
+    leftNext &&
+    (!rightNext || rightNext.semanticAbsT > leftNext.semanticAbsT + eps) &&
+    leftNext.t <= minT + eps
+  ) {
+    globalNarrativeRunning.value = true;
+    globalNarrativePendingLeft.value = true;
+    globalNarrativePendingRight.value = false;
+    globalNarrativeStepIndexLeft.value = leftNext.stepIndex;
+    globalNarrativeStepIndexRight.value = null;
+    globalNarrativeRoundDemoT.value = leftNext.t;
+    compareGlobalDisplayT.value = globalNarrativeRoundDemoT.value;
+    b.pauseBoth();
+    b.scrub('left', leftNext.t, { silent: true });
+    b.runNarrative('left', { stepIndex: leftNext.stepIndex, t: leftNext.t });
+    return;
+  }
+
+  if (
+    rightNext &&
+    (!leftNext || leftNext.semanticAbsT > rightNext.semanticAbsT + eps) &&
+    rightNext.t <= minT + eps
+  ) {
+    globalNarrativeRunning.value = true;
+    globalNarrativePendingRight.value = true;
+    globalNarrativePendingLeft.value = false;
+    globalNarrativeStepIndexRight.value = rightNext.stepIndex;
+    globalNarrativeStepIndexLeft.value = null;
+    globalNarrativeRoundDemoT.value = rightNext.t;
+    compareGlobalDisplayT.value = globalNarrativeRoundDemoT.value;
+    b.pauseBoth();
+    b.scrub('right', rightNext.t, { silent: true });
+    b.runNarrative('right', { stepIndex: rightNext.stepIndex, t: rightNext.t });
+    return;
+  }
+
+  if (leftNext && rightNext && leftNext.semanticAbsT < rightNext.semanticAbsT - eps && maxT >= leftNext.t - eps) {
+    globalNarrativeRunning.value = true;
+    globalNarrativePendingLeft.value = true;
+    globalNarrativePendingRight.value = false;
+    globalNarrativeStepIndexLeft.value = leftNext.stepIndex;
+    globalNarrativeStepIndexRight.value = null;
+    globalNarrativeRoundDemoT.value = leftNext.t;
+    compareGlobalDisplayT.value = globalNarrativeRoundDemoT.value;
+    b.pauseBoth();
+    b.scrub('left', leftNext.t, { silent: true });
+    b.runNarrative('left', { stepIndex: leftNext.stepIndex, t: leftNext.t });
+    return;
+  }
+
+  if (leftNext && rightNext && rightNext.semanticAbsT < leftNext.semanticAbsT - eps && maxT >= rightNext.t - eps) {
+    globalNarrativeRunning.value = true;
+    globalNarrativePendingRight.value = true;
+    globalNarrativePendingLeft.value = false;
+    globalNarrativeStepIndexRight.value = rightNext.stepIndex;
+    globalNarrativeStepIndexLeft.value = null;
+    globalNarrativeRoundDemoT.value = rightNext.t;
+    compareGlobalDisplayT.value = globalNarrativeRoundDemoT.value;
+    b.pauseBoth();
+    b.scrub('right', rightNext.t, { silent: true });
+    b.runNarrative('right', { stepIndex: rightNext.stepIndex, t: rightNext.t });
+  }
+}
+
+const keyframeMarksYes = computed(() => {
+  const demo =
+    isCompare.value && playbackMode.value === 'global' ? compareGlobalDisplayT.value : tYes.value;
+  return marksWithActive((keyframeMarks.value || []).filter((m) => m.side === 'yes'), demo);
+});
+const keyframeMarksNo = computed(() => {
+  const demo =
+    isCompare.value && playbackMode.value === 'global' ? compareGlobalDisplayT.value : tNo.value;
+  return marksWithActive((keyframeMarks.value || []).filter((m) => m.side === 'no'), demo);
+});
+
+const currentTimeLabelYes = computed(() => {
+  if (isCompare.value && playbackMode.value === 'global') {
+    return `T:${toCompareSemanticAbsT(compareGlobalDisplayT.value).toFixed(1)}s`;
+  }
+  return `T:${toCompareSemanticAbsT(tYes.value).toFixed(1)}s`;
+});
+const currentTimeLabelNo = computed(() => {
+  if (isCompare.value && playbackMode.value === 'global') {
+    return `T:${toCompareSemanticAbsT(compareGlobalDisplayT.value).toFixed(1)}s`;
+  }
+  return `T:${toCompareSemanticAbsT(tNo.value).toFixed(1)}s`;
 });
 
 const toSideCard = (step, side = 'yes') => {
@@ -755,26 +1213,23 @@ const toSideCard = (step, side = 'yes') => {
 
 const fallbackCard = (side = 'yes') => toSideCard(null, side);
 
-const updateCompareMarkersAt = (time) => {
+const updateCompareMarkers = () => {
   if (!isCompare.value) return;
   const rangeMax = timelineMax.value;
   if (rangeMax <= 0) return;
-  const currentNode = getCurrentNodeByTime(time, 'yes');
-  const nodeId = currentNode?.nodeId ?? 0;
-  const meta = getCompareMeta(activeScenario.value, nodeId);
-  const posNo = clamp((meta.t_no / rangeMax) * 100, 0, 100);
-  const posYes = clamp((meta.t_yes / rangeMax) * 100, 0, 100);
+  const posNo = clamp((tNo.value / rangeMax) * 100, 0, 100);
+  const posYes = clamp((tYes.value / rangeMax) * 100, 0, 100);
   markerNoLeft.value = posNo;
   markerYesLeft.value = posYes;
   markerNoAlign.value = posNo < 8 ? 'left' : posNo > 92 ? 'right' : 'center';
   markerYesAlign.value = posYes < 8 ? 'left' : posYes > 92 ? 'right' : 'center';
-  markerNoTitle.value = `无云匣子侧：T+${meta.t_no}s`;
-  markerYesTitle.value = `有云匣子侧：T+${meta.t_yes}s`;
-  markerNoLabel.value = `T_no: ${meta.t_no}s`;
-  markerYesLabel.value = `T_yes: ${meta.t_yes}s`;
+  const sNo = toCompareSemanticAbsT(tNo.value);
+  const sYes = toCompareSemanticAbsT(tYes.value);
+  markerNoTitle.value = `无云匣子侧：T:${sNo.toFixed(1)}s`;
+  markerYesTitle.value = `有云匣子侧：T:${sYes.toFixed(1)}s`;
+  markerNoLabel.value = `T:${sNo.toFixed(1)}s`;
+  markerYesLabel.value = `T:${sYes.toFixed(1)}s`;
 };
-
-const updateCompareMarkers = () => updateCompareMarkersAt(t.value);
 
 const render = () => {
   const nodeYes = steps.value[idxYes.value];
@@ -831,18 +1286,174 @@ const autoScrollToCurrent = () => {
   }
 };
 
-const refreshAll = (time, fromUser = false) => {
+function shouldGateSceneInCompare() {
+  if (!isCompare.value) return false;
+  if (forceSceneUnlocked.value) return false;
+  if (playbackMode.value === 'idle') return false;
+  if (playbackMode.value === 'global') {
+    return (
+      playingGlobal.value &&
+      Math.min(planeProgressLeft.value, planeProgressRight.value) < CRUISE_PATH_PROGRESS
+    );
+  }
+  if (playbackMode.value === 'left') {
+    return playingLeft.value && planeProgressLeft.value < CRUISE_PATH_PROGRESS;
+  }
+  if (playbackMode.value === 'right') {
+    return playingRight.value && planeProgressRight.value < CRUISE_PATH_PROGRESS;
+  }
+  return false;
+}
+
+function stopAllCompareFlightAndScene() {
+  if (isCompare.value) compareBridgeRef.value?.pauseBoth?.();
+  playingGlobal.value = false;
+  playingLeft.value = false;
+  playingRight.value = false;
+  playbackMode.value = 'idle';
+  clearCompareGlobalNarrativeState();
+}
+
+/** 全局播放：iframe 双机同飞（沿线与叙事由 scene.js） */
+function startGlobalPlayback() {
+  if (!isCompare.value) return;
+  forceSceneUnlocked.value = false;
+  clearCompareGlobalNarrativeState();
+  compareBridgeRef.value?.pauseBoth?.();
+  playingGlobal.value = true;
+  playbackMode.value = 'global';
+  compareBridgeRef.value?.playBoth?.({ fromStart: true, parentControlsNarrative: true });
+}
+
+/** 单侧播放：对侧复位后本侧从头播 */
+function startSidePlayback(side) {
+  if (!isCompare.value) return;
+  forceSceneUnlocked.value = false;
+  clearCompareGlobalNarrativeState();
+  compareBridgeRef.value?.pauseBoth?.();
+  if (side === 'left') {
+    compareBridgeRef.value?.reset('right');
+    compareBridgeRef.value?.play('left', { fromStart: true, parentControlsNarrative: false });
+    playbackMode.value = 'left';
+  } else {
+    compareBridgeRef.value?.reset('left');
+    compareBridgeRef.value?.play('right', { fromStart: true, parentControlsNarrative: false });
+    playbackMode.value = 'right';
+  }
+}
+
+function pauseGlobalPlayback() {
+  if (!isCompare.value) return;
+  compareBridgeRef.value?.pauseBoth?.();
+  playingGlobal.value = false;
+  playbackMode.value = 'idle';
+  clearCompareGlobalNarrativeState();
+}
+
+function pauseLeftPlayback() {
+  compareBridgeRef.value?.pause('left');
+}
+
+function pauseRightPlayback() {
+  compareBridgeRef.value?.pause('right');
+}
+
+function resetCompareAll() {
+  forceSceneUnlocked.value = false;
+  stopAllCompareFlightAndScene();
+  playbackMode.value = 'idle';
+  tYes.value = 0;
+  tNo.value = 0;
+  planeProgressLeft.value = 0;
+  planeProgressRight.value = 0;
+  lastNodeIdNo.value = -1;
+  lastNodeIdYes.value = -1;
+  if (isCompare.value) compareBridgeRef.value?.resetBoth?.();
+  refreshAll(true);
+}
+
+function toggleGlobalComparePlay() {
+  if (!isCompare.value) return;
+  if (playingGlobal.value) {
+    pauseGlobalPlayback();
+    return;
+  }
+  startGlobalPlayback();
+}
+
+function toggleCompareSidePlay(side) {
+  if (!isCompare.value) return;
+  if (side === 'left') {
+    if (playingLeft.value && playbackMode.value === 'left') {
+      pauseLeftPlayback();
+      return;
+    }
+    startSidePlayback('left');
+  } else {
+    if (playingRight.value && playbackMode.value === 'right') {
+      pauseRightPlayback();
+      return;
+    }
+    startSidePlayback('right');
+  }
+}
+
+function onScrubCompareYes(val) {
+  if (!isCompare.value) return;
+  forceSceneUnlocked.value = true;
+  const max = timelineMax.value;
+  tYes.value = clamp(Number(val) ?? 0, 0, max);
+  refreshAll(false);
+  compareBridgeRef.value?.scrub('left', tYes.value);
+}
+
+function onScrubCompareNo(val) {
+  if (!isCompare.value) return;
+  forceSceneUnlocked.value = true;
+  const max = timelineMax.value;
+  tNo.value = clamp(Number(val) ?? 0, 0, max);
+  refreshAll(false);
+  compareBridgeRef.value?.scrub('right', tNo.value);
+}
+
+function resetCompareSide(side) {
+  if (!isCompare.value) return;
+  forceSceneUnlocked.value = true;
+  clearCompareGlobalNarrativeState();
+  compareBridgeRef.value?.reset(side === 'left' ? 'left' : 'right');
+  if (side === 'left') {
+    tYes.value = 0;
+    planeProgressLeft.value = 0;
+    lastNodeIdYes.value = -1;
+  } else {
+    tNo.value = 0;
+    planeProgressRight.value = 0;
+    lastNodeIdNo.value = -1;
+  }
+  refreshAll(true);
+}
+
+const refreshAll = (fromUser = false) => {
   render();
-  const curIdxNo = getCurrentNodeIndexByTime(time, 'no');
-  const curIdxYes = getCurrentNodeIndexByTime(time, 'yes');
+  const timeNo = isCompare.value ? tNo.value : t.value;
+  const timeYes = isCompare.value ? tYes.value : t.value;
+  const curIdxNo = getCurrentNodeIndexByTime(timeNo, 'no');
+  const curIdxYes = getCurrentNodeIndexByTime(timeYes, 'yes');
   const nodeNo = steps.value[curIdxNo];
   const nodeYes = steps.value[curIdxYes];
+
+  const gateScene = shouldGateSceneInCompare();
 
   if (!isCompare.value) {
     visibleRelationIdsLeft.value = nodeYes?.activeRelations_yes ?? [];
     visibleRelationIdsRight.value = [];
     visibleUnitClusterIdsLeft.value = ['DYN_YES'];
     visibleUnitClusterIdsRight.value = [];
+  } else if (gateScene) {
+    visibleRelationIdsLeft.value = [];
+    visibleRelationIdsRight.value = [];
+    visibleUnitClusterIdsLeft.value = ['DYN_YES'];
+    visibleUnitClusterIdsRight.value = ['DYN_NO'];
   } else {
     visibleRelationIdsLeft.value = nodeYes?.activeRelations_yes ?? [];
     visibleRelationIdsRight.value = nodeNo?.activeRelations_no ?? [];
@@ -891,6 +1502,7 @@ const stopTimer = () => {
 };
 
 const startTimer = () => {
+  if (isCompare.value) return;
   if (playTimer) return;
   playing.value = true;
   const step = 0.1;
@@ -901,26 +1513,28 @@ const startTimer = () => {
       return;
     }
     t.value = clamp(t.value + step, 0, max);
-    refreshAll(t.value, false);
+    refreshAll(false);
   }, 200);
 };
 
 const jumpTo = (targetT) => {
+  if (isCompare.value) return;
   const max = timelineMax.value;
   const nextT = clamp(Number(targetT) || 0, 0, max);
   if (playing.value) {
     stopTimer();
   }
   if (nextT === t.value) {
-    refreshAll(t.value, true);
+    refreshAll(true);
     return;
   }
   t.value = nextT;
-  refreshAll(nextT, true);
+  refreshAll(true);
   console.log('[jumpTo]', nextT);
 };
 
 const togglePlay = () => {
+  if (isCompare.value) return;
   if (playing.value) {
     stopTimer();
   } else {
@@ -930,33 +1544,33 @@ const togglePlay = () => {
 };
 
 const onReset = () => {
+  if (isCompare.value) return;
   stopTimer();
   t.value = 0;
   lastNodeIdNo.value = -1;
   lastNodeIdYes.value = -1;
   lastNodeIdSingle.value = -1;
-  refreshAll(t.value, true);
+  refreshAll(true);
   console.log('[DynamicFlow] reset');
 };
 
 const onScrub = (val) => {
+  if (isCompare.value) return;
   const max = timelineMax.value;
   const nextT = clamp(Number(val) ?? 0, 0, max);
-  updateCompareMarkersAt(nextT);
   t.value = nextT;
   if (scrubRaf) cancelAnimationFrame(scrubRaf);
   scrubRaf = requestAnimationFrame(() => {
-    refreshAll(nextT, false);
+    refreshAll(false);
   });
 };
 
-// 关键帧按钮仅更新 t（v-model），这里统一监听 t 变化并刷新链路/卡片
 watch(t, (newT, oldT) => {
+  if (isCompare.value) return;
   if (Number(newT) === Number(oldT)) return;
   const max = timelineMax.value;
-  const nextT = clamp(Number(newT) ?? 0, 0, max);
-  updateCompareMarkersAt(nextT);
-  refreshAll(nextT, false);
+  clamp(Number(newT) ?? 0, 0, max);
+  refreshAll(false);
 });
 
 const hideInfoBox = () => {
@@ -1108,13 +1722,21 @@ const loadScenario = async (key) => {
       };
     });
     disposalCards.value = buildDisposalCards(steps.value);
+    stopAllCompareFlightAndScene();
     t.value = 0;
-    planeProgress.value = 0.55;
+    tYes.value = 0;
+    tNo.value = 0;
+    planeProgress.value = 0;
+    planeProgressLeft.value = 0;
+    planeProgressRight.value = 0;
     lastNodeIdNo.value = -1;
     lastNodeIdYes.value = -1;
     lastNodeIdSingle.value = -1;
-    refreshAll(0, true);
+    refreshAll(true);
     selectedRelationId.value = steps.value[0]?.activeRelations_yes?.[0] ?? null;
+    nextTick(() => {
+      if (isCompare.value) pushLoadScenarioToIframes();
+    });
     console.log('[DynamicFlow] loadScenario', key);
   } catch (e) {
     console.warn('[DynamicFlow] loadScenario failed:', e);
@@ -1125,12 +1747,28 @@ const toggleCompare = () => {
   isCompare.value = !isCompare.value;
   if (isCompare.value) {
     hideInfoBox();
+    stopTimer();
+    stopAllCompareFlightAndScene();
+    tYes.value = 0;
+    tNo.value = 0;
+    planeProgressLeft.value = 0;
+    planeProgressRight.value = 0;
+    lastNodeIdNo.value = -1;
+    lastNodeIdYes.value = -1;
+    forceSceneUnlocked.value = false;
+  } else {
+    stopAllCompareFlightAndScene();
+    t.value = tYes.value;
+    planeProgress.value = planeProgressLeft.value;
   }
   nextTick(() => {
-    [vpSingle.value, vpCompare.value].forEach((v) => v?.resize?.());
-    [vpSingle.value, vpCompare.value].forEach((v) => v?.requestRender?.());
+    if (!isCompare.value) {
+      vpSingle.value?.resize?.();
+      vpSingle.value?.requestRender?.();
+    }
     updateCompareMarkers();
-    refreshAll(t.value);
+    refreshAll(false);
+    if (isCompare.value) pushLoadScenarioToIframes();
   });
   console.log('[DynamicFlow] compare', isCompare.value);
 };
@@ -1139,6 +1777,8 @@ loadScenario(activeScenario.value);
 
 onBeforeUnmount(() => {
   planeScreenInfo.value = null;
+  stopAllCompareFlightAndScene();
+  compareBridgeRef.value?.destroy?.();
 });
 </script>
 

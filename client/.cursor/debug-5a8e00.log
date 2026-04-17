@@ -1,0 +1,6 @@
+{"sessionId":"5a8e00","location":"ViewerStage.vue","message":"unmounting","data":{"hypothesisId":"B"},"timestamp":1776322464322}
+{"sessionId":"5a8e00","location":"CompareIframeStage.vue","message":"unmounting","data":{"leftFrameId":"left-1776321828777-h3raeekh","rightFrameId":"right-1776321828777-ifb6junc","hypothesisId":"B"},"timestamp":1776322464398}
+{"sessionId":"5a8e00","location":"CompareIframeStage.vue","message":"mounted","data":{"leftFrameId":"left-1776322464850-uurkdx0c","rightFrameId":"right-1776322464850-enq9pq2f","leftSrc":"http://localhost:5173/yxz/dynamic/compare-frame?side=left&frameId=left-1776322464850-uurkdx0c","rightSrc":"http://localhost:5173/yxz/dynamic/compare-frame?side=right&frameId=right-1776322464850-enq9pq2f","hypothesisId":"A-B"},"timestamp":1776322464961}
+{"sessionId":"5a8e00","location":"ViewerStage.vue","message":"mounted","data":{"hypothesisId":"B"},"timestamp":1776322465096}
+{"sessionId":"5a8e00","location":"CompareIframeStage.vue","message":"unmounting","data":{"leftFrameId":"left-1776322464850-uurkdx0c","rightFrameId":"right-1776322464850-enq9pq2f","hypothesisId":"B"},"timestamp":1776322465114}
+{"sessionId":"5a8e00","location":"ViewerStage.vue","message":"unmounting","data":{"hypothesisId":"B"},"timestamp":1776322465255}

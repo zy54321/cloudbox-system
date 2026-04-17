@@ -21,6 +21,8 @@
             :visible-relation-id="effectiveVisibleRelationId"
             :visible-relation-ids-left="effectiveIdsLeft"
             :visible-relation-ids-right="effectiveIdsRight"
+            :active-relation-ids="effectiveIdsLeft"
+            :active-unit-cluster-ids="effectiveActiveUnitClusterIds"
             :visible-unit-cluster-ids-left="visibleUnitClusterIdsLeft"
             :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
             @marker-click="$emit('marker-click', $event)"
@@ -30,35 +32,21 @@
           <slot name="single-overlays" />
         </div>
 
-        <div v-show="isCompare" class="cb-viewer-split">
-          <div class="cb-viewport cb-viewport--split-full">
-            <div class="cb-cesium-layer">
-              <CesiumViewport
-                :ref="vpCompareRef"
-                :split-mode="true"
-                :left-model-url="leftModelUrl"
-                :right-model-url="rightModelUrl"
-                :split-position="splitPosition"
-                :readonly="readonly"
-                :auto-focus="autoFocus"
-                :units-url="unitsUrl"
-                :links-url="linksUrl"
-                :path-points="pathPoints"
-                :path-progress="pathProgress"
-                :follow-path="followPath"
-                :dep-airport-label="depAirportLabel"
-                :arr-airport-label="arrAirportLabel"
-                :visible-relation-id="effectiveVisibleRelationId"
-                :visible-relation-ids-left="effectiveIdsLeft"
-                :visible-relation-ids-right="effectiveIdsRight"
-                :visible-unit-cluster-ids-left="visibleUnitClusterIdsLeft"
-                :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
-                @marker-click="$emit('marker-click', $event)"
-                @marker-move="$emit('marker-move', $event)"
-              />
+        <div v-show="isCompare" class="cb-viewer-split cb-viewer-split--iframe-absolute">
+          <div class="cb-viewport cb-viewport--split-full cb-viewport--iframe-split-host">
+            <!-- iframe 由 compareBridge 挂载；勿用 tYes/tNo/marker 等作 key，避免重载 -->
+            <CompareIframeStage v-if="compareBridge" :bridge="compareBridge">
+              <template #left-overlay>
+                <slot name="compare-left-overlay" />
+              </template>
+              <template #right-overlay>
+                <slot name="compare-right-overlay" />
+              </template>
+            </CompareIframeStage>
+            <div class="cb-compare-map-overlays">
+              <slot name="compare-map-overlays" />
             </div>
           </div>
-          <slot name="compare-overlays" />
         </div>
       </div>
     </div>
@@ -66,20 +54,20 @@
 </template>
 
 <script setup>
+/**
+ * 单屏：CesiumViewport。双屏：仅 CompareIframeStage（dual-iframe-poc/scene-*.html）；不再内嵌双视口 Cesium split。
+ */
 import { computed } from 'vue';
 import CesiumViewport from './CesiumViewport.vue';
+import CompareIframeStage from './CompareIframeStage.vue';
 
 const props = defineProps({
   isCompare: { type: Boolean, required: true },
+  compareBridge: { type: Object, default: null },
   bindVpSingle: { type: Function, required: true },
-  bindVpCompare: { type: Function, required: true },
   modelUrl: { type: String, default: '' },
   unitsUrl: { type: String, default: '' },
   linksUrl: { type: String, default: '' },
-  leftModelUrl: { type: String, default: '' },
-  rightModelUrl: { type: String, default: '' },
-  splitPosition: { type: Number, default: 0.5 },
-  readonly: { type: Boolean, default: false },
   autoFocus: { type: Boolean, default: true },
   pathPoints: { type: Array, default: null },
   pathProgress: { type: Number, default: 0 },
@@ -101,11 +89,14 @@ const effectiveIdsRight = computed(() =>
   props.visibleRelationId != null ? [] : (props.visibleRelationIdsRight || [])
 );
 const effectiveVisibleRelationId = computed(() => props.visibleRelationId);
+/** 单屏：簇可见性经 activeUnitClusterIds（合并左右 prop） */
+const effectiveActiveUnitClusterIds = computed(() => {
+  const L = props.visibleUnitClusterIdsLeft || [];
+  const R = props.visibleUnitClusterIdsRight || [];
+  return [...new Set([...L, ...R].map(String).filter(Boolean))];
+});
 
 const vpSingleRef = (el) => {
   if (typeof props.bindVpSingle === 'function') props.bindVpSingle(el);
-};
-const vpCompareRef = (el) => {
-  if (typeof props.bindVpCompare === 'function') props.bindVpCompare(el);
 };
 </script>

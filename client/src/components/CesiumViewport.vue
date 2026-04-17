@@ -66,12 +66,29 @@ const props = defineProps({
   /** 当前要显示的关联 id（来自 links.json relation.id），为 null 时所有链路隐藏；保留兼容：转为 Left */
   visibleRelationId: { type: String, default: null },
   skipRelationNodeFocus: { type: Boolean, default: false },
-  /** 左/右视口要显示的关联 id 列表（透传自 ViewerStage，双屏时使用） */
+  /** 左/右视口关联 id（透传自 ViewerStage；仅 splitMode=true 的 legacy 双视口使用，正式链路已冻结该入口） */
   visibleRelationIdsLeft: { type: Array, default: () => [] },
   visibleRelationIdsRight: { type: Array, default: () => [] },
   visibleUnitClusterIdsLeft: { type: Array, default: () => [] },
-  visibleUnitClusterIdsRight: { type: Array, default: () => [] }
+  visibleUnitClusterIdsRight: { type: Array, default: () => [] },
+  /**
+   * splitMode=false：iframe 子页（dual-iframe-poc scene.js）/ 单屏共用；本侧激活 relation.id。
+   * 非空时优先于 visibleRelationId / visibleRelationIdsLeft（legacy 单屏仍可走后者）。
+   */
+  activeRelationIds: { type: Array, default: () => [] },
+  /** splitMode=false：iframe 单侧 unit 簇（如 DYN_YES）；非空时优先于 *Left/Right */
+  activeUnitClusterIds: { type: Array, default: () => [] }
 });
+
+/**
+ * D3 候选清单（splitMode=true 专用；当前应用仅单屏 splitMode=false，以下仍为死代码保留）：
+ * - props：splitMode、leftModelUrl、rightModelUrl、splitPosition（及 split 相关的 visibleRelationIds* 消费路径）
+ * - 方法：updateUnitEntitiesVisibilitySplitLegacy、updateLinkVisibilitySplitMode；drawPlaneRelationLinks 在 split 下的侧别分支
+ * - 调用点：load 后 watch 内 `if (props.splitMode) updateUnitEntitiesVisibilitySplitLegacy()`、`updateLinkVisibilitySplitMode`；
+ *   syncRelationsFromActiveIds 的 `if (props.splitMode)` 早退；viewer.scene.splitPosition 与双模型加载分支（约 2639+）
+ * - watcher：`[props.splitMode, props.splitPosition]`、pathPoints+splitMode 等
+ * 本轮不删除，避免误伤单屏与静态页复用。
+ */
 
 const container = ref(null);
 const creditEl = ref(null);
@@ -333,7 +350,83 @@ const applyUnitSplitDirection = (entity, dir) => {
   if (entity.point) entity.point.splitDirection = dir;
 };
 
-const updateUnitEntitiesVisibility = () => {
+/**
+ * splitMode=false 时正式 relation.id：优先 props.activeRelationIds（ViewerStage 注入 iframe 子页 / 单屏）；
+ * 仅选单 id 的旧页（如 StaticHome）可只传 visibleRelationId，不读 visibleRelationIdsLeft/Right。
+ */
+const getFormalRelationIdsNonSplit = () => {
+  const a = (props.activeRelationIds || []).map(String).filter(Boolean);
+  if (a.length) return a;
+  if (props.visibleRelationId != null) return [String(props.visibleRelationId)];
+  return [];
+};
+
+/**
+ * iframe / 单屏主路径：簇可见性 + 与正式 relation 相关的 plane- 附件高亮；仅消费 activeUnitClusterIds + getFormalRelationIdsNonSplit。
+ */
+const syncUnitHighlightsFromActiveIds = () => {
+  if (!viewer?.entities) return;
+  const ac = props.activeUnitClusterIds || [];
+  const activeUnitOnly = ac.length > 0;
+  const singleClusterSet = activeUnitOnly ? new Set(ac.map(String).filter(Boolean)) : null;
+  const hasDynamicFilter = activeUnitOnly && singleClusterSet.size > 0;
+
+  const activeRelationPlaneUnitIds = new Set();
+  getFormalRelationIdsNonSplit().forEach((rid) => {
+    const relData = RELATION_UNIT_IDS.get(String(rid));
+    relData?.edges?.forEach(([fromId, toId]) => {
+      if (String(fromId || '').startsWith('plane-')) activeRelationPlaneUnitIds.add(String(fromId));
+      if (String(toId || '').startsWith('plane-')) activeRelationPlaneUnitIds.add(String(toId));
+    });
+  });
+
+  UNIT_ENTITY_IDS.forEach((id) => {
+    const e = viewer.entities.getById(id);
+    const clusterId = UNIT_ENTITY_CLUSTER.get(id);
+    if (!e) return;
+
+    if (!hasDynamicFilter) {
+      let visible = true;
+      if (clusterId === 'DEP_AIRPORT') visible = props.showClusterDepAirport;
+      else if (clusterId === 'ARR_AIRPORT') visible = props.showClusterArrAirport;
+      else if (clusterId === 'PLANE') visible = _planeAttachedMarkersVisible;
+      if (e.__meta?.isPlaneAttachedCube) {
+        const baseId = getEntityBaseUnitId(e, id);
+        visible = _planeAttachedMarkersVisible && (_staticAirborneDetailActive || activeRelationPlaneUnitIds.has(baseId));
+      }
+      e.show = visible;
+      applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+      return;
+    }
+
+    const cid = String(clusterId || '');
+    e.show = singleClusterSet.has(cid);
+    applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+  });
+
+  if (staticSpotlightActive) {
+    UNIT_ENTITY_IDS.forEach((id) => {
+      const e = viewer.entities.getById(id);
+      if (!e) return;
+      if (e.__meta?.isPlaneAttachedCube) {
+        const baseId = getEntityBaseUnitId(e, id);
+        e.show = staticSpotlightUnitIds.has(baseId);
+        applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+        return;
+      }
+      const baseId = getEntityBaseUnitId(e, id);
+      e.show = staticSpotlightUnitIds.has(baseId);
+      applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
+    });
+    if (modelEntity) modelEntity.show = staticSpotlightShowPlane;
+    if (billboardEntity) billboardEntity.show = staticSpotlightShowPlane;
+  }
+
+  viewer.scene.requestRender?.();
+};
+
+/** legacy splitMode=true 双视口（已冻结非正式入口）：消费 visibleUnitClusterIdsLeft/Right 与 visibleRelationId */
+const updateUnitEntitiesVisibilitySplitLegacy = () => {
   if (!viewer?.entities) return;
   const leftSet = new Set((props.visibleUnitClusterIdsLeft || []).map(String).filter(Boolean));
   const rightSet = new Set((props.visibleUnitClusterIdsRight || []).map(String).filter(Boolean));
@@ -369,13 +462,6 @@ const updateUnitEntitiesVisibility = () => {
     const cid = String(clusterId || '');
     const inLeft = leftSet.has(cid);
     const inRight = rightSet.has(cid);
-
-    if (!props.splitMode) {
-      e.show = inLeft;
-      applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
-      return;
-    }
-
     e.show = inLeft || inRight;
 
     let dir = Cesium.SplitDirection.NONE;
@@ -404,6 +490,12 @@ const updateUnitEntitiesVisibility = () => {
   }
 
   viewer.scene.requestRender?.();
+};
+
+const updateUnitEntitiesVisibility = () => {
+  if (!viewer?.entities) return;
+  if (props.splitMode) updateUnitEntitiesVisibilitySplitLegacy();
+  else syncUnitHighlightsFromActiveIds();
 };
 
 const roundedRect = (ctx, x, y, w, h, r) => {
@@ -643,44 +735,48 @@ const loadAndAddUnits = async () => {
   }
 };
 
-/** 根据 visibleRelationId / visibleRelationIdsLeft|Right 更新链路显示/隐藏与 splitDirection */
-const updateLinkVisibility = () => {
-  // 暂时关闭双屏模式链路绘制
-  // if (props.splitMode) return;
+/**
+ * 仅移除「含 plane」正式链路几何（linkTier formal-plane-dynamic），供 syncRelationsFromActiveIds 在重画前对齐集合；
+ * 不碰静态 links.json 载入的 formal-static 折线。
+ */
+/** @returns 移除的含 plane 动态链路实体数量 */
+const removeAllPlaneRelationLinkEntities = () => {
+  if (!RELATIONS_WITH_PLANE.size || !viewer?.entities) return 0;
+  const toRemove = [];
+  LINK_ENTITY_IDS.forEach((linkId) => {
+    const rid = LINK_ENTITY_RELATION_IDS.get(linkId);
+    if (rid && RELATIONS_WITH_PLANE.has(rid)) toRemove.push(linkId);
+  });
+  toRemove.forEach((linkId) => {
+    const e = viewer.entities.getById(linkId);
+    if (e) viewer.entities.remove(e);
+    LINK_ENTITY_IDS.delete(linkId);
+    LINK_ENTITY_RELATION_IDS.delete(linkId);
+    LINK_ENTITY_ENDPOINTS.delete(linkId);
+    LINK_ENTITY_SIDE.delete(linkId);
+  });
+  return toRemove.length;
+};
+
+/**
+ * legacy splitMode=true 双视口分屏（已冻结，非正式链路）。
+ * 消费 visibleRelationIdsLeft/Right；正式双屏 iframe（splitMode=false）不得进入此分支。
+ */
+const updateLinkVisibilitySplitMode = () => {
   if (!viewer?.entities) return;
   const leftArr = props.visibleRelationId != null ? [props.visibleRelationId] : (props.visibleRelationIdsLeft || []);
   const rightArr = props.visibleRelationIdsRight || [];
   const leftSet = new Set(leftArr.map(String).filter(Boolean));
   const rightSet = new Set(rightArr.map(String).filter(Boolean));
-  const splitMode = props.splitMode;
 
+  removeAllPlaneRelationLinkEntities();
   if (RELATIONS_WITH_PLANE.size) {
-    const toRemove = [];
-    LINK_ENTITY_IDS.forEach((linkId) => {
-      const rid = LINK_ENTITY_RELATION_IDS.get(linkId);
-      if (rid && RELATIONS_WITH_PLANE.has(rid)) toRemove.push(linkId);
+    leftSet.forEach((rid) => {
+      if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'left');
     });
-    toRemove.forEach((linkId) => {
-      const e = viewer.entities.getById(linkId);
-      if (e) viewer.entities.remove(e);
-      LINK_ENTITY_IDS.delete(linkId);
-      LINK_ENTITY_RELATION_IDS.delete(linkId);
-      LINK_ENTITY_ENDPOINTS.delete(linkId);
-      LINK_ENTITY_SIDE.delete(linkId);
+    rightSet.forEach((rid) => {
+      if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'right');
     });
-
-    if (!splitMode) {
-      leftSet.forEach((rid) => {
-        if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'none');
-      });
-    } else {
-      leftSet.forEach((rid) => {
-        if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'left');
-      });
-      rightSet.forEach((rid) => {
-        if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'right');
-      });
-    }
   }
 
   LINK_ENTITY_IDS.forEach((linkId) => {
@@ -694,31 +790,23 @@ const updateLinkVisibility = () => {
     let dir = Cesium.SplitDirection.NONE;
     let show = false;
 
-    if (!splitMode) {
-      // 单屏模式：以左侧 (有云匣子) 数据为准
-      show = leftSet.has(rid);
-      dir = Cesium.SplitDirection.NONE;
+    const inLeft = leftSet.has(rid);
+    const inRight = rightSet.has(rid);
+
+    if (side === 'left') {
+      show = inLeft;
+      dir = inLeft ? Cesium.SplitDirection.LEFT : Cesium.SplitDirection.NONE;
+    } else if (side === 'right') {
+      show = inRight;
+      dir = inRight ? Cesium.SplitDirection.RIGHT : Cesium.SplitDirection.NONE;
     } else {
-      // 双屏模式：精确判断归属
-      const inLeft = leftSet.has(rid);
-      const inRight = rightSet.has(rid);
-      
-      if (side === 'left') {
-        show = inLeft;
-        dir = inLeft ? Cesium.SplitDirection.LEFT : Cesium.SplitDirection.NONE;
-      } else if (side === 'right') {
-        show = inRight;
-        dir = inRight ? Cesium.SplitDirection.RIGHT : Cesium.SplitDirection.NONE;
-      } else {
-        show = inLeft || inRight;
-        // 如果左右同时包含这条链路，设为 NONE (全屏贯穿，Shader会自动左蓝右橙)
-        if (inLeft && inRight) {
-          dir = Cesium.SplitDirection.NONE;
-        } else if (inLeft) {
-          dir = Cesium.SplitDirection.LEFT;
-        } else if (inRight) {
-          dir = Cesium.SplitDirection.RIGHT;
-        }
+      show = inLeft || inRight;
+      if (inLeft && inRight) {
+        dir = Cesium.SplitDirection.NONE;
+      } else if (inLeft) {
+        dir = Cesium.SplitDirection.LEFT;
+      } else if (inRight) {
+        dir = Cesium.SplitDirection.RIGHT;
       }
     }
 
@@ -726,11 +814,8 @@ const updateLinkVisibility = () => {
     e.splitDirection = dir;
     if (e.polyline) e.polyline.splitDirection = dir;
 
-    // 【关键】：将计算好的方向传递给 Shader 的 splitDir 变量
     if (e.polyline && e.polyline.material && e.polyline.material.splitDir !== undefined) {
-      if (!splitMode) {
-        e.polyline.material.splitDir = 0.0;
-      } else if (dir === Cesium.SplitDirection.LEFT) {
+      if (dir === Cesium.SplitDirection.LEFT) {
         e.polyline.material.splitDir = -1.0;
       } else if (dir === Cesium.SplitDirection.RIGHT) {
         e.polyline.material.splitDir = 1.0;
@@ -747,6 +832,67 @@ const updateLinkVisibility = () => {
   if (anyShown) startFlowLoop();
   else stopFlowLoop();
   viewer.scene.requestRender();
+};
+
+/**
+ * iframe / 单屏主路径（splitMode=false）：正式链路来自 getFormalRelationIdsNonSplit()（activeRelationIds 优先）；
+ * 含 plane 的边在此重建几何，静态边仅切换 show。不读取 visibleRelationIdsLeft/Right。
+ */
+const syncRelationsFromActiveIds = () => {
+  if (!viewer?.entities) return;
+  const formalIds = getFormalRelationIdsNonSplit();
+  const activeSet = new Set(formalIds);
+  let relationsWithPlaneInActiveSet = 0;
+  activeSet.forEach((rid) => {
+    if (RELATIONS_WITH_PLANE.has(rid)) relationsWithPlaneInActiveSet += 1;
+  });
+
+  const removedPlaneLinkEntities = removeAllPlaneRelationLinkEntities();
+  if (RELATIONS_WITH_PLANE.size) {
+    activeSet.forEach((rid) => {
+      if (RELATIONS_WITH_PLANE.has(rid)) drawPlaneRelationLinks(rid, 'none');
+    });
+  }
+
+  LINK_ENTITY_IDS.forEach((linkId) => {
+    const e = viewer.entities.getById(linkId);
+    if (!e) return;
+    const relId = LINK_ENTITY_RELATION_IDS.get(linkId);
+    if (!relId) return;
+    const rid = String(relId);
+
+    const show = activeSet.has(rid);
+    const dir = Cesium.SplitDirection.NONE;
+
+    e.show = show;
+    e.splitDirection = dir;
+    if (e.polyline) e.polyline.splitDirection = dir;
+
+    if (e.polyline && e.polyline.material && e.polyline.material.splitDir !== undefined) {
+      e.polyline.material.splitDir = 0.0;
+    }
+  });
+  let anyShown = false;
+  LINK_ENTITY_IDS.forEach((linkId) => {
+    const e = viewer.entities.getById(linkId);
+    if (e?.show) anyShown = true;
+  });
+  if (anyShown) startFlowLoop();
+  else stopFlowLoop();
+  viewer.scene.requestRender();
+
+  console.debug('[compare-link-sync]', 'syncRelationsFromActiveIds', {
+    activeRelationIds: formalIds.slice(),
+    relationsWithPlaneInActiveSet,
+    removedPlaneLinkEntities,
+    anyShown
+  });
+};
+
+const updateLinkVisibility = () => {
+  if (!viewer?.entities) return;
+  if (props.splitMode) updateLinkVisibilitySplitMode();
+  else syncRelationsFromActiveIds();
 };
 
 /** 飞行聚焦到指定关联的链路范围（链路折点 + 父/子标点，并留足边距以看到完整内容） */
@@ -1010,7 +1156,7 @@ const focusRelationNode = async (nodeId, seq) => {
   await flashUnitBillboards([nodeId], 3);
 };
 
-const playRelationNodeFocusSequence = async (relationId) => {
+const playRelationNodeFocusSequence = async (relationId, opts = {}) => {
   if (!relationId) return;
   const seq = ++_relationFocusSeq;
   const order = getRelationNodeOrder(relationId);
@@ -1023,11 +1169,46 @@ const playRelationNodeFocusSequence = async (relationId) => {
     await waitMs(180);
   }
   if (seq !== _relationFocusSeq) return;
-  flyCameraToRelationCameraView(relationId);
+  if (!opts.skipFinalRelationCameraView) {
+    flyCameraToRelationCameraView(relationId);
+  }
+};
+
+/** 多条链路同一聚焦代际：按 relationIds 顺序，每条内按节点顺序（compare 子页阶段机用） */
+const playRelationIdsNodeFocusSequence = async (relationIds, opts = {}) => {
+  if (!Array.isArray(relationIds) || !relationIds.length) return;
+  const seq = ++_relationFocusSeq;
+  for (const relationId of relationIds) {
+    if (!relationId || seq !== _relationFocusSeq) return;
+    const order = getRelationNodeOrder(relationId);
+    for (const nodeId of order) {
+      if (seq !== _relationFocusSeq) return;
+      await focusRelationNode(nodeId, seq);
+      if (seq !== _relationFocusSeq) return;
+      await waitMs(180);
+    }
+  }
+  if (seq !== _relationFocusSeq) return;
+  if (!opts.skipFinalRelationCameraView && relationIds.length) {
+    const last = relationIds[relationIds.length - 1];
+    flyCameraToRelationCameraView(last);
+  }
+};
+
+const cancelRelationFocusSequence = () => {
+  _relationFocusSeq++;
+};
+
+/** 沿线/恢复巡航时跟随飞机；链路节点序列时由子页关闭 */
+const setPlaneCameraFollow = (enabled) => {
+  if (!viewer) return;
+  viewer.trackedEntity = enabled && modelEntity ? modelEntity : undefined;
+  viewer.scene?.requestRender?.();
 };
 
 /**
- * 移除某关联下的所有链路实体（用于「与飞机连接的」关联切换时先清再画）
+ * 按 relationId 删除所有匹配链路实体（粗暴）；仅保留给 legacy 与 load 重建等内部路径。
+ * 正式 iframe/单屏链路集合变更请走 syncRelationsFromActiveIds，避免与闪烁等临时效果误伤（若未来共用 entity）。
  */
 const removeLinkEntitiesForRelation = (relationId) => {
   const toRemove = [];
@@ -1046,7 +1227,8 @@ const removeLinkEntitiesForRelation = (relationId) => {
 };
 
 /**
- * 绘制「与飞机连接的」关联链路：按 edges 每条边 [from,to] 取坐标（plane 用变量），画完即静态。
+ * 内部：绘制「与飞机连接的」正式链路几何（Tier A：formal-plane-dynamic）。
+ * 仅供 viewport 内 syncRelationsFromActiveIds / legacy split 调用；外部页面勿直接调用。
  */
 const drawPlaneRelationLinks = (relationId, side = 'none') => {
   if (!viewer?.entities) return;
@@ -1061,7 +1243,7 @@ const drawPlaneRelationLinks = (relationId, side = 'none') => {
     const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
     const suffix = side === 'left' ? 'L' : side === 'right' ? 'R' : 'N';
     const linkId = `link-${relationId}-${fromId}-${toId}-${suffix}`;
-    viewer.entities.add({
+    const linkEnt = viewer.entities.add({
       id: linkId,
       show: true,
       polyline: {
@@ -1081,6 +1263,9 @@ const drawPlaneRelationLinks = (relationId, side = 'none') => {
             ? Cesium.SplitDirection.RIGHT
             : Cesium.SplitDirection.NONE
     });
+    try {
+      linkEnt.__meta = { ...(linkEnt.__meta || {}), linkTier: 'formal-plane-dynamic' };
+    } catch (_) {}
     LINK_ENTITY_IDS.add(linkId);
     LINK_ENTITY_RELATION_IDS.set(linkId, relationId);
     LINK_ENTITY_ENDPOINTS.set(linkId, { parentId: fromId, childId: toId });
@@ -1102,7 +1287,7 @@ const normalizeRelationEdges = (rel) => {
 
 /**
  * 加载并绘制链路。每条关联用 edges 表示多组 from→to（可多层级、多分支）；
- * 含「plane」的关联不在此画，等用户点击该关联时再 clear + drawPlaneRelationLinks。
+ * 含「plane」的关联不在此画，由 syncRelationsFromActiveIds / legacy split 内 drawPlaneRelationLinks 动态挂载。
  */
 const loadAndAddLinks = async () => {
   if (!viewer?.entities) return;
@@ -1152,7 +1337,7 @@ const loadAndAddLinks = async () => {
         const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
         const linkId = `link-${rel.id}-${fromId}-${toId}`;
         const material = getLinkMaterialByFlowLabel(rel.flowLabel);
-        viewer.entities.add({
+        const staticLinkEnt = viewer.entities.add({
           id: linkId,
           show: false,
           polyline: {
@@ -1165,6 +1350,9 @@ const loadAndAddLinks = async () => {
             splitDirection: Cesium.SplitDirection.NONE
           }
         });
+        try {
+          staticLinkEnt.__meta = { ...(staticLinkEnt.__meta || {}), linkTier: 'formal-static' };
+        } catch (_) {}
         LINK_ENTITY_IDS.add(linkId);
         LINK_ENTITY_RELATION_IDS.set(linkId, rel.id);
         LINK_ENTITY_ENDPOINTS.set(linkId, { parentId: fromId, childId: toId });
@@ -1289,8 +1477,25 @@ function setPlanePoseAtIndex(index) {
   viewer.trackedEntity = modelEntity;
 }
 
-/** 取飞机当前坐标：优先用变量，否则从实体取（如尚未点过阶段按钮） */
-const getPlanePosition = () => planePositionCartesian ?? getEntityPosition('planeEntity');
+/**
+ * 取飞机当前坐标：优先 modelEntity + clock（含跟飞/动画时的最新位置），成功则回写 planePositionCartesian；
+ * 避免含 plane 的 relation 同步仍吃旧缓存。
+ */
+const getPlanePosition = () => {
+  if (viewer && modelEntity?.position?.getValue) {
+    try {
+      const jd = viewer.clock?.currentTime;
+      const p = jd
+        ? modelEntity.position.getValue(jd)
+        : modelEntity.position.getValue(Cesium.JulianDate.now());
+      if (p) {
+        planePositionCartesian = Cesium.Cartesian3.clone(p);
+        return p;
+      }
+    } catch (_) {}
+  }
+  return planePositionCartesian ?? getEntityPosition('planeEntity');
+};
 
 const getViewState = () => {
   if (!viewer?.camera) return null;
@@ -1453,7 +1658,9 @@ const loadGlbModelEntity = async (uri) => {
     const pNow = planeEntity.position?.getValue?.(viewer.clock.currentTime);
     if (pNow) planePositionCartesian = Cesium.Cartesian3.clone(pNow);
   } catch (_) {}
-  if (props.visibleRelationId != null && RELATIONS_WITH_PLANE.has(props.visibleRelationId)) {
+  if (!props.splitMode) {
+    syncRelationsFromActiveIds();
+  } else if (props.visibleRelationId != null && RELATIONS_WITH_PLANE.has(props.visibleRelationId)) {
     removeLinkEntitiesForRelation(props.visibleRelationId);
     drawPlaneRelationLinks(props.visibleRelationId);
   }
@@ -1677,6 +1884,43 @@ const removeAirportEndpointLabels = () => {
     try { viewer.entities.remove(arrAirportLabelEntity); } catch (_) {}
     arrAirportLabelEntity = null;
   }
+};
+
+const VIEWPORT_ROUTE_POLYLINE_ID = 'cbViewportPathRoute';
+
+const removeViewportRoutePolyline = () => {
+  if (!viewer?.entities) return;
+  try {
+    viewer.entities.removeById(VIEWPORT_ROUTE_POLYLINE_ID);
+  } catch (_) {}
+};
+
+/** 单屏 iframe：由 props.pathPoints 驱动航线折线；split 双卷帘仍由父页 ROUTE_ENTITY_ID 等处理，此处不叠加 */
+const syncViewportRoutePolyline = () => {
+  if (!viewer?.entities) return;
+  removeViewportRoutePolyline();
+  if (props.splitMode) {
+    viewer.scene?.requestRender?.();
+    return;
+  }
+  const pts = props.pathPoints;
+  if (!Array.isArray(pts) || pts.length < 2) {
+    viewer.scene?.requestRender?.();
+    return;
+  }
+  const positions = pts.map((p) =>
+    Cesium.Cartesian3.fromDegrees(Number(p.lon), Number(p.lat), Number(p.alt ?? 0))
+  );
+  viewer.entities.add({
+    id: VIEWPORT_ROUTE_POLYLINE_ID,
+    polyline: {
+      positions,
+      width: 2,
+      clampToGround: false,
+      material: Cesium.Color.fromCssColorString('#59E8FF').withAlpha(0.9)
+    }
+  });
+  viewer.scene?.requestRender?.();
 };
 
 const syncAirportEndpointLabels = () => {
@@ -2273,7 +2517,12 @@ defineExpose({
   flyCameraToUnitIdsBoundingSphere,
   flashUnitBillboards,
   flashPlaneModelBrief,
-  clearActiveMarker: () => { activeMarkerEntity = null; }
+  playRelationNodeFocusSequence,
+  playRelationIdsNodeFocusSequence,
+  cancelRelationFocusSequence,
+  setPlaneCameraFollow,
+  clearActiveMarker: () => { activeMarkerEntity = null; },
+  resetCameraHome
 });
 
 onMounted(async () => {
@@ -2532,6 +2781,7 @@ watch(
     props.showClusterArrAirport,
     props.visibleUnitClusterIdsLeft,
     props.visibleUnitClusterIdsRight,
+    props.activeUnitClusterIds,
     props.splitMode
   ],
   () => updateUnitEntitiesVisibility(),
@@ -2548,7 +2798,13 @@ watch(
 );
 
 watch(
-  () => [props.visibleRelationId, props.visibleRelationIdsLeft, props.visibleRelationIdsRight, props.splitMode],
+  () => [
+    props.splitMode,
+    props.activeRelationIds,
+    props.visibleRelationId,
+    props.visibleRelationIdsLeft,
+    props.visibleRelationIdsRight
+  ],
   () => {
     updateLinkVisibility();
   },
@@ -2561,18 +2817,12 @@ watch(
     _relationFocusSeq++;
     if (newVal == null) {
       clearPlaneHighlightVisual();
-      RELATIONS_WITH_PLANE.forEach((rid) => removeLinkEntitiesForRelation(rid));
       updateLinkVisibility();
       updateUnitEntitiesVisibility();
       return;
     }
     applyPlaneDimHighlightVisual();
-    if (RELATIONS_WITH_PLANE.has(newVal)) {
-      removeLinkEntitiesForRelation(newVal);
-      drawPlaneRelationLinks(newVal);
-    } else {
-      updateLinkVisibility();
-    }
+    updateLinkVisibility();
     updateUnitEntitiesVisibility();
     if (!props.skipRelationNodeFocus) {
       playRelationNodeFocusSequence(newVal);
@@ -2580,10 +2830,46 @@ watch(
   }
 );
 
+let _focusTimerIdsLeft = 0;
+watch(
+  () => (props.visibleRelationIdsLeft || []).map(String).join(','),
+  () => {
+    if (props.splitMode || props.skipRelationNodeFocus) return;
+    const ids = props.visibleRelationIdsLeft || [];
+    if (!ids.length) return;
+    const last = ids[ids.length - 1];
+    clearTimeout(_focusTimerIdsLeft);
+    _focusTimerIdsLeft = setTimeout(() => {
+      playRelationNodeFocusSequence(last);
+    }, 120);
+  }
+);
+
+let _focusTimerIdsRight = 0;
+watch(
+  () => (props.visibleRelationIdsRight || []).map(String).join(','),
+  () => {
+    if (props.splitMode || props.skipRelationNodeFocus) return;
+    const ids = props.visibleRelationIdsRight || [];
+    if (!ids.length) return;
+    const last = ids[ids.length - 1];
+    clearTimeout(_focusTimerIdsRight);
+    _focusTimerIdsRight = setTimeout(() => {
+      playRelationNodeFocusSequence(last);
+    }, 120);
+  }
+);
+
 watch(
   () => [props.pathPoints, props.depAirportLabel, props.arrAirportLabel],
   () => syncAirportEndpointLabels(),
   { deep: true }
+);
+
+watch(
+  () => [props.pathPoints, props.splitMode],
+  () => syncViewportRoutePolyline(),
+  { deep: true, immediate: true }
 );
 
 onBeforeUnmount(() => {
@@ -2620,6 +2906,7 @@ onBeforeUnmount(() => {
   clickHandler = null;
   pickHandler?.destroy();
   pickHandler = null;
+  removeViewportRoutePolyline();
   removeAirportEndpointLabels();
   if (viewer) {
     if (chinaBoundaryDataSource) {

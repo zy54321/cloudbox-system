@@ -235,6 +235,17 @@ export function buildFlightPathFromRunways(
 }
 
 /**
+ * 按沿线进度 u∈[0,1] 取路径上最近采样点的 phase（与 buildFlightPathFromRunways 的 PathPoint.phase 一致）。
+ */
+export function getPhaseAtPathProgress(path: PathPoint[], u: number): PathPoint['phase'] {
+  if (!path?.length) return 'cruise';
+  const n = path.length;
+  const t = Math.min(1, Math.max(0, u));
+  const idx = Math.min(n - 1, Math.max(0, Math.floor(t * (n - 1))));
+  return path[idx].phase;
+}
+
+/**
  * 按累计距离分配时间，生成匀速 SampledPositionProperty（起点/终点不覆写高度）
  */
 export function buildSampledPositionFromPath(
