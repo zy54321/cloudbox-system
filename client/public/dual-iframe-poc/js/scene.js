@@ -360,7 +360,6 @@
     return new Cesium.Cartesian2(ox, oy);
   }
 
-  var debugStateNode = document.getElementById('scene-debug-state');
   var keyframeEntries = Object.keys(scenario.keyframes)
     .map(function (key) {
       return {
@@ -570,45 +569,10 @@
   }
 
   /**
-   * demo 时间（state.currentTime）→ 航迹样本弧长时间 pathT：
-   * A [0, narrativeT0] 爬升/过场；B (narrativeT0, tDisposalEndDemo] 按语义比例至接近终点；
-   * C (tDisposalEndDemo, D] 固定剩余 demo 时间飞至 100% 航迹（与父页 timeline 末段 10s 对齐）。
+   * demo 时间 → 航迹弧长参数：与播放时间线性一致（由 state.currentTime 驱动），不再做分段语义映射。
    */
   function planePathTimeFromDemoTime(timeSeconds) {
-    var t = clampTime(timeSeconds);
-    var D = Math.max(state.duration, 1e-6);
-    var narrativeStartPathT = clampTime(cruisePathProgressU * D);
-    var climbEndPathT = clampTime(
-      narrativeStartPathT - PRE_NARRATIVE_CRUISE_SECONDS * POST_CLIMB_PLANE_SPEED_RATE
-    );
-    var introEnd = INTRO_CLIMB_SCENE_SECONDS;
-    var pathTBeforeFinal = D * (1 - PATH_FINAL_LEG_FRACTION);
-    if (pathTBeforeFinal <= narrativeStartPathT + 1e-6) {
-      pathTBeforeFinal = Math.min(narrativeStartPathT + D * 0.1, D * 0.95);
-    }
-    var tEnd = Math.min(tDisposalEndDemo, D - 1e-6);
-    if (tEnd < narrativeT0) tEnd = narrativeT0;
-    var pathT;
-    if (t <= introEnd + 1e-9) {
-      pathT = lerp(0, climbEndPathT, introEnd > 1e-9 ? t / introEnd : 0);
-    } else if (t <= narrativeT0 + 1e-9) {
-      var span0 = Math.max(narrativeT0 - introEnd, 1e-9);
-      pathT = lerp(climbEndPathT, narrativeStartPathT, (t - introEnd) / span0);
-    } else if (t <= tEnd + 1e-9) {
-      var sem = (t - narrativeT0) * SEMANTIC_TIME_COMPRESS;
-      var ratio =
-        maxSemanticRaw > 1e-6 ? Math.min(1, Math.max(0, sem / maxSemanticRaw)) : 1;
-      pathT = lerp(narrativeStartPathT, pathTBeforeFinal, ratio);
-    } else {
-      var spanF = Math.max(D - tEnd, 1e-9);
-      var u2 = (t - tEnd) / spanF;
-      if (u2 < 0) u2 = 0;
-      if (u2 > 1) u2 = 1;
-      pathT = lerp(pathTBeforeFinal, D, u2);
-    }
-    if (pathT < 0) return 0;
-    if (pathT > D) return D;
-    return pathT;
+    return clampTime(timeSeconds);
   }
 
   function getInterpolatedAircraftPosition(timeSeconds) {
@@ -1167,23 +1131,14 @@
 
     function afterAllNodes(nodeIdx) {
       if (nodeIdx >= nodes.length) {
-        var ap = getInterpolatedAircraftPosition(state.currentTime);
         if (narrativeFlightTimeoutId) {
           clearTimeout(narrativeFlightTimeoutId);
           narrativeFlightTimeoutId = 0;
         }
-        /** 与单屏 focus 时序略似：等 flyTo 落稳再跟飞，减少尾帧与 chase 的叠跳观感 */
-        narrativeFlightTimeoutId = setTimeout(function () {
-          narrativeFlightTimeoutId = 0;
-          applyCameraChaseAtAircraftPosition(
-            getInterpolatedAircraftPosition(state.currentTime)
-          );
-          if (viewer && viewer.scene) viewer.scene.requestRender();
-          narrativeFlightTimeoutId = setTimeout(function () {
-            narrativeFlightTimeoutId = 0;
-            finishNarrative();
-          }, 400);
-        }, 80);
+        updateSceneForTime(state.currentTime);
+        if (viewer && viewer.scene) viewer.scene.requestRender();
+        /** 不强制叙事尾帧 lookAt 跟飞，避免与 finish 后时间轴/下一帧跟飞叠跳；父页裁决时由 playLoop+update 自然跟随机位 */
+        finishNarrative();
         return;
       }
       updateSceneForTime(state.currentTime);
@@ -1476,14 +1431,28 @@
       if (isFinite(cp)) cruisePathProgressU = Math.max(0.05, Math.min(0.98, cp));
     }
     externalScenarioActive = true;
-    scenarioStepRows = Array.isArray(payload.steps) ? payload.steps.slice() : [];
-    scenarioStepRows.sort(function (a, b) {
-      var ta = Number(compareSide === 'right' ? a.t_no : a.t_yes);
-      var tb = Number(compareSide === 'right' ? b.t_no : b.t_yes);
-      if (!isFinite(ta)) ta = 0;
-      if (!isFinite(tb)) tb = 0;
-      return ta - tb;
-    });
+    (function buildScenarioStepRowsForSide() {
+      var rawSteps = Array.isArray(payload.steps) ? payload.steps : [];
+      var keyName = compareSide === 'right' ? 't_no' : 't_yes';
+      var indexed = rawSteps.map(function (row, i) {
+        return { row: row, orig: i };
+      });
+      var filtered = indexed.filter(function (x) {
+        var v = x.row[keyName];
+        if (v === null || v === undefined) return false;
+        var n = Number(v);
+        return Number.isFinite(n);
+      });
+      filtered.sort(function (a, b) {
+        var ta = Number(a.row[keyName]);
+        var tb = Number(b.row[keyName]);
+        if (ta !== tb) return ta - tb;
+        return a.orig - b.orig;
+      });
+      scenarioStepRows = filtered.map(function (x) {
+        return x.row;
+      });
+    })();
     flightPathSamples = buildSamplesFromPathPoints(payload.pathPoints, state.duration);
     removeRouteEntity();
     addRoutePolyline(payload.pathPoints);
@@ -1554,18 +1523,7 @@
     flyCameraToHome(scenario.initialView.destination, 0);
   }
 
-  function updateDebugState() {
-    if (!debugStateNode) {
-      return;
-    }
-
-    debugStateNode.textContent = [
-      'scenario: ' + scenario.name,
-      'playing: ' + state.playing,
-      'currentTime: ' + state.currentTime.toFixed(1),
-      'frameId: ' + (frameIdFromUrl || '(none)')
-    ].join(' | ');
-  }
+  function updateDebugState() {}
 
   setCameraToInitialView();
 

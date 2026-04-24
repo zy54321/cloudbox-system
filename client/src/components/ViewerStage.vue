@@ -4,7 +4,21 @@
 
     <div class="cb-dv-main-stage">
       <div class="cb-viewport" :class="{ 'cb-viewport--split': isCompare }">
-        <div v-show="!isCompare" class="cb-viewport--single cb-viewer-single">
+        <div
+          v-if="!isCompare && useSingleIframe && singleIframeBridge"
+          class="cb-viewport--single cb-viewer-single cb-viewport--single-iframe"
+        >
+          <SingleIframeStage :bridge="singleIframeBridge">
+            <template #left-overlay>
+              <slot name="single-iframe-left-overlay" />
+            </template>
+          </SingleIframeStage>
+        </div>
+
+        <div
+          v-else-if="!isCompare && !useSingleIframe"
+          class="cb-viewport--single cb-viewer-single"
+        >
           <CesiumViewport
             :ref="vpSingleRef"
             class="cb-dv-cesium"
@@ -26,17 +40,18 @@
             :active-unit-cluster-ids="effectiveActiveUnitClusterIds"
             :visible-unit-cluster-ids-left="visibleUnitClusterIdsLeft"
             :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
+            :skip-relation-node-focus="skipRelationNodeFocus"
             @marker-click="$emit('marker-click', $event)"
             @marker-move="$emit('marker-move', $event)"
             @marker-close="$emit('marker-close')"
             @plane-screen-info="$emit('plane-screen-info', $event)"
+            @plane-billboard-click="$emit('plane-billboard-click', $event)"
           />
           <slot name="single-overlays" />
         </div>
 
-        <div v-show="isCompare" class="cb-viewer-split cb-viewer-split--iframe-absolute">
+        <div v-if="isCompare" class="cb-viewer-split cb-viewer-split--iframe-absolute">
           <div class="cb-viewport cb-viewport--split-full cb-viewport--iframe-split-host">
-            <!-- iframe 由 compareBridge 挂载；勿用 tYes/tNo/marker 等作 key，避免重载 -->
             <CompareIframeStage v-if="compareBridge" :bridge="compareBridge">
               <template #left-overlay>
                 <slot name="compare-left-overlay" />
@@ -57,16 +72,21 @@
 
 <script setup>
 /**
- * 单屏：CesiumViewport。双屏：仅 CompareIframeStage（dual-iframe-poc/scene-*.html）；不再内嵌双视口 Cesium split。
+ * 单屏：SingleIframeStage（scene-left）或 CesiumViewport。双屏：CompareIframeStage。
  */
 import { computed } from 'vue';
 import CesiumViewport from './CesiumViewport.vue';
 import CompareIframeStage from './CompareIframeStage.vue';
+import SingleIframeStage from './SingleIframeStage.vue';
 
 const props = defineProps({
   isCompare: { type: Boolean, required: true },
+  /** 为 true 时单屏用 scene-left iframe，不再内嵌 CesiumViewport */
+  useSingleIframe: { type: Boolean, default: false },
+  /** 单屏 iframe 用桥；与 compareBridge 互斥挂载 */
+  singleIframeBridge: { type: Object, default: null },
   compareBridge: { type: Object, default: null },
-  bindVpSingle: { type: Function, required: true },
+  bindVpSingle: { type: Function, default: () => {} },
   modelUrl: { type: String, default: '' },
   unitsUrl: { type: String, default: '' },
   staticGroundMergeUrl: { type: String, default: '' },
@@ -77,12 +97,12 @@ const props = defineProps({
   followPath: { type: Boolean, default: false },
   depAirportLabel: { type: String, default: '' },
   arrAirportLabel: { type: String, default: '' },
-  /** 旧 API：单 id，传入时自动转为 visibleRelationIdsLeft=[id]、visibleRelationIdsRight=[] */
   visibleRelationId: { type: String, default: null },
   visibleRelationIdsLeft: { type: Array, default: () => [] },
   visibleRelationIdsRight: { type: Array, default: () => [] },
   visibleUnitClusterIdsLeft: { type: Array, default: () => [] },
-  visibleUnitClusterIdsRight: { type: Array, default: () => [] }
+  visibleUnitClusterIdsRight: { type: Array, default: () => [] },
+  skipRelationNodeFocus: { type: Boolean, default: false }
 });
 
 const effectiveIdsLeft = computed(() =>
@@ -92,7 +112,6 @@ const effectiveIdsRight = computed(() =>
   props.visibleRelationId != null ? [] : (props.visibleRelationIdsRight || [])
 );
 const effectiveVisibleRelationId = computed(() => props.visibleRelationId);
-/** 单屏：簇可见性经 activeUnitClusterIds（合并左右 prop） */
 const effectiveActiveUnitClusterIds = computed(() => {
   const L = props.visibleUnitClusterIdsLeft || [];
   const R = props.visibleUnitClusterIdsRight || [];
@@ -100,6 +119,7 @@ const effectiveActiveUnitClusterIds = computed(() => {
 });
 
 const vpSingleRef = (el) => {
+  if (props.useSingleIframe) return;
   if (typeof props.bindVpSingle === 'function') props.bindVpSingle(el);
 };
 </script>

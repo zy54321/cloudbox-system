@@ -1004,6 +1004,16 @@ header {
   width: 100%;
 }
 
+/* 单屏：仅左列，与双屏左列 DOM/类名一致，占满单屏地图区 */
+.cb-wrap--dynamic .cb-viewport--single-iframe .cb-compare-iframe-stage--single {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+
 .cb-wrap--dynamic .cb-compare-iframe-col {
   flex: 1;
   min-width: 0;
@@ -1060,8 +1070,8 @@ header {
   width: 100%;
   height: 100%;
   min-height: 0;
-  /* 底部多留 10px，时间轴不贴边 */
-  padding: 0 6px 18px;
+  /* 底部留白略增，时间轴整体再上移 10px，不与故障条争位 */
+  padding: 0 6px 28px;
   box-sizing: border-box;
 }
 
@@ -1072,12 +1082,15 @@ header {
   pointer-events: none;
 }
 
-/* 双屏：地图区下方、时间轴上方的故障条（与 FloatingCard 同列、窄条居中） */
+/* 双屏：故障条脱离 flex，固定在时间轴上方（约 bottom: 120px），避免被时间轴遮挡 */
 .cb-wrap--dynamic .cb-compare-side-overlay-inner .cb-compare-fault-alert {
-  flex: 0 0 auto;
-  align-self: center;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: fit-content;
   max-width: 96%;
-  margin: 6px 0 4px;
+  bottom: 130px;
+  margin: 0;
   padding: 7px 12px;
   border-radius: 10px;
   font-size: 12.4px;
@@ -1088,7 +1101,8 @@ header {
   border: 1px solid rgba(255, 120, 90, 0.48);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
   pointer-events: auto;
-  z-index: 2;
+  z-index: 4;
+  box-sizing: border-box;
 }
 
 .cb-wrap--dynamic .cb-compare-side-overlay-inner .cb-time-dock--embed {
@@ -1940,7 +1954,7 @@ header {
 /* 布局 B2：iframe 半屏 overlay */
 .cb-wrap--dynamic .cb-compare-side-overlay-inner .floating-card--dv {
   right: 8px;
-  bottom: 118px;
+  bottom: 140px;
   width: min(252px, calc(100% - 16px));
   min-width: 182px;
   z-index: 3;
@@ -2043,7 +2057,8 @@ header {
 .cb-wrap--dynamic .alert-toast {
   position: absolute;
   right: 18px;
-  bottom: 18px;
+  bottom: 120px;
+  z-index: 45;
   display: flex;
   gap: 10px;
   align-items: center;
@@ -3340,7 +3355,7 @@ body {
   position: absolute;
   left: 18px;
   right: 18px;
-  bottom: 18px;
+  bottom: 28px;
   z-index: 44;
   background: rgba(14, 44, 123, 0.42);
   backdrop-filter: blur(12px);

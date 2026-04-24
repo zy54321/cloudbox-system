@@ -31,25 +31,11 @@
       border: 1px solid rgba(255, 164, 127, 0.4);
     }
 
-    .scene-debug-state {
-      position: absolute;
-      right: 12px;
-      bottom: 12px;
-      z-index: 10;
-      padding: 6px 10px;
-      max-width: calc(100% - 24px);
-      border-radius: 8px;
-      font: 12px/1.3 sans-serif;
-      color: #fff;
-      background: rgba(24, 8, 8, 0.78);
-      border: 1px solid rgba(255, 164, 127, 0.25);
-    }
-
     /* --- HUD: 复位 / 指北针 / 比例尺 --- */
     .cb-map-hud {
       position: absolute;
       left: 16px;
-      bottom: 96px;
+      bottom: 140px;
       z-index: 36;
       display: flex;
       flex-direction: column;
@@ -145,7 +131,6 @@
 </head>
 <body data-scenario="right">
   <div class="scene-badge">Right / 无云匣子</div>
-  <div id="scene-debug-state" class="scene-debug-state"></div>
   <div id="cesium-container"></div>
 
   <div class="cb-map-hud">

@@ -196,6 +196,8 @@ const LINK_ENTITY_SIDE = new Map();
 const LINK_ENTITY_ENDPOINTS = new Map();
 /** 飞机位置变量：起飞/巡航等阶段切换时更新，绘制与飞机连接的链路时用此坐标 */
 let planePositionCartesian = null;
+/** 与 setPlaneCameraFollow 一致：是否处于相机跟踪飞机 */
+let planeCameraFollowEnabled = false;
 /** 含端点 "plane" 的关联 id 集合，这些链路在用户点击该关联时再按当前飞机位置重绘 */
 const RELATIONS_WITH_PLANE = new Set();
 let _relationFocusSeq = 0;
@@ -1446,10 +1448,24 @@ const cancelRelationFocusSequence = () => {
   _relationFocusSeq++;
 };
 
+const syncPlaneRuntimeByPathProgress = () => {
+  if (!viewer || !modelEntity?.position?.getValue) return;
+  try {
+    const time = viewer.clock?.currentTime ?? Cesium.JulianDate.now();
+    const p = modelEntity.position.getValue(time);
+    if (p) planePositionCartesian = Cesium.Cartesian3.clone(p);
+  } catch (_) {}
+  if (planeCameraFollowEnabled && modelEntity) {
+    viewer.trackedEntity = modelEntity;
+  }
+  viewer.scene?.requestRender?.();
+};
+
 /** 沿线/恢复巡航时跟随飞机；链路节点序列时由子页关闭 */
 const setPlaneCameraFollow = (enabled) => {
   if (!viewer) return;
-  viewer.trackedEntity = enabled && modelEntity ? modelEntity : undefined;
+  planeCameraFollowEnabled = !!enabled;
+  viewer.trackedEntity = planeCameraFollowEnabled && modelEntity ? modelEntity : undefined;
   viewer.scene?.requestRender?.();
 };
 
@@ -1487,7 +1503,15 @@ const drawPlaneRelationLinks = (relationId, side = 'none') => {
     const fromPos = getPos(fromId);
     const toPos = getPos(toId);
     if (!fromPos || !toPos) continue;
-    const positions = computeArcPositions(fromPos, toPos, 24, 0.12);
+    const edgeHasPlane = fromId === 'plane' || toId === 'plane';
+    const positions = edgeHasPlane
+      ? new Cesium.CallbackProperty((time) => {
+          const fp = getPos(fromId);
+          const tp = getPos(toId);
+          if (!fp || !tp) return undefined;
+          return computeArcPositions(fp, tp, 24, 0.12);
+        }, false)
+      : computeArcPositions(fromPos, toPos, 24, 0.12);
     const suffix = side === 'left' ? 'L' : side === 'right' ? 'R' : 'N';
     const linkId = `link-${relationId}-${fromId}-${toId}-${suffix}`;
     const linkEnt = viewer.entities.add({
@@ -1724,8 +1748,7 @@ function setPlanePoseAtIndex(index) {
   // 同步飞机位置变量，供「与飞机连接的链路」使用
   planePositionCartesian = Cesium.Cartesian3.clone(p);
 
-  // 若启用跟随，相机重新锁定到飞机
-  viewer.trackedEntity = modelEntity;
+  if (planeCameraFollowEnabled) viewer.trackedEntity = modelEntity;
 }
 
 /**
@@ -1930,6 +1953,7 @@ const loadGlbModelEntity = async (uri) => {
     }
     viewer.scene.requestRender?.();
   }
+  syncPlaneRuntimeByPathProgress();
   return planeEntity;
 };
 
@@ -3046,6 +3070,11 @@ watch(
     planePositionCartesian = Cesium.Cartesian3.fromDegrees(p0.lon, p0.lat, p0.alt ?? 0);
   },
   { immediate: true }
+);
+
+watch(
+  () => props.pathProgress,
+  () => syncPlaneRuntimeByPathProgress()
 );
 
 watch(
