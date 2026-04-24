@@ -20,6 +20,7 @@
   var MSG_CLEAR_ACTIVE_MARKER = 'CLEAR_ACTIVE_MARKER';
   var MSG_RUN_NARRATIVE = 'RUN_NARRATIVE';
   var MSG_NARRATIVE_DONE = 'NARRATIVE_DONE';
+  var MSG_FOCUS_UNIT = 'FOCUS_UNIT';
 
   var params = new URLSearchParams(window.location.search);
   var frameIdFromUrl = String(params.get('frameId') || '');
@@ -225,6 +226,12 @@
   var scenarioStepRows = [];
   /** 叙事起点：统一时间轴上 T 时刻（秒），T+0.0 = narrativeT0 + 0 */
   var narrativeT0 = 10;
+  /** 与 DynamicFlow.vue 一致：双屏全节点 t_yes/t_no 的最大 raw，用于处置段与 phase B 航迹比例 */
+  var maxSemanticRaw = 100;
+  /** demo 时间：处置段结束 = narrativeT0 + maxSemanticRaw/SEMANTIC_TIME_COMPRESS；之后 10s 飞至终点 */
+  var tDisposalEndDemo = 10;
+  /** 与 DynamicFlow.vue semanticToDemoT(maxRaw)+10 一致；样条总时长 D 的末段留作「进近至终点」 */
+  var PATH_FINAL_LEG_FRACTION = 0.08;
   /** 与 DynamicFlow.vue SEMANTIC_TIME_COMPRESS 一致：语义秒 ↔ demo 秒 */
   var SEMANTIC_TIME_COMPRESS = 10;
   var narrativeBusy = false;
@@ -563,7 +570,9 @@
   }
 
   /**
-   * demo 时间（state.currentTime）→ 航迹样本时间：0～narrativeT0 为爬升/过场（纯 demo）；之后巡航段用语义时间推进弧长，体现语义差异。
+   * demo 时间（state.currentTime）→ 航迹样本弧长时间 pathT：
+   * A [0, narrativeT0] 爬升/过场；B (narrativeT0, tDisposalEndDemo] 按语义比例至接近终点；
+   * C (tDisposalEndDemo, D] 固定剩余 demo 时间飞至 100% 航迹（与父页 timeline 末段 10s 对齐）。
    */
   function planePathTimeFromDemoTime(timeSeconds) {
     var t = clampTime(timeSeconds);
@@ -573,17 +582,29 @@
       narrativeStartPathT - PRE_NARRATIVE_CRUISE_SECONDS * POST_CLIMB_PLANE_SPEED_RATE
     );
     var introEnd = INTRO_CLIMB_SCENE_SECONDS;
+    var pathTBeforeFinal = D * (1 - PATH_FINAL_LEG_FRACTION);
+    if (pathTBeforeFinal <= narrativeStartPathT + 1e-6) {
+      pathTBeforeFinal = Math.min(narrativeStartPathT + D * 0.1, D * 0.95);
+    }
+    var tEnd = Math.min(tDisposalEndDemo, D - 1e-6);
+    if (tEnd < narrativeT0) tEnd = narrativeT0;
     var pathT;
     if (t <= introEnd + 1e-9) {
       pathT = lerp(0, climbEndPathT, introEnd > 1e-9 ? t / introEnd : 0);
     } else if (t <= narrativeT0 + 1e-9) {
-      var span = Math.max(narrativeT0 - introEnd, 1e-9);
-      pathT = lerp(climbEndPathT, narrativeStartPathT, (t - introEnd) / span);
+      var span0 = Math.max(narrativeT0 - introEnd, 1e-9);
+      pathT = lerp(climbEndPathT, narrativeStartPathT, (t - introEnd) / span0);
+    } else if (t <= tEnd + 1e-9) {
+      var sem = (t - narrativeT0) * SEMANTIC_TIME_COMPRESS;
+      var ratio =
+        maxSemanticRaw > 1e-6 ? Math.min(1, Math.max(0, sem / maxSemanticRaw)) : 1;
+      pathT = lerp(narrativeStartPathT, pathTBeforeFinal, ratio);
     } else {
-      var sem = demoToSemanticAfterBase(t);
-      pathT = clampTime(
-        narrativeStartPathT + sem * (POST_CLIMB_PLANE_SPEED_RATE / SEMANTIC_TIME_COMPRESS)
-      );
+      var spanF = Math.max(D - tEnd, 1e-9);
+      var u2 = (t - tEnd) / spanF;
+      if (u2 < 0) u2 = 0;
+      if (u2 > 1) u2 = 1;
+      pathT = lerp(pathTBeforeFinal, D, u2);
     }
     if (pathT < 0) return 0;
     if (pathT > D) return D;
@@ -1147,15 +1168,22 @@
     function afterAllNodes(nodeIdx) {
       if (nodeIdx >= nodes.length) {
         var ap = getInterpolatedAircraftPosition(state.currentTime);
-        applyCameraChaseAtAircraftPosition(ap);
         if (narrativeFlightTimeoutId) {
           clearTimeout(narrativeFlightTimeoutId);
           narrativeFlightTimeoutId = 0;
         }
+        /** 与单屏 focus 时序略似：等 flyTo 落稳再跟飞，减少尾帧与 chase 的叠跳观感 */
         narrativeFlightTimeoutId = setTimeout(function () {
           narrativeFlightTimeoutId = 0;
-          finishNarrative();
-        }, 400);
+          applyCameraChaseAtAircraftPosition(
+            getInterpolatedAircraftPosition(state.currentTime)
+          );
+          if (viewer && viewer.scene) viewer.scene.requestRender();
+          narrativeFlightTimeoutId = setTimeout(function () {
+            narrativeFlightTimeoutId = 0;
+            finishNarrative();
+          }, 400);
+        }, 80);
         return;
       }
       updateSceneForTime(state.currentTime);
@@ -1219,13 +1247,21 @@
       return Promise.resolve();
     }
     var clusterId = compareSide === 'right' ? 'DYN_NO' : 'DYN_YES';
-    return Promise.all([fetch(payload.unitsUrl), fetch(payload.linksUrl)])
+    var mergeUrl = payload.staticGroundMergeUrl || '';
+    var fetches = [fetch(payload.unitsUrl), fetch(payload.linksUrl)];
+    if (mergeUrl) fetches.push(fetch(mergeUrl));
+    return Promise.all(fetches)
       .then(function (rs) {
-        return Promise.all([rs[0].json(), rs[1].json()]);
+        var pUnits = rs[0].json();
+        var pLinks = rs[1].json();
+        var pStatic =
+          mergeUrl && rs[2] && rs[2].ok ? rs[2].json() : Promise.resolve(null);
+        return Promise.all([pUnits, pLinks, pStatic]);
       })
       .then(function (docs) {
         var unitsDoc = docs[0];
         var linksDoc = docs[1];
+        var staticDoc = docs[2];
         clearEngineOverlays();
         var clusters = (unitsDoc.ground && unitsDoc.ground.clusters) || [];
         var cluster = null;
@@ -1236,8 +1272,39 @@
           }
         }
         var planeLinked = collectPlaneLinkedUnitIds(linksDoc.relations || []);
-        var units = (cluster && cluster.units) || [];
-        units.forEach(function (u) {
+        var baseUnits = (cluster && cluster.units) || [];
+        function groundNameKeyPoc(n) {
+          return String(n || '').trim();
+        }
+        var staticByName = {};
+        if (staticDoc) {
+          var sClusters0 = (staticDoc.ground && staticDoc.ground.clusters) || [];
+          for (var si0 = 0; si0 < sClusters0.length; si0++) {
+            var suArr0 = sClusters0[si0].units || [];
+            for (var sj0 = 0; sj0 < suArr0.length; sj0++) {
+              var su0 = suArr0[sj0];
+              var nk0 = groundNameKeyPoc(su0.name);
+              if (nk0 && !staticByName[nk0]) staticByName[nk0] = su0;
+            }
+          }
+        }
+        function mergeUnitWithStaticByNamePoc(u) {
+          var s = staticByName[groundNameKeyPoc(u.name)];
+          if (!s) return u;
+          var o = Object.assign({}, s, { id: u.id });
+          if (u.attachToPlane != null) o.attachToPlane = u.attachToPlane;
+          return o;
+        }
+        var dynamicNames = {};
+        for (var di = 0; di < baseUnits.length; di++) {
+          var nkDyn = groundNameKeyPoc(baseUnits[di].name);
+          if (nkDyn) dynamicNames[nkDyn] = true;
+        }
+        var mergedBase = baseUnits.map(function (u) {
+          return mergeUnitWithStaticByNamePoc(u);
+        });
+
+        function addEngineGroundUnit(u) {
           var isPlaneAttached =
             !!planeLinked[u.id] ||
             u.attachToPlane === true ||
@@ -1327,7 +1394,23 @@
             });
             engineUnitEntities[u.id + '__cube'] = cubeEnt;
           }
-        });
+        }
+
+        mergedBase.forEach(addEngineGroundUnit);
+        if (staticDoc) {
+          var extraNameSeen = {};
+          var sClustersX = (staticDoc.ground && staticDoc.ground.clusters) || [];
+          for (var six = 0; six < sClustersX.length; six++) {
+            var suArrX = sClustersX[six].units || [];
+            for (var sjx = 0; sjx < suArrX.length; sjx++) {
+              var suX = suArrX[sjx];
+              var nkX = groundNameKeyPoc(suX.name);
+              if (!nkX || dynamicNames[nkX] || extraNameSeen[nkX]) continue;
+              extraNameSeen[nkX] = true;
+              addEngineGroundUnit(suX);
+            }
+          }
+        }
 
         var relations = linksDoc.relations || [];
         engineRelations = [];
@@ -1374,6 +1457,19 @@
     if (payload.narrativeT0 != null) {
       var nt = Number(payload.narrativeT0);
       if (isFinite(nt)) narrativeT0 = nt;
+    }
+    if (payload.maxSemanticRaw != null) {
+      var mr = Number(payload.maxSemanticRaw);
+      if (isFinite(mr) && mr >= 0) maxSemanticRaw = Math.max(mr, 1e-6);
+    }
+    tDisposalEndDemo = narrativeT0 + maxSemanticRaw / SEMANTIC_TIME_COMPRESS;
+    if (payload.tDisposalEnd != null) {
+      var te = Number(payload.tDisposalEnd);
+      if (isFinite(te)) tDisposalEndDemo = te;
+    }
+    if (payload.pathFinalLegFraction != null) {
+      var pf = Number(payload.pathFinalLegFraction);
+      if (isFinite(pf) && pf > 0.02 && pf < 0.5) PATH_FINAL_LEG_FRACTION = pf;
     }
     if (payload.cruisePathProgress != null) {
       var cp = Number(payload.cruisePathProgress);
@@ -1700,10 +1796,49 @@
     lastPlayMs = now;
 
     var prev = state.currentTime;
-    var nextTime = Math.min(state.currentTime + dt, state.duration);
+    var p0 = state.currentTime;
+    var nextTime = Math.min(p0 + dt, state.duration);
+    /** 在下一叙事触发点前截断本帧推进，避免 p1 越过 trigDemo 再被钳回，造成航迹微回跳/闪烁 */
+    if (externalScenarioActive && scenarioStepRows.length && !parentControlsNarrative) {
+      var nextTrigDemo = -1;
+      for (var ti = 0; ti < scenarioStepRows.length; ti++) {
+        if (firedNarrativeSteps[ti]) continue;
+        var srow0 = scenarioStepRows[ti];
+        var tKey0 = compareSide === 'right' ? 't_no' : 't_yes';
+        var raw0 = Number(srow0[tKey0]);
+        if (!isFinite(raw0)) continue;
+        var trg0 = narrativeT0 + raw0 / SEMANTIC_TIME_COMPRESS;
+        if (p0 < trg0 - 1e-9) {
+          if (nextTrigDemo < 0 || trg0 < nextTrigDemo) nextTrigDemo = trg0;
+        }
+      }
+      if (nextTrigDemo > 0) {
+        nextTime = Math.min(nextTime, nextTrigDemo);
+      }
+    }
+    /**
+     * 父页裁决（parentControlsNarrative=true）：不在这里自触发 narrative，但同样必须在下一未过账关键点前截断
+     * 并「钉在」已到达且尚未 RUN_NARRATIVE 的点的 demo 上，避免越过后再被 scrub/对齐造成沿航迹前/后瞬移。
+     */
+    if (externalScenarioActive && scenarioStepRows.length && parentControlsNarrative) {
+      var nextUnfiredCap = -1;
+      for (var tj = 0; tj < scenarioStepRows.length; tj++) {
+        if (firedNarrativeSteps[tj]) continue;
+        var srowA = scenarioStepRows[tj];
+        var tKeyA = compareSide === 'right' ? 't_no' : 't_yes';
+        var rawA = Number(srowA[tKeyA]);
+        if (!isFinite(rawA)) continue;
+        var trgA = narrativeT0 + rawA / SEMANTIC_TIME_COMPRESS;
+        if (trgA + 1e-9 >= p0) {
+          if (nextUnfiredCap < 0 || trgA < nextUnfiredCap) nextUnfiredCap = trgA;
+        }
+      }
+      if (nextUnfiredCap > 0) {
+        nextTime = Math.min(nextTime, nextUnfiredCap);
+      }
+    }
 
     if (externalScenarioActive && scenarioStepRows.length && !parentControlsNarrative) {
-      var p0 = state.currentTime;
       var p1 = nextTime;
       if (p1 >= p0 - 1e-9) {
         var ni;
@@ -1774,7 +1909,8 @@
       setCameraToInitialView();
     }
     if (state.playing) {
-      return;
+      stopPlayLoop();
+      setPlaying(false);
     }
     try {
       if (viewer && !viewer.isDestroyed()) viewer.trackedEntity = undefined;
@@ -1797,18 +1933,37 @@
       firedNarrativeSteps = Object.create(null);
     }
     seekToTime(t, { reason: 'scrub' });
+    /** 随 scrub 对齐相机到当前时间样条机位，避免对实体 flyTo 造成与叙事 fly 叠跳的观感 */
     if (!payload || !payload.silent) {
-      resetCameraHome();
+      var apScrub = getInterpolatedAircraftPosition(state.currentTime);
+      applyCameraChaseAtAircraftPosition(apScrub);
     }
     if (viewer && viewer.scene) viewer.scene.requestRender();
     postSideStateThrottled();
+  }
+
+  function handleFocusUnit(payload) {
+    var uid = payload && payload.unitId != null ? String(payload.unitId).trim() : '';
+    if (!uid) return;
+    if (uid === 'plane') {
+      var apPlane = getInterpolatedAircraftPosition(state.currentTime);
+      applyCameraChaseAtAircraftPosition(apPlane);
+      if (viewer && viewer.scene) viewer.scene.requestRender();
+      return;
+    }
+    narrativeFlyToUnit(uid, function () {
+      if (viewer && viewer.scene) viewer.scene.requestRender();
+    });
   }
 
   function handleRunNarrative(payload) {
     pause();
     var stepIndex = Number(payload && payload.stepIndex);
     if (payload && payload.t != null && isFinite(Number(payload.t))) {
-      state.currentTime = clampTime(Number(payload.t));
+      var tSet = clampTime(Number(payload.t));
+      if (Math.abs(state.currentTime - tSet) > 1e-5) {
+        state.currentTime = tSet;
+      }
       updateSceneForTime(state.currentTime);
     }
     if (!isFinite(stepIndex) || stepIndex < 0 || stepIndex >= scenarioStepRows.length) {
@@ -1859,6 +2014,9 @@
         break;
       case MSG_RUN_NARRATIVE:
         handleRunNarrative(p);
+        break;
+      case MSG_FOCUS_UNIT:
+        handleFocusUnit(p);
         break;
       case MSG_SET_ACTIVE_RELATIONS:
       case MSG_CLEAR_ACTIVE_MARKER:

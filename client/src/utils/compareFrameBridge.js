@@ -13,6 +13,7 @@ import {
   MSG_LOAD_SCENARIO,
   MSG_NARRATIVE_DONE,
   MSG_RUN_NARRATIVE,
+  MSG_FOCUS_UNIT,
   MSG_SET_ACTIVE_RELATIONS,
   MSG_SIDE_STATE
 } from './compareFrameProtocol.js';
@@ -203,14 +204,27 @@ export function createCompareFrameBridge(options = {}) {
     runNarrative('right', rightPayload || {});
   }
 
+  function focusUnit(side, payload = {}) {
+    postToSide(side, {
+      channel: COMPARE_CHANNEL,
+      v: COMPARE_VERSION,
+      type: MSG_FOCUS_UNIT,
+      payload: { ...payload }
+    });
+  }
+
   function logChildRejected(kind, reason, detail) {
     diag[kind].rejected += 1;
-    console.log(LOG, kind, 'rejected', reason, detail);
+    if (kind === 'narrativeDone') {
+      console.warn(LOG, 'NARRATIVE_DONE rejected', { reason, detail });
+    } else {
+      console.log(LOG, kind, 'rejected', reason, detail);
+    }
   }
 
   function logChildAccepted(kind, detail) {
     diag[kind].accepted += 1;
-    console.log(LOG, kind, 'accepted', detail);
+    // console.log(LOG, kind, 'accepted', detail);
   }
 
   /**
@@ -378,6 +392,7 @@ export function createCompareFrameBridge(options = {}) {
     clearActiveMarkerBoth,
     runNarrative,
     runNarrativeBoth,
+    focusUnit,
     destroy,
     isBothReady,
     getFrameId,

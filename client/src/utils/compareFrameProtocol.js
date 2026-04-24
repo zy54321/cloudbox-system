@@ -36,6 +36,8 @@ export const MSG_CLEAR_ACTIVE_MARKER = 'CLEAR_ACTIVE_MARKER';
 export const MSG_CAMERA_HOME = 'CAMERA_HOME';
 /** 父 → 子：父页裁决后触发指定 step 的 narrative */
 export const MSG_RUN_NARRATIVE = 'RUN_NARRATIVE';
+/** 父 → 子：聚焦指定单元（相机飞行；unitId 为 plane 时回 home） */
+export const MSG_FOCUS_UNIT = 'FOCUS_UNIT';
 
 /**
  * @typedef {Object} LoadScenarioPayload
@@ -48,6 +50,7 @@ export const MSG_RUN_NARRATIVE = 'RUN_NARRATIVE';
  * @property {Array<{ t_yes: number, t_no: number, activeRelations_yes?: string[], activeRelations_no?: string[] }>} steps
  * @property {string} [modelUrl]
  * @property {string} [unitsUrl]
+ * @property {string} [staticGroundMergeUrl] 静态架构 units.json，与子页地面标点并集合并
  * @property {string} [linksUrl]
  * @property {string} [depAirportLabel]
  * @property {string} [arrAirportLabel]

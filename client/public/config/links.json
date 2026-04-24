@@ -16,76 +16,105 @@
       "edges": [
         ["plane-blackbox-01", "plane-sensing-warning-01"],
         ["plane-sensing-warning-01", "plane-atg-gateway-01"]
+      ],
+      "transfers": [
+        {
+          "fromId": "plane-blackbox-01",
+          "toId": "plane-sensing-warning-01",
+          "fromLabel": "黑匣子",
+          "toLabel": "通感算一体机载感知预警系统",
+          "payload": "舱音数据、飞行数据",
+          "kind": "data"
+        },
+        {
+          "fromId": "plane-sensing-warning-01",
+          "toId": "plane-atg-gateway-01",
+          "fromLabel": "通感算一体机载感知预警系统",
+          "toLabel": "空地通信卫星/ATG网关",
+          "payload": "舱音数据、飞行数据",
+          "kind": "data"
+        }
       ]
     },
     {
-      "id": "link-info-2",
+      "id": "link-info-hts-concurrent",
       "flowLabel": "信息流",
-      "name": "空地通信卫星/ATG网关→HTS卫星→地面飞行场景实时重构系统",
+      "name": "HTS卫星同时下传至地面飞行场景实时重构系统与地面运营控制中心专家组",
       "viewPreset": "space-ground",
       "cam": {
-        "lon": 117.69385,
-        "lat": 22.056471,
-        "height": 3781829.35,
-        "heading": 353.3,
-        "pitch": -58.79,
+        "lon": 117.95,
+        "lat": 24.85,
+        "height": 3650000.0,
+        "heading": 346.0,
+        "pitch": -61.0,
         "roll": 0.0
       },
       "edges": [
-        ["plane-atg-gateway-01", "sat-hts-01"],
-        ["sat-hts-01", "dep-reconstruction"]
-      ]
-    },
-    {
-      "id": "link-info-3",
-      "flowLabel": "信息流",
-      "name": "空地通信卫星/ATG网关→HTS卫星→地面运营控制中心专家组",
-      "viewPreset": "space-ground",
-      "cam": {
-        "lon": 118.178666,
-        "lat": 27.694048,
-        "height": 3474140.36,
-        "heading": 339.48,
-        "pitch": -63.07,
-        "roll": 0.0
-      },
-      "edges": [
-        ["plane-atg-gateway-01", "sat-hts-01"],
+        ["sat-hts-01", "dep-reconstruction"],
         ["sat-hts-01", "dep-expert-group"]
+      ],
+      "transfers": [
+        {
+          "fromId": "sat-hts-01",
+          "toId": "dep-reconstruction",
+          "fromLabel": "HTS卫星",
+          "toLabel": "地面飞行场景实时重构系统",
+          "payload": "飞行数据与舱音衍生数据包、态势重构所需下行切片",
+          "kind": "data"
+        },
+        {
+          "fromId": "sat-hts-01",
+          "toId": "dep-expert-group",
+          "fromLabel": "HTS卫星",
+          "toLabel": "地面运营控制中心专家组",
+          "payload": "飞行数据与舱音衍生数据包、告警与研判摘要",
+          "kind": "data"
+        }
+      ],
+      "focusGroups": [
+        { "type": "single", "unitIds": ["plane-atg-gateway-01"] },
+        { "type": "single", "unitIds": ["sat-hts-01"] },
+        { "type": "group", "unitIds": ["dep-reconstruction", "dep-expert-group"] }
       ]
     },
     {
-      "id": "link-info-4",
+      "id": "link-info-ground-concurrent",
       "flowLabel": "信息流",
-      "name": "地面运营控制中心专家组→体系应急决策推演系统",
+      "name": "地面飞行场景实时重构系统与地面运营控制中心专家组同时汇入体系应急决策推演系统",
       "viewPreset": "ground-local",
       "cam": {
-        "lon": 108.771989,
-        "lat": 34.431692,
-        "height": 731.75,
-        "heading": 353.69,
-        "pitch": -30.61,
+        "lon": 108.7748,
+        "lat": 34.4321,
+        "height": 980.0,
+        "heading": 345.5,
+        "pitch": -32.5,
         "roll": 360.0
       },
       "edges": [
+        ["dep-reconstruction", "dep-sim-system"],
         ["dep-expert-group", "dep-sim-system"]
-      ]
-    },
-    {
-      "id": "link-info-5",
-      "flowLabel": "信息流",
-      "name": "地面飞行场景实时重构系统→体系应急决策推演系统",
-      "viewPreset": "ground-local",
-      "cam": {
-        "lon": 108.777522,
-        "lat": 34.432452,
-        "height": 1181.77,
-        "heading": 337.42,
-        "pitch": -34.39,
-        "roll": 360.0
-      },
-      "edges": [
-        ["dep-reconstruction", "dep-sim-system"]
+      ],
+      "transfers": [
+        {
+          "fromId": "dep-reconstruction",
+          "toId": "dep-sim-system",
+          "fromLabel": "地面飞行场景实时重构系统",
+          "toLabel": "体系应急决策推演系统",
+          "payload": "实时场景重构结果、风险态势与数据质量标记",
+          "kind": "data"
+        },
+        {
+          "fromId": "dep-expert-group",
+          "toId": "dep-sim-system",
+          "fromLabel": "地面运营控制中心专家组",
+          "toLabel": "体系应急决策推演系统",
+          "payload": "专家认定结论、方案约束与优先级建议",
+          "kind": "data"
+        }
+      ],
+      "focusGroups": [
+        { "type": "group", "unitIds": ["dep-reconstruction", "dep-expert-group"] },
+        { "type": "single", "unitIds": ["dep-sim-system"] }
       ]
     },
     {
@@ -105,6 +134,32 @@
         ["dep-sim-system", "dep-atc"],
         ["dep-sim-system", "dep-airline"],
         ["dep-sim-system", "dep-airport"]
+      ],
+      "transfers": [
+        {
+          "fromId": "dep-sim-system",
+          "toId": "dep-atc",
+          "fromLabel": "体系应急决策推演系统",
+          "toLabel": "空管",
+          "payload": "流量与间隔方案摘要、协同处置信息包",
+          "kind": "data"
+        },
+        {
+          "fromId": "dep-sim-system",
+          "toId": "dep-airline",
+          "fromLabel": "体系应急决策推演系统",
+          "toLabel": "航空公司",
+          "payload": "运行决策支持包、签派协同数据",
+          "kind": "data"
+        },
+        {
+          "fromId": "dep-sim-system",
+          "toId": "dep-airport",
+          "fromLabel": "体系应急决策推演系统",
+          "toLabel": "机场",
+          "payload": "地面保障与资源调度建议、执行窗口",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -122,6 +177,16 @@
       },
       "edges": [
         ["plane-sensing-warning-01", "plane-crew-01"]
+      ],
+      "transfers": [
+        {
+          "fromId": "plane-sensing-warning-01",
+          "toId": "plane-crew-01",
+          "fromLabel": "通感算一体机载感知预警系统",
+          "toLabel": "机组",
+          "payload": "处置指令、告警确认与操作提示",
+          "kind": "control"
+        }
       ]
     },
     {
@@ -141,6 +206,32 @@
         ["dep-sim-system", "sat-hts-01"],
         ["sat-hts-01", "plane-atg-gateway-01"],
         ["plane-atg-gateway-01", "plane-crew-01"]
+      ],
+      "transfers": [
+        {
+          "fromId": "dep-sim-system",
+          "toId": "sat-hts-01",
+          "fromLabel": "体系应急决策推演系统",
+          "toLabel": "HTS卫星",
+          "payload": "协同处置指令、方案下发与优先级",
+          "kind": "control"
+        },
+        {
+          "fromId": "sat-hts-01",
+          "toId": "plane-atg-gateway-01",
+          "fromLabel": "HTS卫星",
+          "toLabel": "空地通信卫星/ATG网关",
+          "payload": "控制指令转发、链路适配参数",
+          "kind": "control"
+        },
+        {
+          "fromId": "plane-atg-gateway-01",
+          "toId": "plane-crew-01",
+          "fromLabel": "空地通信卫星/ATG网关",
+          "toLabel": "机组",
+          "payload": "执行级控制指令与协同处置指令",
+          "kind": "control"
+        }
       ]
     },
     {
@@ -160,6 +251,32 @@
         ["dep-atc", "sat-hts-01"],
         ["sat-hts-01", "plane-atg-gateway-01"],
         ["plane-atg-gateway-01", "plane-crew-01"]
+      ],
+      "transfers": [
+        {
+          "fromId": "dep-atc",
+          "toId": "sat-hts-01",
+          "fromLabel": "空管",
+          "toLabel": "HTS卫星",
+          "payload": "空域指挥与流量控制指令",
+          "kind": "control"
+        },
+        {
+          "fromId": "sat-hts-01",
+          "toId": "plane-atg-gateway-01",
+          "fromLabel": "HTS卫星",
+          "toLabel": "空地通信卫星/ATG网关",
+          "payload": "控制指令中继、波束/路由参数",
+          "kind": "control"
+        },
+        {
+          "fromId": "plane-atg-gateway-01",
+          "toId": "plane-crew-01",
+          "fromLabel": "空地通信卫星/ATG网关",
+          "toLabel": "机组",
+          "payload": "管制协同处置指令",
+          "kind": "control"
+        }
       ]
     },
     {
@@ -179,6 +296,32 @@
         ["plane-sensing-warning-01", "plane-atg-gateway-01"],
         ["plane-atg-gateway-01", "sat-hts-01"],
         ["sat-hts-01", "dep-reconstruction"]
+      ],
+      "transfers": [
+        {
+          "fromId": "plane-sensing-warning-01",
+          "toId": "plane-atg-gateway-01",
+          "fromLabel": "通感算一体机载感知预警系统",
+          "toLabel": "空地通信卫星/ATG网关",
+          "payload": "控制指令、采集策略与优先级",
+          "kind": "control"
+        },
+        {
+          "fromId": "plane-atg-gateway-01",
+          "toId": "sat-hts-01",
+          "fromLabel": "空地通信卫星/ATG网关",
+          "toLabel": "HTS卫星",
+          "payload": "卫星链路控制与同步参数",
+          "kind": "control"
+        },
+        {
+          "fromId": "sat-hts-01",
+          "toId": "dep-reconstruction",
+          "fromLabel": "HTS卫星",
+          "toLabel": "地面飞行场景实时重构系统",
+          "payload": "地面侧协同控制指令、重构任务触发",
+          "kind": "control"
+        }
       ]
     }
   ]

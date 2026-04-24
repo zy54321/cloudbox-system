@@ -10,6 +10,7 @@
             class="cb-dv-cesium"
             :model-url="modelUrl"
             :units-url="unitsUrl"
+            :static-ground-merge-url="staticGroundMergeUrl"
             :links-url="linksUrl"
             :auto-focus="autoFocus"
             :split-mode="false"
@@ -27,6 +28,7 @@
             :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
             @marker-click="$emit('marker-click', $event)"
             @marker-move="$emit('marker-move', $event)"
+            @marker-close="$emit('marker-close')"
             @plane-screen-info="$emit('plane-screen-info', $event)"
           />
           <slot name="single-overlays" />
@@ -67,6 +69,7 @@ const props = defineProps({
   bindVpSingle: { type: Function, required: true },
   modelUrl: { type: String, default: '' },
   unitsUrl: { type: String, default: '' },
+  staticGroundMergeUrl: { type: String, default: '' },
   linksUrl: { type: String, default: '' },
   autoFocus: { type: Boolean, default: true },
   pathPoints: { type: Array, default: null },

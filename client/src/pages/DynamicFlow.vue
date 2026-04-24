@@ -60,6 +60,7 @@
           :bindVpSingle="bindVpSingle"
           :model-url="boeingModelUrl"
           :units-url="engineFailureUnitsUrl"
+          :static-ground-merge-url="staticGroundMergeUrl"
           :links-url="dynamicLinksUrl"
           :auto-focus="true"
           :path-points="pathPointsForViewer"
@@ -74,13 +75,14 @@
           :visible-unit-cluster-ids-right="visibleUnitClusterIdsRight"
           @marker-click="onMarkerClick"
           @marker-move="onMarkerMove"
+          @marker-close="onMarkerClose"
           @plane-screen-info="onPlaneScreenInfo"
           @plane-billboard-click="onPlaneBillboardClick"
         >
           <template #header></template>
 
           <template #single-overlays>
-            <!-- 与静态架构页完全一致：仅根据 plane-screen-info 刷新 popup，不参与飞机运动逻辑 -->
+            <!-- 单屏：仅沿线运动时显示跟随飞机 popup；数据仍来自 plane-screen-info -->
             <div class="cb-dv-cesium-layer-with-popup">
               <div
                 v-if="showPlanePopup && planeScreenInfo"
@@ -144,7 +146,31 @@
                 keyPrefix="no-"
                 @toggle-collapsed="floatingCardNoCollapsed = !floatingCardNoCollapsed"
                 @toggle-details="detailsOpenNo = !detailsOpenNo"
-              />
+              >
+                <template v-if="compareCurrentRelationNodesYes.length" #extra>
+                  <div class="cb-floating-relation-nodes">
+                    <div class="cb-floating-relation-nodes-title">链路节点</div>
+                    <div class="cb-floating-relation-nodes-btns relation-node-list floating-card-extra-scroll">
+                      <button
+                        v-for="(rn, ri) in compareCurrentRelationNodesYes"
+                        :key="'rel-yes-' + ri + '-' + rn.id"
+                        type="button"
+                        class="cb-floating-relation-node-btn"
+                        @click="onCompareRelationNodeClick('left', rn)"
+                      >
+                        {{ rn.name }}
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </FloatingCard>
+              <div
+                v-show="compareFaultAlertFiredYes"
+                class="cb-compare-fault-alert"
+                role="status"
+              >
+                {{ compareFaultAlertTextYes }}
+              </div>
               <TimelineDock
                 embed
                 embed-title-main="时间轴"
@@ -153,11 +179,15 @@
                 v-model.number="tYes"
                 :maxTime="timelineMax"
                 :step="0.1"
+                :milestones="compareMilestonesYes"
                 :keyframeMarks="keyframeMarksYes"
                 :dvTitleIconLeft="dvTitleIconLeft"
                 :playing="playingGlobal || playingLeft"
                 :currentTimeLabel="currentTimeLabelYes"
-                :isCompare="false"
+                :isCompare="true"
+                per-side-time-marker="yes"
+                :marker-yes-demo-t="tYes"
+                :marker-no-demo-t="tNo"
                 :markerNoAlign="markerNoAlign"
                 :markerNoLeft="markerNoLeft"
                 :markerNoTitle="markerNoTitle"
@@ -183,7 +213,31 @@
                 keyPrefix="yes-"
                 @toggle-collapsed="floatingCardYesCollapsed = !floatingCardYesCollapsed"
                 @toggle-details="detailsOpenYes = !detailsOpenYes"
-              />
+              >
+                <template v-if="compareCurrentRelationNodesNo.length" #extra>
+                  <div class="cb-floating-relation-nodes">
+                    <div class="cb-floating-relation-nodes-title">链路节点</div>
+                    <div class="cb-floating-relation-nodes-btns relation-node-list floating-card-extra-scroll">
+                      <button
+                        v-for="(rn, ri) in compareCurrentRelationNodesNo"
+                        :key="'rel-no-' + ri + '-' + rn.id"
+                        type="button"
+                        class="cb-floating-relation-node-btn"
+                        @click="onCompareRelationNodeClick('right', rn)"
+                      >
+                        {{ rn.name }}
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </FloatingCard>
+              <div
+                v-show="compareFaultAlertFiredNo"
+                class="cb-compare-fault-alert"
+                role="status"
+              >
+                {{ compareFaultAlertTextNo }}
+              </div>
               <TimelineDock
                 embed
                 embed-title-main="时间轴"
@@ -192,11 +246,15 @@
                 v-model.number="tNo"
                 :maxTime="timelineMax"
                 :step="0.1"
+                :milestones="compareMilestonesNo"
                 :keyframeMarks="keyframeMarksNo"
                 :dvTitleIconLeft="dvTitleIconLeft"
                 :playing="playingGlobal || playingRight"
                 :currentTimeLabel="currentTimeLabelNo"
-                :isCompare="false"
+                :isCompare="true"
+                per-side-time-marker="no"
+                :marker-yes-demo-t="tYes"
+                :marker-no-demo-t="tNo"
                 :markerNoAlign="markerNoAlign"
                 :markerNoLeft="markerNoLeft"
                 :markerNoTitle="markerNoTitle"
@@ -283,11 +341,14 @@
         v-model.number="t"
         :maxTime="timelineMax"
         :step="0.1"
+        :milestones="singleMilestones"
         :keyframeMarks="keyframeMarks"
         :dvTitleIconLeft="dvTitleIconLeft"
         :playing="playing"
         :currentTimeLabel="currentTimeLabel"
         :isCompare="false"
+        :marker-yes-demo-t="t"
+        :marker-no-demo-t="t"
         :markerNoAlign="markerNoAlign"
         :markerNoLeft="markerNoLeft"
         :markerNoTitle="markerNoTitle"
@@ -333,6 +394,7 @@ const dvMsgTabSelected = new URL('../assets/dynamicViewport/msgpage_button_selec
 const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const engineFailureUnitsUrl = `${baseUrl}/config/dynamic/engine_failure_units.json`;
 const dynamicLinksUrl = `${baseUrl}/config/dynamic/engine_failure_links.json`;
+const staticGroundMergeUrl = `${baseUrl}/config/units.json`;
 
 const vpSingle = ref(null);
 
@@ -388,9 +450,14 @@ const activePopup = ref(null);
 const showAirbornePopup = ref(false);
 
 function onMarkerClick(payload) {
+  if (isCompare.value) return;
   activePopup.value = payload;
 }
+function onMarkerClose() {
+  activePopup.value = null;
+}
 function onMarkerMove(p) {
+  if (isCompare.value) return;
   if (activePopup.value) activePopup.value.screen = { x: p.x, y: p.y };
 }
 
@@ -427,10 +494,13 @@ const airbornePopupStyle = computed(() => {
     transform: `translate(${info.x + offsetX}px, ${info.y + offsetY}px)`
   };
 });
+/** 与 StaticHome 一致：相对标点下移 40px，避免挡住 billboard 文字 */
+const MARKER_POPUP_TOP_FROM_SCREEN_Y = -12 + 40;
+
 const popupStyle = computed(() => {
   const s = activePopup.value?.screen;
   if (!s) return { position: 'fixed', right: '16px', top: '80px' };
-  return { position: 'fixed', left: `${s.x + 12}px`, top: `${s.y - 12}px` };
+  return { position: 'fixed', left: `${s.x + 12}px`, top: `${s.y + MARKER_POPUP_TOP_FROM_SCREEN_Y}px` };
 });
 
 let _dynTickUnsub1 = null;
@@ -458,10 +528,15 @@ const CRUISE_PATH_PROGRESS = Math.min(
 const FLIGHT_ANIM_MS = (60000 * 5) / 2; // 与 StaticHome togglePlaneMove 同量级
 
 function buildIframeScenarioPayload(side) {
+  const nodes = scenarioNodes.value || [];
+  const maxR = collectMaxRawFromNodes(nodes);
+  const tDisposal = semanticToDemoT(maxR);
   return {
     side,
     scenarioKey: activeScenario.value,
     timelineMax: timelineMax.value,
+    maxSemanticRaw: maxR,
+    tDisposalEnd: tDisposal,
     pathPoints: clonePathPointsForCompareSync(),
     cruisePathProgress: CRUISE_PATH_PROGRESS,
     flightAnimMs: FLIGHT_ANIM_MS,
@@ -475,6 +550,7 @@ function buildIframeScenarioPayload(side) {
     })),
     modelUrl: boeingModelUrl,
     unitsUrl: engineFailureUnitsUrl,
+    staticGroundMergeUrl,
     linksUrl: dynamicLinksUrl,
     depAirportLabel,
     arrAirportLabel
@@ -526,22 +602,30 @@ function clearCompareGlobalNarrativeState() {
 }
 
 function onNarrativeDoneFromChild(p) {
+  if (!globalNarrativeRunning.value) return;
   const side = p.side;
   const stepIdx = Number(p.stepIndex);
-  if (!globalNarrativeRunning.value || !Number.isFinite(stepIdx)) return;
+  const stepOk = Number.isFinite(stepIdx);
+  if (!stepOk && import.meta.env.DEV) {
+    console.warn('[DynamicFlowCompare] NARRATIVE_DONE stepIndex missing/invalid; clearing pending for side', p);
+  }
   if (side === 'left') {
     if (globalNarrativePendingLeft.value) {
       globalNarrativePendingLeft.value = false;
-      const sy = new Set(firedMarkStepIndexYes.value);
-      sy.add(stepIdx);
-      firedMarkStepIndexYes.value = sy;
+      if (stepOk) {
+        const sy = new Set(firedMarkStepIndexYes.value);
+        sy.add(stepIdx);
+        firedMarkStepIndexYes.value = sy;
+      }
     }
   } else if (side === 'right') {
     if (globalNarrativePendingRight.value) {
       globalNarrativePendingRight.value = false;
-      const sn = new Set(firedMarkStepIndexNo.value);
-      sn.add(stepIdx);
-      firedMarkStepIndexNo.value = sn;
+      if (stepOk) {
+        const sn = new Set(firedMarkStepIndexNo.value);
+        sn.add(stepIdx);
+        firedMarkStepIndexNo.value = sn;
+      }
     }
   }
   if (!globalNarrativePendingLeft.value && !globalNarrativePendingRight.value) {
@@ -550,6 +634,12 @@ function onNarrativeDoneFromChild(p) {
     globalNarrativeStepIndexRight.value = null;
     globalNarrativeRoundDemoT.value = null;
     compareGlobalDisplayT.value = Math.max(tYes.value, tNo.value, 0);
+    if (import.meta.env.DEV) {
+      console.log('[DynamicFlowCompare] playBoth after narrative (both sides done)', {
+        stepOk,
+        side
+      });
+    }
     compareBridgeRef.value?.playBoth?.({ parentControlsNarrative: true });
   }
 }
@@ -778,7 +868,7 @@ const pathProgressForViewerStage = computed(() => {
   return planeProgressLeft.value;
 });
 
-// 以下与静态架构页完全一致：仅接收 plane-screen-info 刷新 popup，与沿线运动无耦合
+// 单屏：与静态架构一致，仅「沿线运动」开启时允许跟随飞机 popup；对比模式仍只按相机高度门控
 const planeScreenInfo = ref(null);
 const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
 function onPlaneScreenInfo(info) {
@@ -787,6 +877,7 @@ function onPlaneScreenInfo(info) {
 const showPlanePopup = computed(() => {
   const info = planeScreenInfo.value;
   if (!info) return false;
+  if (!isCompare.value && !planePathEnabled.value) return false;
   return info.cameraHeight != null && info.cameraHeight <= POPUP_CAMERA_HEIGHT_THRESHOLD;
 });
 const planePopupStyle = computed(() => {
@@ -809,15 +900,52 @@ const planeEnvText = computed(() => {
 });
 
 const timelineMax = ref(100);
+/** 处置完成后沿航迹到终点的固定 demo 秒（与 scene.js 末段、JSON duration 对齐用） */
+const FINAL_FLIGHT_DEMO_SEC = 10;
 /** 与 iframe scene.js narrativeT0 对齐：语义时间轴「T+0」对应 demo 时间起点 */
 const compareNarrativeBaseT = 10;
 /** 语义秒 → demo 秒压缩比（与 scene.js SEMANTIC_TIME_COMPRESS 一致）；只调此项可整体快慢联动 */
 const SEMANTIC_TIME_COMPRESS = 10;
+/** 来自 dynamic_scenarios.json 的 optional narrativeMilestones，用于三枚阶段标牌的 raw 语义锚点 */
+const narrativeMilestonesFromJson = ref(null);
 
 /** raw：叙事基准后的语义秒（与 steps / scenarioNodes 中 t 一致）→ demo 时间（父页时间轴 scrub / iframe 共用） */
 function semanticToDemoT(rawSemanticAfterBase) {
   return compareNarrativeBaseT + Number(rawSemanticAfterBase) / SEMANTIC_TIME_COMPRESS;
 }
+
+function collectMaxRawFromNodes(nodes) {
+  let m = 0;
+  for (const n of nodes || []) {
+    if (n?.yes?.t != null) m = Math.max(m, Number(n.yes.t));
+    if (n?.no?.t != null) m = Math.max(m, Number(n.no.t));
+  }
+  return m;
+}
+
+function maxRawForSide(nodes, side) {
+  const k = side === 'yes' ? 'yes' : 'no';
+  let m = 0;
+  for (const n of nodes || []) {
+    if (n?.[k]?.t != null) m = Math.max(m, Number(n[k].t));
+  }
+  return m;
+}
+
+function computeTimelineMaxFromNodes(nodes) {
+  const maxR = collectMaxRawFromNodes(nodes);
+  return semanticToDemoT(maxR) + FINAL_FLIGHT_DEMO_SEC;
+}
+
+function firstAlertTextForSide(nodes, side) {
+  const k = side === 'yes' ? 'yes' : 'no';
+  for (const n of nodes || []) {
+    const a = n?.[k]?.alert;
+    if (a && String(a).trim()) return String(a).trim();
+  }
+  return '故障已触发（示意）';
+}
+
 /** demo 时间 → 叙事基准后的语义秒（用于节点判断、与 rawT 比较） */
 function demoToSemanticAfterBase(demoT) {
   return Math.max(0, (Number(demoT) - compareNarrativeBaseT) * SEMANTIC_TIME_COMPRESS);
@@ -846,6 +974,38 @@ const currentNodeId = ref(-1);
 const activeScenario = ref('engine');
 const steps = ref([]);
 const scenarioNodes = ref([]);
+
+function buildMilestoneRowsForSide(side) {
+  const nodes = scenarioNodes.value || [];
+  const cfg = narrativeMilestonesFromJson.value;
+  const k = side === 'yes' ? 'yes' : 'no';
+  let alarmRaw = cfg?.alarmRaw != null ? Number(cfg.alarmRaw) : 0;
+  if (!Number.isFinite(alarmRaw)) alarmRaw = 0;
+  let disposalRaw = cfg?.[side === 'yes' ? 'disposalStartRaw_yes' : 'disposalStartRaw_no'];
+  if (disposalRaw == null) disposalRaw = cfg?.disposalStartRaw;
+  if (disposalRaw == null && nodes[1]?.[k]?.t != null) disposalRaw = Number(nodes[1][k].t);
+  if (disposalRaw == null || !Number.isFinite(Number(disposalRaw))) disposalRaw = 0;
+  else disposalRaw = Number(disposalRaw);
+  let completeRaw = cfg?.[side === 'yes' ? 'completeRaw_yes' : 'completeRaw_no'];
+  if (completeRaw == null) completeRaw = cfg?.completeRaw;
+  if (completeRaw == null || !Number.isFinite(Number(completeRaw))) {
+    completeRaw = maxRawForSide(nodes, side);
+  } else {
+    completeRaw = Number(completeRaw);
+  }
+  const maxT = timelineMax.value;
+  const rows = [
+    { key: 'alarm', label: '开始告警', t: semanticToDemoT(alarmRaw) },
+    { key: 'disposal', label: '开始处置', t: semanticToDemoT(disposalRaw) },
+    { key: 'complete', label: '处置完成', t: semanticToDemoT(completeRaw) }
+  ];
+  return rows.map((r) => ({ ...r, t: Math.min(r.t, maxT) }));
+}
+
+const compareMilestonesYes = computed(() => buildMilestoneRowsForSide('yes'));
+const compareMilestonesNo = computed(() => buildMilestoneRowsForSide('no'));
+const singleMilestones = computed(() => buildMilestoneRowsForSide('yes'));
+
 const disposalCards = ref([]);
 const playing = ref(false);
 const activeSymbol = ref('plane');
@@ -895,6 +1055,32 @@ const infoFields = ref({
 
 const firedAlerts = reactive(new Set());
 
+/** 双屏：飞过 narrative 起点（10s）后一次性故障提示，复位后需可再播 */
+const compareFaultAlertFiredYes = ref(false);
+const compareFaultAlertFiredNo = ref(false);
+const compareFaultAlertTextYes = ref('故障已触发（示意）');
+const compareFaultAlertTextNo = ref('故障已触发（示意）');
+
+function clearCompareFaultAlerts() {
+  compareFaultAlertFiredYes.value = false;
+  compareFaultAlertFiredNo.value = false;
+}
+
+watch(tYes, (v, prev) => {
+  if (!isCompare.value) return;
+  if (prev == null || prev === undefined) return;
+  if (prev < compareNarrativeBaseT && v >= compareNarrativeBaseT - 1e-9) {
+    compareFaultAlertFiredYes.value = true;
+  }
+});
+watch(tNo, (v, prev) => {
+  if (!isCompare.value) return;
+  if (prev == null || prev === undefined) return;
+  if (prev < compareNarrativeBaseT && v >= compareNarrativeBaseT - 1e-9) {
+    compareFaultAlertFiredNo.value = true;
+  }
+});
+
 const currentScenarioName = computed(() => scenarios.find((s) => s.key === activeScenario.value)?.name || '单发失效');
 
 const currentTimeLabel = computed(() => `T+ ${t.value.toFixed(1)}`);
@@ -908,7 +1094,8 @@ function getCurrentNodeIndexByTime(time, side) {
   let idx = 0;
   for (let i = 0; i < arr.length; i++) {
     const ti = Number(arr[i][key] ?? 0);
-    const threshold = isCompare.value ? compareNarrativeBaseT + ti : ti;
+    /** compare 时间轴为 demo 秒：须与 keyframeMarks.t / iframe 触发一致，用语义压缩映射而非 base+raw */
+    const threshold = isCompare.value ? semanticToDemoT(ti) : ti;
     if (time >= threshold) idx = i;
   }
   return idx;
@@ -949,6 +1136,103 @@ const getCompareMeta = (scenarioKey, nodeId) => {
 
 const currentCardNo = computed(() => toSideCard(steps.value[idxNo.value], 'no'));
 const currentCardYes = computed(() => toSideCard(steps.value[idxYes.value], 'yes'));
+
+/** 父页缓存：dynamic_scenarios 同源的 engine_failure_units / engine_failure_links（子页仍自 fetch，此处仅服务 FloatingCard 链路节点） */
+const dynamicRelationMap = ref({ relations: [] });
+/** @type {import('vue').Ref<Record<string, { id: string, name: string }>>} */
+const dynamicUnitMap = ref({});
+
+async function fetchDynamicCompareMaps() {
+  try {
+    const [uRes, lRes] = await Promise.all([fetch(engineFailureUnitsUrl), fetch(dynamicLinksUrl)]);
+    if (!uRes.ok || !lRes.ok) return;
+    const unitsDoc = await uRes.json();
+    const linksDoc = await lRes.json();
+    const map = {};
+    const clusters = unitsDoc?.ground?.clusters || [];
+    for (let ci = 0; ci < clusters.length; ci++) {
+      const units = clusters[ci]?.units || [];
+      for (let ui = 0; ui < units.length; ui++) {
+        const u = units[ui];
+        if (u?.id == null) continue;
+        const id = String(u.id);
+        map[id] = { id, name: String(u.name != null ? u.name : id) };
+      }
+    }
+    dynamicUnitMap.value = map;
+    dynamicRelationMap.value = {
+      relations: Array.isArray(linksDoc?.relations) ? linksDoc.relations : []
+    };
+  } catch (e) {
+    console.warn('[DynamicFlow] fetchDynamicCompareMaps', e);
+  }
+}
+
+/**
+ * @param {'yes'|'no'} side
+ * @param {ReturnType<typeof toSideCard>} card
+ * @returns {{ id: string, name: string }[]}
+ */
+function buildRelationNodeList(side, card) {
+  if (!card) return [];
+  const relIds =
+    side === 'no'
+      ? Array.isArray(card.activeRelations_no)
+        ? card.activeRelations_no
+        : []
+      : Array.isArray(card.activeRelations_yes)
+        ? card.activeRelations_yes
+        : [];
+  const relations = dynamicRelationMap.value?.relations || [];
+  const unitMap = dynamicUnitMap.value || {};
+  const seen = new Set();
+  const out = [];
+  const pushNode = (nid) => {
+    const id = String(nid ?? '').trim();
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    if (id === 'plane') {
+      out.push({ id: 'plane', name: '飞机' });
+      return;
+    }
+    const u = unitMap[id];
+    out.push({ id, name: u?.name != null ? String(u.name) : id });
+  };
+  for (let ri = 0; ri < relIds.length; ri++) {
+    const rid = relIds[ri];
+    const rel = relations.find((r) => String(r?.id ?? '') === String(rid));
+    if (!rel || !Array.isArray(rel.edges)) continue;
+    for (let ei = 0; ei < rel.edges.length; ei++) {
+      const edge = rel.edges[ei];
+      if (!edge || edge.length < 2) continue;
+      pushNode(edge[0]);
+      pushNode(edge[1]);
+    }
+  }
+  return out;
+}
+
+const compareCurrentRelationNodesYes = computed(() =>
+  isCompare.value ? buildRelationNodeList('yes', currentCardYes.value) : []
+);
+const compareCurrentRelationNodesNo = computed(() =>
+  isCompare.value ? buildRelationNodeList('no', currentCardNo.value) : []
+);
+
+function isValidCompareFocusUnitId(id) {
+  if (id == null) return false;
+  const s = String(id).trim();
+  if (!s || s === 'undefined' || s === 'null') return false;
+  return true;
+}
+
+function onCompareRelationNodeClick(side, node) {
+  if (!isCompare.value || !node) return;
+  if (!isValidCompareFocusUnitId(node.id)) return;
+  const b = compareBridgeRef.value;
+  if (!b?.focusUnit) return;
+  b.focusUnit(side, { unitId: String(node.id).trim() });
+}
 const currentCard = computed(() => currentCardYes.value || fallbackCard('yes'));
 const currentCompareMeta = computed(() => getCompareMeta(activeScenario.value, currentCardYes.value?.nodeId ?? 0));
 
@@ -1187,6 +1471,8 @@ const toSideCard = (step, side = 'yes') => {
       events: [],
       evidence: [],
       actions: [],
+      activeRelations_yes: [],
+      activeRelations_no: [],
       compare: getCompareMeta(activeScenario.value, 0)
     };
   }
@@ -1207,6 +1493,8 @@ const toSideCard = (step, side = 'yes') => {
     evidence: isNo ? ((step.evidence_no && step.evidence_no.length) ? step.evidence_no : (step.evidence || [])) : (step.evidence || []),
     actions: isNo ? ((step.actions_no && step.actions_no.length) ? step.actions_no : (step.actions || [])) : (step.actions || []),
     alert: isNo ? (step.alert_no || step.alert || '') : (step.alert || ''),
+    activeRelations_yes: Array.isArray(step.activeRelations_yes) ? [...step.activeRelations_yes] : [],
+    activeRelations_no: Array.isArray(step.activeRelations_no) ? [...step.activeRelations_no] : [],
     compare: getCompareMeta(activeScenario.value, step.nodeId ?? 0)
   };
 };
@@ -1319,6 +1607,7 @@ function startGlobalPlayback() {
   if (!isCompare.value) return;
   forceSceneUnlocked.value = false;
   clearCompareGlobalNarrativeState();
+  clearCompareFaultAlerts();
   compareBridgeRef.value?.pauseBoth?.();
   playingGlobal.value = true;
   playbackMode.value = 'global';
@@ -1330,6 +1619,7 @@ function startSidePlayback(side) {
   if (!isCompare.value) return;
   forceSceneUnlocked.value = false;
   clearCompareGlobalNarrativeState();
+  clearCompareFaultAlerts();
   compareBridgeRef.value?.pauseBoth?.();
   if (side === 'left') {
     compareBridgeRef.value?.reset('right');
@@ -1361,6 +1651,7 @@ function pauseRightPlayback() {
 function resetCompareAll() {
   forceSceneUnlocked.value = false;
   stopAllCompareFlightAndScene();
+  clearCompareFaultAlerts();
   playbackMode.value = 'idle';
   tYes.value = 0;
   tNo.value = 0;
@@ -1420,6 +1711,8 @@ function resetCompareSide(side) {
   if (!isCompare.value) return;
   forceSceneUnlocked.value = true;
   clearCompareGlobalNarrativeState();
+  if (side === 'left') compareFaultAlertFiredYes.value = false;
+  else compareFaultAlertFiredNo.value = false;
   compareBridgeRef.value?.reset(side === 'left' ? 'left' : 'right');
   if (side === 'left') {
     tYes.value = 0;
@@ -1683,9 +1976,15 @@ const loadScenario = async (key) => {
       console.warn('[DynamicFlow] scenario not found:', scenarioKey);
       return;
     }
-    timelineMax.value = Number(scenario.durationSec) || 100;
+    await fetchDynamicCompareMaps();
     const nodes = scenario.nodes || [];
     scenarioNodes.value = nodes;
+    narrativeMilestonesFromJson.value = scenario.narrativeMilestones || null;
+    timelineMax.value = computeTimelineMaxFromNodes(nodes);
+    compareFaultAlertTextYes.value = firstAlertTextForSide(nodes, 'yes');
+    compareFaultAlertTextNo.value = firstAlertTextForSide(nodes, 'no');
+    clearCompareFaultAlerts();
+    infoFields.value.f_time = `T+0 ~ T+${timelineMax.value.toFixed(0)}（示意）`;
     steps.value = nodes.map((node, idx) => {
       const y = node.yes || {};
       const n = node.no || {};
@@ -1746,6 +2045,7 @@ const loadScenario = async (key) => {
 const toggleCompare = () => {
   isCompare.value = !isCompare.value;
   if (isCompare.value) {
+    closePopup();
     hideInfoBox();
     stopTimer();
     stopAllCompareFlightAndScene();
@@ -1757,6 +2057,8 @@ const toggleCompare = () => {
     lastNodeIdYes.value = -1;
     forceSceneUnlocked.value = false;
   } else {
+    compareBridgeRef.value?.clearActiveMarkerBoth?.();
+    closePopup();
     stopAllCompareFlightAndScene();
     t.value = tYes.value;
     planeProgress.value = planeProgressLeft.value;
@@ -1921,4 +2223,5 @@ onBeforeUnmount(() => {
 .cb-airborne-popup-follow {
   pointer-events: auto;
 }
+
 </style>

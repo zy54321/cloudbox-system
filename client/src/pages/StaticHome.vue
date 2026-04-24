@@ -39,7 +39,7 @@
 
               <!-- Cesium 视口 + 飞机跟随 popup（相机高度≤阈值时显示） -->
               <div class="cb-cesium-layer cb-cesium-layer--with-popup">
-                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :dep-airport-label="depAirportLabel" :arr-airport-label="arrAirportLabel" :visible-relation-id="selectedRelationId" :skip-relation-node-focus="relationSequencePlaying" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @plane-screen-info="onPlaneScreenInfo" @plane-billboard-click="onPlaneBillboardClick" @module-highlight-screen="onModuleHighlightScreen" @camera-home="onCameraHome" />
+                <CesiumViewport ref="vpStatic" :model-url="boeingModelUrl" :auto-focus="true" :path-points="pathPointsForViewer" :path-progress="planeProgress" :follow-path="true" :dep-airport-label="depAirportLabel" :arr-airport-label="arrAirportLabel" :visible-relation-id="selectedRelationId" :skip-relation-node-focus="relationSequencePlaying" @marker-click="onMarkerClick" @marker-move="onMarkerMove" @marker-close="onMarkerClose" @marker-group-show="onMarkerGroupShow" @marker-group-move="onMarkerGroupMove" @marker-group-close="onMarkerGroupClose" @plane-screen-info="onPlaneScreenInfo" @plane-billboard-click="onPlaneBillboardClick" @module-highlight-screen="onModuleHighlightScreen" @camera-home="onCameraHome" />
                 <div
                   v-if="showPlanePopup && planeScreenInfo"
                   class="cb-plane-follow-popup"
@@ -93,6 +93,23 @@
                     <span class="marker-popup-type">类型：{{ activePopup.meta.typeLabel || activePopup.meta.type }}</span>
                   </div>
                   <div class="marker-popup-desc">{{ activePopup.meta.info || '该节点用于展示其在"云匣子"体系中的位置与作用。' }}</div>
+                </div>
+              </div>
+              <div
+                v-for="(g, gIdx) in activeGroupPopups"
+                :key="g.unitId"
+                class="marker-popup marker-popup--group"
+                :style="groupPopupItemStyle(g, gIdx)"
+              >
+                <div class="marker-popup-header marker-popup-header--compact">
+                  <div class="marker-popup-title">{{ g.meta.name }}</div>
+                </div>
+                <div class="marker-popup-body marker-popup-body--compact">
+                  <div class="marker-popup-meta">
+                    <span class="marker-popup-badge">{{ g.meta.infoSource || '节点介绍' }}</span>
+                    <span class="marker-popup-type">类型：{{ g.meta.typeLabel || g.meta.type }}</span>
+                  </div>
+                  <div class="marker-popup-desc marker-popup-desc--compact">{{ g.meta.info || '该节点用于展示其在"云匣子"体系中的位置与作用。' }}</div>
                 </div>
               </div>
 
@@ -208,11 +225,30 @@
                 v-for="rel in panelRelations"
                 :key="rel.id"
                 :ref="(el) => setRelationItemRef(rel.id, el)"
-                class="cb-item"
-                :class="{ 'cb-item--relation-selected': selectedRelationId === rel.id }"
+                class="cb-item cb-item--relation-row"
+                :class="[
+                  rel.displayFlowLabel === '信息流' ? 'cb-relation--info' : 'cb-relation--ctrl',
+                  { 'cb-item--relation-selected': selectedRelationId === rel.id }
+                ]"
+                role="button"
+                tabindex="0"
+                @click="openRelationDetail(rel.id)"
+                @keydown.enter.prevent="openRelationDetail(rel.id)"
+                @keydown.space.prevent="openRelationDetail(rel.id)"
               >
-                <h4><span style="color:#ffd54a;">{{ rel.displayFlowLabel }}：</span>{{ rel.name }}</h4>
-                <p><span class="cb-link" @click="openRelationDetail(rel.id)">点击查看详细信息</span></p>
+                <h4><span class="cb-relation-flow-tag">{{ rel.displayFlowLabel }}</span>{{ rel.name }}</h4>
+                <div v-if="selectedRelationId === rel.id" class="cb-relation-detail" @click.stop>
+                  <div class="cb-relation-detail-hd">
+                    <span class="cb-relation-badge">{{ rel.displayFlowLabel }}</span>
+                    <span class="cb-relation-detail-title">{{ rel.name }}</span>
+                  </div>
+                  <ul v-if="rel.transfers?.length" class="cb-relation-transfers">
+                    <li v-for="(t, idx) in rel.transfers" :key="rel.id + '-t-' + idx">
+                      {{ t.fromLabel }} → {{ t.toLabel }}：{{ t.payload }}
+                    </li>
+                  </ul>
+                  <p v-else class="cb-relation-transfers-empty">暂无传输明细</p>
+                </div>
               </div>
             </template>
             <template v-else-if="activeTab === 'modules'">
@@ -459,6 +495,8 @@ const staticArchitectureImageUrl = `${(import.meta.env.BASE_URL || '/').replace(
 
 const planeScreenInfo = ref(null);
 const activePopup = ref(null);
+/** 并发 group 聚焦：多节点 popup（与单点 activePopup 分离） */
+const activeGroupPopups = ref([]);
 const detailModalType = ref(null); // 'star' | 'ground' | 'airborne' | null
 const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
 
@@ -662,6 +700,7 @@ async function scrollSelectedRelationIntoView() {
   }
 }
 function openRelationDetail(relationId) {
+  closeDetailModal();
   relationSequencePlaying.value = false;
   _relationSequenceToken++;
   selectedRelationId.value = selectedRelationId.value === relationId ? null : relationId;
@@ -692,11 +731,16 @@ async function playAllRelationsSequence() {
   const token = ++_relationSequenceToken;
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try {
-    for (const rel of relations) {
+    const n = relations.length;
+    for (let i = 0; i < n; i++) {
       if (token !== _relationSequenceToken) return;
+      const rel = relations[i];
       selectedRelationId.value = rel.id;
-      vp.flyCameraToRelationCameraView?.(rel.id, { duration: 2.1 });
-      await wait(2700);
+      await vp.playRelationFocusUnified?.(rel.id, {
+        skipFinalRelationCameraView: i < n - 1
+      });
+      if (token !== _relationSequenceToken) return;
+      await wait(320);
     }
     if (token !== _relationSequenceToken) return;
     openStaticArchitectureImageViewer();
@@ -728,11 +772,11 @@ const onClickDynamicTab = () => {
 };
 
 const STATIC_GROUND_VIEW = {
-  destination: Cesium.Cartesian3.fromDegrees(116.199545, 28.245891, 1528514.64),
+  destination: Cesium.Cartesian3.fromDegrees(108.782557, 34.397726, 7973.44),
   orientation: {
-    heading: Cesium.Math.toRadians(353.31),
-    pitch: Cesium.Math.toRadians(-52.41),
-    roll: Cesium.Math.toRadians(0.01)
+    heading: Cesium.Math.toRadians(352.65),
+    pitch: Cesium.Math.toRadians(-55.08),
+    roll: Cesium.Math.toRadians(0)
   }
 };
 
@@ -841,8 +885,31 @@ const detailModalTitle = computed(() => {
 function onMarkerClick(payload) {
   activePopup.value = payload;
 }
+function onMarkerClose() {
+  activePopup.value = null;
+}
 function onMarkerMove(p) {
   if (activePopup.value) activePopup.value.screen = { x: p.x, y: p.y };
+}
+function onMarkerGroupShow(items) {
+  activePopup.value = null;
+  activeGroupPopups.value = (items || []).map((it) => ({
+    unitId: it.unitId,
+    meta: it.meta,
+    screen: it.screen ? { x: it.screen.x, y: it.screen.y } : null
+  }));
+}
+function onMarkerGroupMove(items) {
+  const list = activeGroupPopups.value;
+  if (!list.length || !items?.length) return;
+  activeGroupPopups.value = list.map((g) => {
+    const upd = items.find((it) => it.unitId === g.unitId);
+    if (!upd?.screen) return g;
+    return { ...g, screen: { x: upd.screen.x, y: upd.screen.y } };
+  });
+}
+function onMarkerGroupClose() {
+  activeGroupPopups.value = [];
 }
 function closePopup() {
   activePopup.value = null;
@@ -873,11 +940,29 @@ const airbornePopupStyle = computed(() => {
     transform: `translate(${info.x + offsetX}px, ${info.y + offsetY}px)`
   };
 });
+/** 相对标点 world→window：原 top 为 s.y-12，再整体下移 40px 避免挡住 billboard 文字 */
+const MARKER_POPUP_TOP_FROM_SCREEN_Y = -12 + 40;
+
 const popupStyle = computed(() => {
   const s = activePopup.value?.screen;
   if (!s) return { position: 'fixed', right: '16px', top: '80px' };
-  return { position: 'fixed', left: `${s.x + 12}px`, top: `${s.y - 12}px` };
+  return { position: 'fixed', left: `${s.x + 12}px`, top: `${s.y + MARKER_POPUP_TOP_FROM_SCREEN_Y}px` };
 }); // 相机高度 > 500km 时隐藏 popup，显示航迹线+起点
+
+function groupPopupItemStyle(g, idx) {
+  const s = g.screen;
+  const staggerX = (idx || 0) * 10;
+  const staggerY = (idx || 0) * 14;
+  if (!s) {
+    return { position: 'fixed', right: '16px', top: `${80 + staggerY}px`, zIndex: 99 };
+  }
+  return {
+    position: 'fixed',
+    left: `${s.x + 12 + staggerX}px`,
+    top: `${s.y + MARKER_POPUP_TOP_FROM_SCREEN_Y + staggerY}px`,
+    zIndex: 99
+  };
+}
 
 function onPlaneScreenInfo(info) {
   planeScreenInfo.value = info;
@@ -1389,10 +1474,6 @@ onBeforeUnmount(() => {
   margin-left: -10px;
   border-radius: 4px;
 }
-.cb-item.cb-item--relation-selected .cb-link {
-  color: #7dd3fc;
-  font-weight: 600;
-}
 .cb-relation-actions {
   display: flex;
   gap: 8px;
@@ -1677,6 +1758,35 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.94);
   line-height: 1.72;
   white-space: normal;
+}
+.marker-popup--group {
+  z-index: 99;
+  min-width: 180px;
+  max-width: 280px;
+  border-radius: 12px;
+}
+.marker-popup--group .marker-popup-header--compact {
+  padding: 8px 10px;
+}
+.marker-popup--group .marker-popup-title {
+  font-size: 12px;
+}
+.marker-popup--group .marker-popup-body--compact {
+  padding: 8px 10px;
+  gap: 6px;
+  max-width: 260px;
+}
+.marker-popup--group .marker-popup-desc--compact {
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.marker-popup--group .marker-popup-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+.marker-popup--group .marker-popup-type {
+  font-size: 10px;
 }
 .airborne-popup-list {
   margin: 0;

@@ -1,5 +1,9 @@
 <template>
-  <div :id="id" class="floating-card" :class="{ 'is-collapsed': collapsed }">
+  <div
+    :id="id"
+    class="floating-card floating-card--dv"
+    :class="{ 'is-collapsed': collapsed }"
+  >
     <div class="floating-card-header">
       <span class="floating-card-title">{{ card?.phase }} · {{ card?.title }}</span>
       <button class="btn-icon floating-card-toggle" type="button" @click="$emit('toggle-collapsed')">
@@ -7,7 +11,7 @@
       </button>
     </div>
 
-    <div class="floating-card-body" v-show="!collapsed">
+    <div class="floating-card-body floating-card-scroll" v-show="!collapsed">
       <div class="card-meta">T+{{ card?.t }}s ｜ {{ card?.state }}</div>
       <div class="card-summary" v-if="card?.summary">{{ card.summary }}</div>
       <div class="card-desc" v-if="card?.desc">{{ card.desc }}</div>
@@ -23,7 +27,9 @@
           <li v-for="(item, idx) in (card?.actions || []).slice(0, 5)" :key="keyPrefix + 'a' + idx">{{ item }}</li>
         </ul>
 
-        <slot name="extra" />
+        <div v-if="$slots.extra" class="floating-card-extra">
+          <slot name="extra" />
+        </div>
       </div>
 
       <button class="btn-small" type="button" @click="$emit('toggle-details')">

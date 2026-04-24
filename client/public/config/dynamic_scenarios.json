@@ -2,7 +2,14 @@
   "scenarios": {
     "engine_failure": {
       "name": "单发失效",
-      "durationSec": 1800,
+      "durationSec": 200,
+      "narrativeMilestones": {
+        "alarmRaw": 0,
+        "disposalStartRaw_yes": 0.3,
+        "disposalStartRaw_no": 60,
+        "completeRaw_yes": 40.3,
+        "completeRaw_no": 1800
+      },
       "nodes": [
         {
           "nodeId": 0,

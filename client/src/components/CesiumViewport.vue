@@ -22,6 +22,7 @@
 import { defineExpose, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import * as Cesium from 'cesium';
 import { createCesiumViewer, destroyCesiumViewer } from '../engine/cesium/viewer';
+import { mergeGroundUnitsWithStatic } from '../utils/mergeGroundUnitsWithStatic';
 
 // 所有 billboard 图片统一从 public/img 加载，与 units.json 的 image 路径一致
 const _base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -43,11 +44,24 @@ const AIRPORT_LABEL_FADE_START = 1500000;
 const AIRPORT_LABEL_HIDE_DISTANCE = 12000000;
 const AIRPORT_LABEL_PIXEL_OFFSET = new Cesium.Cartesian2(0, -18);
 
-const emit = defineEmits(['marker-click', 'marker-move', 'marker-close', 'plane-screen-info', 'plane-billboard-click', 'module-highlight-screen', 'camera-home']);
+const emit = defineEmits([
+  'marker-click',
+  'marker-move',
+  'marker-close',
+  'marker-group-show',
+  'marker-group-move',
+  'marker-group-close',
+  'plane-screen-info',
+  'plane-billboard-click',
+  'module-highlight-screen',
+  'camera-home'
+]);
 
 const props = defineProps({
   modelUrl: { type: String, default: '' },
   unitsUrl: { type: String, default: `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/config/units.json` },
+  /** 非空时与 unitsUrl 拉取结果合并地面标点（静态架构 units.json），同 id 静态优先图标字段 */
+  staticGroundMergeUrl: { type: String, default: '' },
   linksUrl: { type: String, default: `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/config/links.json` },
   autoFocus: { type: Boolean, default: false },
   readonly: { type: Boolean, default: false },
@@ -106,6 +120,10 @@ let arrAirportLabelEntity = null;
 let clickHandler = null;
 let pickHandler = null;
 let activeMarkerEntity = null;
+/** group 关系聚焦：多节点 popup 跟随（与单点 activeMarkerEntity 分离） */
+let activeMarkerEntities = [];
+/** viewer 就绪后赋值，与拾取逻辑共用：canvas 坐标 → 视口 fixed 定位 */
+let canvasToViewportForMarker = (canvasX, canvasY) => ({ x: canvasX, y: canvasY });
 let _planeFaultFlashInterval = null;
 let _moduleHighlightIndex = null;
 let _moduleCubeEntity = null;
@@ -170,6 +188,8 @@ const RELATION_FLOW_LABEL = new Map();
 const RELATION_VIEW_PRESET = new Map();
 /** relationId -> cam，全链路巡航结束后的全局视角 */
 const RELATION_CAMERA_VIEW = new Map();
+/** relationId -> focusGroups[]（并发聚焦：single / group） */
+const RELATION_FOCUS_GROUPS = new Map();
 /** linkEntityId -> 'left' | 'right' | 'none'（用于 splitMode 下的 plane 链路） */
 const LINK_ENTITY_SIDE = new Map();
 /** linkId -> { parentId, childId }，用于阶段切换后按当前端点位置刷新链路（如飞机移动） */
@@ -286,6 +306,60 @@ const ensureSplitMaterials = () => {
   }
 };
 
+/** splitMode=false：信息流/控制流固定冷色虚线、暖色箭头，不依赖卷帘左右分色 */
+const ensureMonoFlowMaterials = () => {
+  const cache = Cesium.Material._materialCache;
+  if (!cache.getMaterial('MonoInfoDash')) {
+    cache.addMaterial('MonoInfoDash', {
+      fabric: {
+        type: 'MonoInfoDash',
+        uniforms: {
+          colorBase: new Cesium.Color(0.12, 0.68, 0.98, 0.95),
+          time: 0.0
+        },
+        source: `
+          czm_material czm_getMaterial(czm_materialInput materialInput) {
+            czm_material material = czm_getDefaultMaterial(materialInput);
+            vec2 st = materialInput.st;
+            float t = fract(st.s * 4.0 - time);
+            float a = smoothstep(0.0, 0.15, t) * (1.0 - smoothstep(0.75, 1.0, t));
+            material.diffuse = colorBase.rgb;
+            material.alpha = a * colorBase.a;
+            return material;
+          }
+        `
+      },
+      translucent: () => true
+    });
+  }
+  if (!cache.getMaterial('MonoCtrlArrow')) {
+    cache.addMaterial('MonoCtrlArrow', {
+      fabric: {
+        type: 'MonoCtrlArrow',
+        uniforms: {
+          colorBase: new Cesium.Color(0.98, 0.42, 0.12, 0.95),
+          time: 0.0
+        },
+        source: `
+          czm_material czm_getMaterial(czm_materialInput materialInput) {
+            czm_material material = czm_getDefaultMaterial(materialInput);
+            vec2 st = materialInput.st;
+            float distFromCenter = abs(st.t - 0.5) * 2.0;
+            float s = fract(st.s * 4.0 - time);
+            float arrowHead = step(distFromCenter, (1.0 - s) * 2.0) * step(0.5, s);
+            float arrowStem = step(distFromCenter, 0.2) * step(s, 0.5);
+            float arrowShape = clamp(arrowHead + arrowStem, 0.0, 1.0);
+            material.diffuse = colorBase.rgb;
+            material.alpha = arrowShape * colorBase.a;
+            return material;
+          }
+        `
+      },
+      translucent: () => true
+    });
+  }
+};
+
 // --- 自定义的 MaterialProperty 类 ---
 class SplitLinkMaterialProperty {
   constructor(isArrow = false) {
@@ -310,10 +384,33 @@ class SplitLinkMaterialProperty {
   equals(other) { return this === other; }
 }
 
+class MonoLinkMaterialProperty {
+  constructor(isCtrl = false) {
+    this._definitionChanged = new Cesium.Event();
+    this.isCtrl = isCtrl;
+    this._startMs = Date.now();
+  }
+  get isConstant() { return false; }
+  get definitionChanged() { return this._definitionChanged; }
+  getType() {
+    ensureMonoFlowMaterials();
+    return this.isCtrl ? 'MonoCtrlArrow' : 'MonoInfoDash';
+  }
+  getValue(time, result) {
+    if (!result) result = {};
+    result.time = ((Date.now() - this._startMs) / 1000) * 1.5;
+    return result;
+  }
+  equals(other) { return this === other; }
+}
+
 const getLinkMaterialByFlowLabel = (flowLabel) => {
   const f = String(flowLabel ?? '').toUpperCase();
-  const isArrow = (f === 'CTRL' || f === '控制流');
-  return new SplitLinkMaterialProperty(isArrow);
+  const isCtrl = f === 'CTRL' || f === '控制流';
+  if (props.splitMode) {
+    return new SplitLinkMaterialProperty(isCtrl);
+  }
+  return new MonoLinkMaterialProperty(isCtrl);
 };
 
 /** 根据实体 id 获取当前时刻的笛卡尔位置 */
@@ -400,7 +497,8 @@ const syncUnitHighlightsFromActiveIds = () => {
     }
 
     const cid = String(clusterId || '');
-    e.show = singleClusterSet.has(cid);
+    const showMergedStaticExtra = cid === 'STATIC_ARCH_EXTRA';
+    e.show = singleClusterSet.has(cid) || (showMergedStaticExtra && hasDynamicFilter);
     applyUnitSplitDirection(e, Cesium.SplitDirection.NONE);
   });
 
@@ -462,7 +560,8 @@ const updateUnitEntitiesVisibilitySplitLegacy = () => {
     const cid = String(clusterId || '');
     const inLeft = leftSet.has(cid);
     const inRight = rightSet.has(cid);
-    e.show = inLeft || inRight;
+    const showMergedStaticExtraSplit = cid === 'STATIC_ARCH_EXTRA' && hasDynamicFilter;
+    e.show = inLeft || inRight || showMergedStaticExtraSplit;
 
     let dir = Cesium.SplitDirection.NONE;
     if (inLeft && !inRight) dir = Cesium.SplitDirection.LEFT;
@@ -562,7 +661,18 @@ const loadAndAddUnits = async () => {
   try {
     const res = await fetch(props.unitsUrl);
     if (!res.ok) return;
-    const data = await res.json();
+    let data = await res.json();
+    if (props.staticGroundMergeUrl) {
+      try {
+        const sres = await fetch(props.staticGroundMergeUrl);
+        if (sres.ok) {
+          const staticData = await sres.json();
+          data = mergeGroundUnitsWithStatic(data, staticData);
+        }
+      } catch (mergeErr) {
+        console.warn('[CesiumViewport] static ground merge failed:', mergeErr);
+      }
+    }
 
     const addBillboard = (unit, clusterId) => {
       const altM = unit.alt ?? unit.alt_m ?? 0;
@@ -1082,6 +1192,81 @@ const flyToRelationBounds = (relationId) => {
 
 const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const clearMarkerPopupFromRelationFocus = () => {
+  activeMarkerEntity = null;
+  emit('marker-close');
+};
+
+const clearMarkerPopupGroupFromRelationFocus = () => {
+  const had = activeMarkerEntities.length > 0;
+  activeMarkerEntities = [];
+  if (had) emit('marker-group-close');
+};
+
+const emitMarkerPopupGroupForUnitIds = (unitIds) => {
+  if (!viewer?.entities) {
+    activeMarkerEntities = [];
+    emit('marker-group-close');
+    return;
+  }
+  const entities = [];
+  const items = [];
+  for (const rawId of unitIds || []) {
+    const uid = String(rawId || '').trim();
+    if (!uid) continue;
+    let ent = viewer.entities.getById(uid);
+    if (!ent) continue;
+    if (ent.__meta?.isTextBillboard && ent.__meta.anchorId) {
+      ent = viewer.entities.getById(ent.__meta.anchorId);
+    }
+    if (!ent?.__meta) continue;
+    const pos = ent.position?.getValue(viewer.clock.currentTime);
+    const win = pos ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos) : null;
+    const screen = win ? canvasToViewportForMarker(win.x, win.y) : null;
+    if (!screen) continue;
+    entities.push(ent);
+    items.push({ unitId: String(ent.id), meta: ent.__meta, screen });
+  }
+  activeMarkerEntities = entities;
+  if (!items.length) {
+    activeMarkerEntities = [];
+    emit('marker-group-close');
+  } else {
+    emit('marker-group-show', items);
+  }
+};
+
+const emitMarkerPopupForUnitId = (nodeId) => {
+  if (!viewer?.entities) {
+    clearMarkerPopupGroupFromRelationFocus();
+    clearMarkerPopupFromRelationFocus();
+    return;
+  }
+  clearMarkerPopupGroupFromRelationFocus();
+  let ent = viewer.entities.getById(nodeId);
+  if (!ent) {
+    clearMarkerPopupFromRelationFocus();
+    return;
+  }
+  if (ent.__meta?.isTextBillboard && ent.__meta.anchorId) {
+    ent = viewer.entities.getById(ent.__meta.anchorId);
+  }
+  if (!ent?.__meta) {
+    clearMarkerPopupFromRelationFocus();
+    return;
+  }
+  activeMarkerEntity = ent;
+  viewer.selectedEntity = undefined;
+  const pos = ent.position?.getValue(viewer.clock.currentTime);
+  const win = pos ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos) : null;
+  const screen = win ? canvasToViewportForMarker(win.x, win.y) : null;
+  if (!screen) {
+    clearMarkerPopupFromRelationFocus();
+    return;
+  }
+  emit('marker-click', { meta: ent.__meta, screen });
+};
+
 const getRelationNodeOrder = (relationId) => {
   const relData = RELATION_UNIT_IDS.get(relationId);
   const edges = relData?.edges || [];
@@ -1137,15 +1322,24 @@ const focusRelationNode = async (nodeId, seq) => {
   if (seq !== _relationFocusSeq) return;
   const isPlaneNode = nodeId === 'plane';
   if (isPlaneNode) {
+    clearMarkerPopupFromRelationFocus();
     if (!flyCameraToPlaneNode()) return;
     await waitMs(1100);
     if (seq !== _relationFocusSeq) return;
     await flashPlaneModelBrief(3);
+    if (seq !== _relationFocusSeq) return;
+    await waitMs(2000);
     return;
   }
 
   const entity = viewer?.entities?.getById(nodeId);
-  if (!entity?.position) return;
+  if (!entity?.position) {
+    clearMarkerPopupFromRelationFocus();
+    return;
+  }
+  clearMarkerPopupFromRelationFocus();
+  await waitMs(80);
+  if (seq !== _relationFocusSeq) return;
   flyCameraToUnitId(nodeId, {
     duration: 0.9,
     pitchDeg: -24,
@@ -1153,7 +1347,11 @@ const focusRelationNode = async (nodeId, seq) => {
   });
   await waitMs(1100);
   if (seq !== _relationFocusSeq) return;
+  emitMarkerPopupForUnitId(nodeId);
+  if (seq !== _relationFocusSeq) return;
   await flashUnitBillboards([nodeId], 3);
+  if (seq !== _relationFocusSeq) return;
+  await waitMs(2000);
 };
 
 const playRelationNodeFocusSequence = async (relationId, opts = {}) => {
@@ -1161,6 +1359,8 @@ const playRelationNodeFocusSequence = async (relationId, opts = {}) => {
   const seq = ++_relationFocusSeq;
   const order = getRelationNodeOrder(relationId);
   if (!order.length) return;
+
+  clearMarkerPopupGroupFromRelationFocus();
 
   for (const nodeId of order) {
     if (seq !== _relationFocusSeq) return;
@@ -1170,28 +1370,75 @@ const playRelationNodeFocusSequence = async (relationId, opts = {}) => {
   }
   if (seq !== _relationFocusSeq) return;
   if (!opts.skipFinalRelationCameraView) {
+    clearMarkerPopupGroupFromRelationFocus();
+    clearMarkerPopupFromRelationFocus();
     flyCameraToRelationCameraView(relationId);
+  }
+};
+
+const playRelationFocusGroupsSequence = async (relationId, opts = {}) => {
+  if (!relationId) return;
+  const groups = RELATION_FOCUS_GROUPS.get(relationId);
+  if (!Array.isArray(groups) || !groups.length) return;
+  const seq = ++_relationFocusSeq;
+  const groupDur = opts.groupDuration ?? 1.1;
+  clearMarkerPopupGroupFromRelationFocus();
+  for (const g of groups) {
+    if (seq !== _relationFocusSeq) return;
+    clearMarkerPopupGroupFromRelationFocus();
+    const type = String(g?.type || '').toLowerCase();
+    const ids = Array.isArray(g?.unitIds) ? g.unitIds.map(String).filter(Boolean) : [];
+    if (type === 'single' && ids.length) {
+      await focusRelationNode(ids[0], seq);
+    } else if (type === 'group' && ids.length) {
+      clearMarkerPopupFromRelationFocus();
+      flyCameraToUnitIdsBoundingSphere(ids, {
+        duration: groupDur,
+        rangeScale: 1.0,
+        minRange: 4000,
+        pitchDeg: -55
+      });
+      await waitMs(1100);
+      if (seq !== _relationFocusSeq) return;
+      emitMarkerPopupGroupForUnitIds(ids);
+      if (seq !== _relationFocusSeq) return;
+      await flashUnitBillboards(ids, 3);
+      if (seq !== _relationFocusSeq) return;
+      await waitMs(2000);
+    }
+    if (seq !== _relationFocusSeq) return;
+    await waitMs(180);
+  }
+  if (seq !== _relationFocusSeq) return;
+  if (!opts.skipFinalRelationCameraView) {
+    clearMarkerPopupGroupFromRelationFocus();
+    clearMarkerPopupFromRelationFocus();
+    flyCameraToRelationCameraView(relationId);
+  }
+};
+
+const playRelationFocusUnified = async (relationId, opts = {}) => {
+  if (!relationId) return;
+  const groups = RELATION_FOCUS_GROUPS.get(relationId);
+  if (Array.isArray(groups) && groups.length) {
+    await playRelationFocusGroupsSequence(relationId, opts);
+  } else {
+    await playRelationNodeFocusSequence(relationId, opts);
   }
 };
 
 /** 多条链路同一聚焦代际：按 relationIds 顺序，每条内按节点顺序（compare 子页阶段机用） */
 const playRelationIdsNodeFocusSequence = async (relationIds, opts = {}) => {
   if (!Array.isArray(relationIds) || !relationIds.length) return;
-  const seq = ++_relationFocusSeq;
-  for (const relationId of relationIds) {
-    if (!relationId || seq !== _relationFocusSeq) return;
-    const order = getRelationNodeOrder(relationId);
-    for (const nodeId of order) {
-      if (seq !== _relationFocusSeq) return;
-      await focusRelationNode(nodeId, seq);
-      if (seq !== _relationFocusSeq) return;
-      await waitMs(180);
-    }
-  }
-  if (seq !== _relationFocusSeq) return;
-  if (!opts.skipFinalRelationCameraView && relationIds.length) {
-    const last = relationIds[relationIds.length - 1];
-    flyCameraToRelationCameraView(last);
+  const n = relationIds.length;
+  const skipAllFinal = !!opts.skipFinalRelationCameraView;
+  for (let i = 0; i < n; i++) {
+    const relationId = relationIds[i];
+    if (!relationId) continue;
+    await playRelationFocusUnified(relationId, {
+      ...opts,
+      skipFinalRelationCameraView: skipAllFinal || i < n - 1
+    });
   }
 };
 
@@ -1303,6 +1550,7 @@ const loadAndAddLinks = async () => {
   RELATION_FLOW_LABEL.clear();
   RELATION_VIEW_PRESET.clear();
   RELATION_CAMERA_VIEW.clear();
+  RELATION_FOCUS_GROUPS.clear();
   RELATIONS_WITH_PLANE.clear();
   try {
     const res = await fetch(props.linksUrl || `${_base ? _base + '/' : '/'}config/links.json`);
@@ -1324,6 +1572,9 @@ const loadAndAddLinks = async () => {
           pitch: Number(rel.cam.pitch),
           roll: Number(rel.cam.roll)
         });
+      }
+      if (Array.isArray(rel.focusGroups) && rel.focusGroups.length) {
+        RELATION_FOCUS_GROUPS.set(rel.id, rel.focusGroups);
       }
       const hasPlane = edges.some(([a, b]) => a === 'plane' || b === 'plane');
       if (hasPlane) {
@@ -2392,10 +2643,13 @@ const flyCameraToUnitIdsBoundingSphere = (unitIds, opts = {}) => {
   }
   if (points.length === 0) return;
   const bs = Cesium.BoundingSphere.fromPoints(points);
-  const r = Math.max(bs.radius * 2.8, 25000);
+  const rangeScale = opts.rangeScale ?? 2.8;
+  const minRange = opts.minRange ?? 25000;
+  const r = Math.max(bs.radius * rangeScale, minRange);
+  const pitchDeg = opts.pitchDeg ?? -35;
   viewer.camera.flyToBoundingSphere(bs, {
     duration: opts.duration ?? 1.1,
-    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-35), r)
+    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(pitchDeg), r)
   });
 };
 
@@ -2518,6 +2772,7 @@ defineExpose({
   flashUnitBillboards,
   flashPlaneModelBrief,
   playRelationNodeFocusSequence,
+  playRelationFocusUnified,
   playRelationIdsNodeFocusSequence,
   cancelRelationFocusSequence,
   setPlaneCameraFollow,
@@ -2588,7 +2843,7 @@ onMounted(async () => {
   syncAirportEndpointLabels();
 
   /** 将 canvas 内坐标转为视口坐标，供静态/动态页 marker-popup 统一使用 position:fixed 定位 */
-  const canvasToViewport = (canvasX, canvasY) => {
+  canvasToViewportForMarker = (canvasX, canvasY) => {
     const canvas = viewer.scene.canvas;
     const rect = canvas.getBoundingClientRect();
     return { x: rect.left + canvasX, y: rect.top + canvasY };
@@ -2602,17 +2857,18 @@ onMounted(async () => {
     if (ent.id === 'planeBillboard') {
       const pos = ent.position?.getValue(viewer.clock.currentTime);
       const win = pos ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos) : null;
-      const screen = win ? canvasToViewport(win.x, win.y) : null;
+      const screen = win ? canvasToViewportForMarker(win.x, win.y) : null;
       emit('plane-billboard-click', { screen });
       return;
     }
     const meta = ent.__meta;
     if (!meta) return;
+    clearMarkerPopupGroupFromRelationFocus();
     activeMarkerEntity = ent;
     viewer.selectedEntity = undefined;
     const pos = ent.position?.getValue(viewer.clock.currentTime);
     const win = pos ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos) : null;
-    const screen = win ? canvasToViewport(win.x, win.y) : null;
+    const screen = win ? canvasToViewportForMarker(win.x, win.y) : null;
     emit('marker-click', { meta, screen });
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -2623,8 +2879,25 @@ onMounted(async () => {
     if (!pos) return;
     const win = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos, scratchCartesian2);
     if (!win) return;
-    const screen = canvasToViewport(win.x, win.y);
+    const screen = canvasToViewportForMarker(win.x, win.y);
     emit('marker-move', screen);
+  });
+
+  const scratchCartesian2Group = new Cesium.Cartesian2();
+  viewer.scene.postRender.addEventListener(() => {
+    if (!activeMarkerEntities.length) return;
+    const time = viewer.clock.currentTime;
+    const items = [];
+    for (const ent of activeMarkerEntities) {
+      if (!ent?.__meta) continue;
+      const pos = ent.position?.getValue(time);
+      if (!pos) continue;
+      const win = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, pos, scratchCartesian2Group);
+      if (!win) continue;
+      const screen = canvasToViewportForMarker(win.x, win.y);
+      items.push({ unitId: String(ent.id), meta: ent.__meta, screen });
+    }
+    if (items.length) emit('marker-group-move', items);
   });
 
   // 输出飞机屏幕坐标，供父组件飞机跟随 popup 使用（仅静态页监听；动态页不监听以免干扰沿线运动）
@@ -2816,16 +3089,19 @@ watch(
   (newVal) => {
     _relationFocusSeq++;
     if (newVal == null) {
+      clearMarkerPopupGroupFromRelationFocus();
+      clearMarkerPopupFromRelationFocus();
       clearPlaneHighlightVisual();
       updateLinkVisibility();
       updateUnitEntitiesVisibility();
       return;
     }
+    clearMarkerPopupGroupFromRelationFocus();
     applyPlaneDimHighlightVisual();
     updateLinkVisibility();
     updateUnitEntitiesVisibility();
     if (!props.skipRelationNodeFocus) {
-      playRelationNodeFocusSequence(newVal);
+      playRelationFocusUnified(newVal);
     }
   }
 );
@@ -2840,7 +3116,7 @@ watch(
     const last = ids[ids.length - 1];
     clearTimeout(_focusTimerIdsLeft);
     _focusTimerIdsLeft = setTimeout(() => {
-      playRelationNodeFocusSequence(last);
+      playRelationFocusUnified(last);
     }, 120);
   }
 );
@@ -2855,7 +3131,7 @@ watch(
     const last = ids[ids.length - 1];
     clearTimeout(_focusTimerIdsRight);
     _focusTimerIdsRight = setTimeout(() => {
-      playRelationNodeFocusSequence(last);
+      playRelationFocusUnified(last);
     }, 120);
   }
 );
