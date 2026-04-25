@@ -1,0 +1,295 @@
+{
+  "space": { "satellites": [] },
+  "ground": {
+    "clusters": [
+      {
+        "clusterId": "DYN_YES",
+        "name": "有云匣子链路节点",
+        "center": { "lon": 108.7519, "lat": 34.446756 },
+        "units": [
+          {
+            "id": "yes-human-detect",
+            "type": "ground_unit",
+            "name": "操作检测系统",
+            "lon": 108.74238,
+            "lat": 34.43984,
+            "alt": 0.18,
+            "image": "img/planeBillBoardImg.png",
+            "info": "对驾驶舱/面板操作与关键开关状态进行机载侧检测，用于误操作发现与上送。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-human-ais",
+            "type": "ground_unit",
+            "name": "机载智能辅助系统",
+            "lon": 108.74255,
+            "lat": 34.43995,
+            "alt": 1.05,
+            "image": "img/planeBillBoardImg.png",
+            "info": "融合机载数据与专家规则/模型，为机组与地面提供辅助决策与回传。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-human-display",
+            "type": "ground_unit",
+            "name": "驾驶舱显示系统",
+            "lon": 108.74248,
+            "lat": 34.4399,
+            "alt": 1.55,
+            "image": "img/planeBillBoardImg.png",
+            "info": "呈现辅助提示、告警与操作指引的驾驶舱人机关联节点。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-human-cockpit-guide",
+            "type": "ground_unit",
+            "name": "驾驶舱操作指引",
+            "lon": 108.74251,
+            "lat": 34.44,
+            "alt": 2.05,
+            "image": "img/planeBillBoardImg.png",
+            "info": "将地面/云匣侧协同结论以操作步骤形式下显至机组（语义描述，不绑定特效实现）。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-human-comm-confirm",
+            "type": "ground_unit",
+            "name": "机组通信确认",
+            "lon": 108.74253,
+            "lat": 34.44002,
+            "alt": 2.32,
+            "image": "img/planeBillBoardImg.png",
+            "info": "空地/机组间关键指令的复述与确认，支撑误操作场景沟通闭环。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-human-link-5g-hts",
+            "type": "ground_unit",
+            "name": "5G ATG链路/HTS卫星链路",
+            "lon": 108.7482,
+            "lat": 34.4409,
+            "alt": 12,
+            "image": "img/planeBillBoardImg.png",
+            "info": "天地一体化大带宽/高通量回传抽象节点。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-human-gmc",
+            "type": "ground_unit",
+            "name": "地面监控中心",
+            "lon": 108.7682,
+            "lat": 34.4501,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "汇聚机载上送与空地协同，支撑专家研判、席位联动与对空/对机组处置建议。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-human-expert-support",
+            "type": "ground_unit",
+            "name": "飞行专家支持组",
+            "lon": 108.7722,
+            "lat": 34.4449,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "由飞行/运行专家组成的远程支持组，与监控中心、席位及链路互动。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-human-atc-seat",
+            "type": "ground_unit",
+            "name": "空管协调席位",
+            "lon": 108.7542,
+            "lat": 34.4359,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "空域与流量协同地面席位，与监控中心、空管主体联动。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-human-expert-group",
+            "type": "ground_unit",
+            "name": "地面运营控制中心专家组",
+            "lon": 108.771811,
+            "lat": 34.445005,
+            "alt": 0,
+            "image": "img/06_地面运营控制中心专家组.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "文档摘要"
+          },
+          {
+            "id": "yes-human-atc",
+            "type": "ground_unit",
+            "name": "空管",
+            "lon": 108.766361,
+            "lat": 34.446522,
+            "alt": 0,
+            "image": "img/04_空管.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "yes-human-airport",
+            "type": "ground_unit",
+            "name": "机场",
+            "lon": 108.758305,
+            "lat": 34.439267,
+            "alt": 0,
+            "image": "img/03_机场.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "yes-human-airline",
+            "type": "ground_unit",
+            "name": "航空公司",
+            "lon": 108.744077,
+            "lat": 34.432633,
+            "alt": 0,
+            "image": "img/01_航空公司.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          }
+        ]
+      },
+      {
+        "clusterId": "DYN_NO",
+        "name": "无云匣子链路节点",
+        "center": { "lon": 116.42906, "lat": 39.485763 },
+        "units": [
+          {
+            "id": "no-human-pf",
+            "type": "ground_unit",
+            "name": "操纵飞行员",
+            "lon": 108.7425,
+            "lat": 34.43988,
+            "alt": 1.12,
+            "image": "img/planeBillBoardImg.png",
+            "info": "PF 执行操纵与复诵/响应（人为误操作场景机载侧节点）。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-human-pm",
+            "type": "ground_unit",
+            "name": "监控飞行员",
+            "lon": 108.74258,
+            "lat": 34.43996,
+            "alt": 1.22,
+            "image": "img/planeBillBoardImg.png",
+            "info": "PM 监控、喊话与交叉检查（与 PF 的 CRM 协同）。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-human-fo",
+            "type": "ground_unit",
+            "name": "副驾驶",
+            "lon": 108.74245,
+            "lat": 34.4399,
+            "alt": 1.0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机组成员角色节点，用于无云匣子时舱内信息汇聚表述。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-human-cockpit",
+            "type": "ground_unit",
+            "name": "驾驶舱",
+            "lon": 108.74247,
+            "lat": 34.43998,
+            "alt": 1.35,
+            "image": "img/planeBillBoardImg.png",
+            "info": "驾驶舱整体协同与通报路径抽象。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-human-crew",
+            "type": "ground_unit",
+            "name": "机组",
+            "lon": 108.74256,
+            "lat": 34.44,
+            "alt": 1.85,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机组与空地信息交互主体。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-human-atc",
+            "type": "ground_unit",
+            "name": "空管",
+            "lon": 116.395703,
+            "lat": 39.494101,
+            "alt": 0,
+            "image": "img/04_空管.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "no-human-maint",
+            "type": "ground_unit",
+            "name": "机务",
+            "lon": 116.4313,
+            "lat": 39.495,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机务与维修记录、故障描述衔接（落地方向）。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-human-safety",
+            "type": "ground_unit",
+            "name": "航安部门",
+            "lon": 116.4336,
+            "lat": 39.5216,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "安全监督与事件报告归口。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-human-ftm",
+            "type": "ground_unit",
+            "name": "飞行技术管理部",
+            "lon": 116.4185,
+            "lat": 39.512,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "技术政策、培训与质量管控。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-human-crew-party",
+            "type": "ground_unit",
+            "name": "当事机组",
+            "lon": 116.404,
+            "lat": 39.5005,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "事件所涉当班机组的地面归集节点。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-human-pilots-all",
+            "type": "ground_unit",
+            "name": "全体飞行员",
+            "lon": 116.44,
+            "lat": 39.518,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "公司级技术通告与警示传达对象。",
+            "infoSource": "阶段配置"
+          }
+        ]
+      }
+    ]
+  }
+}

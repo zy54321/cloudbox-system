@@ -64,9 +64,9 @@
           :compare-bridge="compareBridgeRef"
           :bindVpSingle="bindVpSingle"
           :model-url="boeingModelUrl"
-          :units-url="engineFailureUnitsUrl"
+          :units-url="currentUnitsUrl"
           :static-ground-merge-url="staticGroundMergeUrl"
-          :links-url="dynamicLinksUrl"
+          :links-url="currentLinksUrl"
           :auto-focus="true"
           :path-points="pathPointsForViewer"
           :path-progress="pathProgressForViewerStage"
@@ -455,6 +455,21 @@ const engineFailureUnitsUrl = `${baseUrl}/config/dynamic/engine_failure_units.js
 const dynamicLinksUrl = `${baseUrl}/config/dynamic/engine_failure_links.json`;
 const staticGroundMergeUrl = `${baseUrl}/config/units.json`;
 
+/** 由 loadScenario 按 scenario 更新；与默认 engine 资源路径一致 */
+const currentUnitsUrl = ref(engineFailureUnitsUrl);
+const currentLinksUrl = ref(dynamicLinksUrl);
+/** 成功加载后记录 UI 场景 key，用于判断是否需要因场景变化而重挂 iframe */
+const lastLoadedScenarioUiKey = ref(null);
+
+function resolveScenarioAssetPath(p) {
+  if (p == null || p === '') return null;
+  const s = String(p).trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  const path = s.startsWith('/') ? s : `/${s}`;
+  return baseUrl ? `${baseUrl}${path}` : path;
+}
+
 const vpSingle = ref(null);
 
 /** 对比模式：全局 / 左单屏 / 右单屏 互斥；idle 表示未在自动沿线+场景驱动 */
@@ -633,9 +648,9 @@ function buildIframeScenarioPayload(side, options = {}) {
       activeRelations_no: Array.isArray(s.activeRelations_no) ? [...s.activeRelations_no] : []
     })),
     modelUrl: boeingModelUrl,
-    unitsUrl: engineFailureUnitsUrl,
+    unitsUrl: currentUnitsUrl.value,
     staticGroundMergeUrl,
-    linksUrl: dynamicLinksUrl,
+    linksUrl: currentLinksUrl.value,
     depAirportLabel,
     arrAirportLabel
   };
@@ -1053,6 +1068,10 @@ watch(singleIframeMountKey, () => {
   singleIframeFirstReadyForce.value = true;
 });
 
+watch(compareIframeMountKey, () => {
+  lastCompareInitPushKey = '';
+});
+
 watch(isCompare, (cmp) => {
   if (cmp) {
     singleIframeReady.value = false;
@@ -1124,6 +1143,7 @@ function semanticToDemoT(rawSemanticAfterBase) {
 function collectMaxRawFromNodes(nodes) {
   let m = 0;
   for (const n of nodes || []) {
+    if (n?.postReview) continue;
     const yy = toFiniteTime(n?.yes?.t);
     const nn = toFiniteTime(n?.no?.t);
     if (yy != null) m = Math.max(m, yy);
@@ -1136,6 +1156,7 @@ function maxRawForSide(nodes, side) {
   const k = side === 'yes' ? 'yes' : 'no';
   let m = 0;
   for (const n of nodes || []) {
+    if (n?.postReview) continue;
     const t = toFiniteTime(n?.[k]?.t);
     if (t != null) m = Math.max(m, t);
   }
@@ -1150,6 +1171,7 @@ function computeTimelineMaxFromNodes(nodes) {
 function firstAlertTextForSide(nodes, side) {
   const k = side === 'yes' ? 'yes' : 'no';
   for (const n of nodes || []) {
+    if (n?.postReview) continue;
     const a = n?.[k]?.alert;
     if (a && String(a).trim()) return String(a).trim();
   }
@@ -1366,7 +1388,7 @@ const dynamicUnitMap = ref({});
 
 async function fetchDynamicCompareMaps() {
   try {
-    const [uRes, lRes] = await Promise.all([fetch(engineFailureUnitsUrl), fetch(dynamicLinksUrl)]);
+    const [uRes, lRes] = await Promise.all([fetch(currentUnitsUrl.value), fetch(currentLinksUrl.value)]);
     if (!uRes.ok || !lRes.ok) return;
     const unitsDoc = await uRes.json();
     const linksDoc = await lRes.json();
@@ -2445,7 +2467,6 @@ const buildDisposalCards = (items) => {
 };
 
 const loadScenario = async (key) => {
-  activeScenario.value = key;
   const scenarioKey = key === 'engine' ? 'engine_failure' : key;
   try {
     const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -2455,9 +2476,15 @@ const loadScenario = async (key) => {
     const data = await res.json();
     const scenario = data?.scenarios?.[scenarioKey];
     if (!scenario) {
+      showAlertToast('提示', '配置中不存在该场景，请从已有场景选择。');
       console.warn('[DynamicFlow] scenario not found:', scenarioKey);
       return;
     }
+    pendingSingleLoadScenario.value = false;
+    const uu = resolveScenarioAssetPath(scenario.unitsUrl);
+    const lu = resolveScenarioAssetPath(scenario.linksUrl);
+    currentUnitsUrl.value = uu || engineFailureUnitsUrl;
+    currentLinksUrl.value = lu || dynamicLinksUrl;
     await fetchDynamicCompareMaps();
     const nodes = scenario.nodes || [];
     scenarioNodes.value = nodes;
@@ -2499,14 +2526,24 @@ const loadScenario = async (key) => {
         hops_no: 3,
         hops_yes: 2,
         path_no: '地面→中继→机载',
-        path_yes: '地面→机载'
+        path_yes: '地面→机载',
+        effects: node.effects,
+        postReview: node.postReview
       };
     });
     disposalCards.value = buildDisposalCards(steps.value);
+    activeScenario.value = key;
+    const shouldRemountIframes =
+      lastLoadedScenarioUiKey.value != null && lastLoadedScenarioUiKey.value !== key;
     stopTimer();
     stopAllCompareFlightAndScene();
     singleIframeShouldResumeAfterNarrative.value = false;
+    singleNarrativeRunning.value = false;
+    activePopup.value = null;
+    showAirbornePopup.value = false;
     firedMarkStepIndexSingle.value = new Set();
+    firedMarkStepIndexYes.value = new Set();
+    firedMarkStepIndexNo.value = new Set();
     t.value = 0;
     tYes.value = 0;
     tNo.value = 0;
@@ -2516,21 +2553,27 @@ const loadScenario = async (key) => {
     lastNodeIdNo.value = -1;
     lastNodeIdYes.value = -1;
     lastNodeIdSingle.value = -1;
-    if (isCompare.value) {
-      compareIframeMountKey.value += 1;
-    } else if (useSingleMapIframe) {
-      singleIframeMountKey.value += 1;
+    forceSceneUnlocked.value = false;
+    if (shouldRemountIframes) {
+      if (isCompare.value) {
+        compareIframeMountKey.value += 1;
+      } else if (useSingleMapIframe) {
+        singleIframeMountKey.value += 1;
+      }
     }
+    lastLoadedScenarioUiKey.value = key;
     refreshAll(true);
     selectedRelationId.value = steps.value[0]?.activeRelations_yes?.[0] ?? null;
-    nextTick(() => {
-      if (isCompare.value) pushLoadScenarioToIframes();
-      else if (useSingleMapIframe) {
-        if (!singleIframeReady.value) {
-          pendingSingleLoadScenario.value = true;
-        }
-      }
-    });
+    if (isCompare.value) {
+      compareBridgeRef.value?.clearActiveMarkerBoth?.();
+    } else if (useSingleMapIframe) {
+      singleIframeBridgeRef.value?.clearActiveMarker?.('left');
+    } else {
+      vpSingle.value?.clearActiveMarker?.();
+    }
+    if (scenario.placeholder) {
+      showAlertToast('提示', '该场景已切换，具体链路配置待补充');
+    }
     console.log('[DynamicFlow] loadScenario', key);
   } catch (e) {
     console.warn('[DynamicFlow] loadScenario failed:', e);
@@ -2563,7 +2606,6 @@ const toggleCompare = () => {
     }
     updateCompareMarkers();
     refreshAll(false);
-    if (isCompare.value) pushLoadScenarioToIframes();
   });
   console.log('[DynamicFlow] compare', isCompare.value);
 };

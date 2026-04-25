@@ -1,0 +1,281 @@
+{
+  "space": { "satellites": [] },
+  "ground": {
+    "clusters": [
+      {
+        "clusterId": "DYN_YES",
+        "name": "有云匣子链路节点",
+        "center": { "lon": 108.7519, "lat": 34.446756 },
+        "units": [
+          {
+            "id": "yes-smoke-sensor",
+            "type": "ground_unit",
+            "name": "烟雾传感器",
+            "lon": 108.7425,
+            "lat": 34.4399,
+            "alt": 0.15,
+            "image": "img/planeBillBoardImg.png",
+            "info": "烟雾/异味感知的机载或舱内传感节点，用于在动态场景中触发明示告警与上送链路。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-smoke-tongan",
+            "type": "ground_unit",
+            "name": "机载通感算一体设备",
+            "lon": 108.74258,
+            "lat": 34.43999,
+            "alt": 2.2,
+            "image": "img/planeBillBoardImg.png",
+            "info": "通感算一体化机载能力示意点，与烟雾异味处置链路中机载数据汇聚/上送相关。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-smoke-blackbox-cn",
+            "type": "ground_unit",
+            "name": "国产黑匣子",
+            "lon": 108.74245,
+            "lat": 34.43991,
+            "alt": 0.12,
+            "image": "img/planeBillBoardImg.png",
+            "info": "国产机载数据记录/固存节点示意，用于与动态链路数据贯通描述。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-smoke-warn",
+            "type": "ground_unit",
+            "name": "机载感知预警系统",
+            "lon": 108.74252,
+            "lat": 34.43997,
+            "alt": 2.35,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机载侧告警/预警上送，与 5G/卫链回传、地面专家研判衔接。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-smoke-link-5g-hts",
+            "type": "ground_unit",
+            "name": "5G ATG链路/HTS卫星链路",
+            "lon": 108.7482,
+            "lat": 34.4409,
+            "alt": 12,
+            "image": "img/planeBillBoardImg.png",
+            "info": "天地一体化链路的抽象合并节点，用于在烟雾场景表达空天-地面大带宽/高通量回传。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-smoke-data-hub",
+            "type": "ground_unit",
+            "name": "地面数据汇聚中心",
+            "lon": 108.7681,
+            "lat": 34.4502,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "地面侧多源数据汇聚集成与分发，衔接重构、推演、协同处置。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-smoke-recon",
+            "type": "ground_unit",
+            "name": "地面飞行场景实时重构系统",
+            "lon": 108.7701,
+            "lat": 34.4532,
+            "alt": 0,
+            "image": "img/07_地面飞行场景实时重构系统.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "文档摘要"
+          },
+          {
+            "id": "yes-smoke-expert",
+            "type": "ground_unit",
+            "name": "地面运营控制中心专家组",
+            "lon": 108.7719,
+            "lat": 34.4448,
+            "alt": 0,
+            "image": "img/06_地面运营控制中心专家组.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "文档摘要"
+          },
+          {
+            "id": "yes-smoke-sim",
+            "type": "ground_unit",
+            "name": "体系应急决策推演系统",
+            "lon": 108.7644,
+            "lat": 34.4451,
+            "alt": 0,
+            "image": "img/05_体系应急决策推演系统.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "文档摘要"
+          },
+          {
+            "id": "yes-smoke-atc",
+            "type": "ground_unit",
+            "name": "空管",
+            "lon": 108.7535,
+            "lat": 34.4367,
+            "alt": 0,
+            "image": "img/04_空管.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "yes-smoke-airport",
+            "type": "ground_unit",
+            "name": "机场",
+            "lon": 108.7554,
+            "lat": 34.4414,
+            "alt": 0,
+            "image": "img/03_机场.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "yes-smoke-airline",
+            "type": "ground_unit",
+            "name": "航空公司",
+            "lon": 108.7441,
+            "lat": 34.4326,
+            "alt": 0,
+            "image": "img/01_航空公司.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          }
+        ]
+      },
+      {
+        "clusterId": "DYN_NO",
+        "name": "无云匣子链路节点",
+        "center": { "lon": 116.42906, "lat": 39.485763 },
+        "units": [
+          {
+            "id": "no-smoke-cabin",
+            "type": "ground_unit",
+            "name": "客舱/乘务组",
+            "lon": 108.7426,
+            "lat": 34.44,
+            "alt": 1.0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "客舱与乘务组协同处置烟/异味等异常信息的示意节点。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-smoke-cockpit",
+            "type": "ground_unit",
+            "name": "驾驶舱",
+            "lon": 108.74248,
+            "lat": 34.43995,
+            "alt": 1.1,
+            "image": "img/planeBillBoardImg.png",
+            "info": "驾驶舱侧响应与上传统一路径的示意。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-smoke-crew",
+            "type": "ground_unit",
+            "name": "机组",
+            "lon": 108.74255,
+            "lat": 34.44,
+            "alt": 1.8,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机组作为机上执行与空地通报主体（动态自建点，不依赖 plane/space 合并）。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-smoke-atc",
+            "type": "ground_unit",
+            "name": "空管",
+            "lon": 108.7535,
+            "lat": 34.4367,
+            "alt": 0,
+            "image": "img/04_空管.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "no-smoke-aoc",
+            "type": "ground_unit",
+            "name": "机场运行控制中心",
+            "lon": 108.7655,
+            "lat": 34.4408,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机场侧运行态势与资源统筹节点（无云匣子时塔台-机场-救援协同）。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-smoke-rescue",
+            "type": "ground_unit",
+            "name": "救援系统",
+            "lon": 108.7526,
+            "lat": 34.4349,
+            "alt": 0,
+            "image": "img/02_救援系统.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "no-smoke-tower",
+            "type": "ground_unit",
+            "name": "塔台/进近管制",
+            "lon": 108.7691,
+            "lat": 34.4526,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "塔台/进近用于接收机组通报并协同空域与进离场（与 engine 侧命名一致、动态自建）。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-smoke-airport",
+            "type": "ground_unit",
+            "name": "机场",
+            "lon": 108.7583,
+            "lat": 34.4393,
+            "alt": 0,
+            "image": "img/03_机场.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "no-smoke-maint",
+            "type": "ground_unit",
+            "name": "机务",
+            "lon": 116.4313,
+            "lat": 39.495,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "落地后机务检查与排故前序岗位（与 engine 侧逻辑类似的落地链）。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-smoke-safety",
+            "type": "ground_unit",
+            "name": "航安部门",
+            "lon": 116.4336,
+            "lat": 39.5216,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "航安部门监督与事件管理衔接（动态自建）。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-smoke-invest",
+            "type": "ground_unit",
+            "name": "事件调查组",
+            "lon": 116.422,
+            "lat": 39.52,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "事件调查与根因分析闭环节点（动态自建）。",
+            "infoSource": "阶段配置"
+          }
+        ]
+      }
+    ]
+  }
+}

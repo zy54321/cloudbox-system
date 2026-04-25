@@ -1,0 +1,110 @@
+{
+  "relations": [
+    {
+      "id": "nav_yes_info_00",
+      "flowLabel": "信息流",
+      "name": "导航-感知链：机载导航至机载预警",
+      "edges": [["yes-nav-gnss", "yes-nav-sense"]]
+    },
+    {
+      "id": "nav_yes_info_01",
+      "flowLabel": "信息流",
+      "name": "上送链：机载经天地链至专家组与体系推演",
+      "edges": [
+        ["yes-nav-sense", "yes-nav-5g-hts"],
+        ["yes-nav-5g-hts", "yes-nav-expert"],
+        ["yes-nav-expert", "yes-nav-sim"]
+      ]
+    },
+    {
+      "id": "nav_yes_info_02",
+      "flowLabel": "信息流",
+      "name": "空地直达：经卫链/ATG至机组",
+      "edges": [
+        ["yes-nav-sense", "yes-nav-5g-hts"],
+        ["yes-nav-5g-hts", "yes-nav-crew"]
+      ]
+    },
+    {
+      "id": "nav_yes_info_03",
+      "flowLabel": "信息流",
+      "name": "部门协同：专家组经空管至机场、航司",
+      "edges": [
+        ["yes-nav-expert", "yes-nav-atc"],
+        ["yes-nav-atc", "yes-nav-airport"],
+        ["yes-nav-airport", "yes-nav-airline"]
+      ]
+    },
+    {
+      "id": "nav_yes_info_04",
+      "flowLabel": "信息流",
+      "name": "空地指令：专家组经空管至机组",
+      "edges": [
+        ["yes-nav-expert", "yes-nav-atc"],
+        ["yes-nav-atc", "yes-nav-crew"]
+      ]
+    },
+    {
+      "id": "nav_yes_control_01",
+      "flowLabel": "控制流",
+      "name": "决策回传：体系推演回专家组",
+      "edges": [["yes-nav-sim", "yes-nav-expert"]]
+    },
+    {
+      "id": "nav_yes_control_02",
+      "flowLabel": "控制流",
+      "name": "空域协同：空管至机场、机组",
+      "edges": [
+        ["yes-nav-atc", "yes-nav-airport"],
+        ["yes-nav-atc", "yes-nav-crew"]
+      ]
+    },
+    {
+      "id": "nav_no_info_00",
+      "flowLabel": "信息流",
+      "name": "空地第一报：机组至空管",
+      "edges": [["no-nav-crew", "no-nav-atc"]]
+    },
+    {
+      "id": "nav_no_info_01",
+      "flowLabel": "信息流",
+      "name": "管制移交：空管至进近/区域",
+      "edges": [["no-nav-atc", "no-nav-approach"]]
+    },
+    {
+      "id": "nav_no_info_02",
+      "flowLabel": "信息流",
+      "name": "卫星回呼：机组经卫站至航司技术支援",
+      "edges": [
+        ["no-nav-crew", "no-nav-sat-gw"],
+        ["no-nav-sat-gw", "no-nav-tech"]
+      ]
+    },
+    {
+      "id": "nav_no_info_03",
+      "flowLabel": "信息流",
+      "name": "运控与备降：航司/技术支援经空管至备降运控",
+      "edges": [
+        ["no-nav-airline", "no-nav-atc"],
+        ["no-nav-tech", "no-nav-atc"],
+        ["no-nav-atc", "no-nav-alt-ops"]
+      ]
+    },
+    {
+      "id": "nav_no_info_04",
+      "flowLabel": "信息流",
+      "name": "落地后闭环：机务经航材至驾驶舱、技术记录",
+      "edges": [
+        ["no-nav-maint", "no-nav-warehouse"],
+        ["no-nav-warehouse", "no-nav-cockpit"],
+        ["no-nav-cockpit", "no-nav-trecord"]
+      ]
+    },
+    {
+      "id": "nav_no_control_01",
+      "flowLabel": "控制流",
+      "name": "运控与放行：空管对备降场",
+      "edges": [["no-nav-atc", "no-nav-alt-ops"]]
+    }
+  ]
+}

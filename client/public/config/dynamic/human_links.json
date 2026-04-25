@@ -1,0 +1,112 @@
+{
+  "relations": [
+    {
+      "id": "human_yes_info_00_detect_to_ais",
+      "flowLabel": "信息流",
+      "name": "T+0.0s 操作检测系统→机载智能辅助系统",
+      "edges": [["yes-human-detect", "yes-human-ais"]]
+    },
+    {
+      "id": "human_yes_info_01_ais_to_display",
+      "flowLabel": "信息流",
+      "name": "T+0.5s 机载智能辅助系统→驾驶舱显示系统",
+      "edges": [["yes-human-ais", "yes-human-display"]]
+    },
+    {
+      "id": "human_yes_info_02_ais_to_ground",
+      "flowLabel": "信息流",
+      "name": "T+0.5s 机载智能辅助系统→5G ATG/HTS→地面监控中心",
+      "edges": [
+        ["yes-human-ais", "yes-human-link-5g-hts"],
+        ["yes-human-link-5g-hts", "yes-human-gmc"]
+      ]
+    },
+    {
+      "id": "human_yes_control_00_gmc_to_expert",
+      "flowLabel": "控制流",
+      "name": "T+3.0s 地面监控中心→飞行专家支持组",
+      "edges": [["yes-human-gmc", "yes-human-expert-support"]]
+    },
+    {
+      "id": "human_yes_control_01_gmc_to_atc_seat",
+      "flowLabel": "控制流",
+      "name": "T+3.0s 地面监控中心→空管协调席位",
+      "edges": [["yes-human-gmc", "yes-human-atc-seat"]]
+    },
+    {
+      "id": "human_yes_control_02_expert_to_gmc",
+      "flowLabel": "控制流",
+      "name": "T+8.0s 飞行专家支持组→地面监控中心",
+      "edges": [["yes-human-expert-support", "yes-human-gmc"]]
+    },
+    {
+      "id": "human_yes_info_03_expert_to_ais",
+      "flowLabel": "信息流",
+      "name": "T+8.0s 飞行专家支持组→5G ATG/HTS→机载智能辅助系统",
+      "edges": [
+        ["yes-human-expert-support", "yes-human-link-5g-hts"],
+        ["yes-human-link-5g-hts", "yes-human-ais"]
+      ]
+    },
+    {
+      "id": "human_yes_control_03_ais_to_cockpit_guide",
+      "flowLabel": "控制流",
+      "name": "T+12.0s 机载智能辅助系统→驾驶舱操作指引",
+      "edges": [["yes-human-ais", "yes-human-cockpit-guide"]]
+    },
+    {
+      "id": "human_yes_control_04_gmc_to_crew_confirm",
+      "flowLabel": "控制流",
+      "name": "T+12.0s 地面监控中心→空管→机组通信确认",
+      "edges": [
+        ["yes-human-gmc", "yes-human-atc"],
+        ["yes-human-atc", "yes-human-comm-confirm"]
+      ]
+    },
+    {
+      "id": "human_no_info_00_pm_to_pf",
+      "flowLabel": "信息流",
+      "name": "T+0.0s 监控飞行员→操纵飞行员",
+      "edges": [["no-human-pm", "no-human-pf"]]
+    },
+    {
+      "id": "human_no_info_01_crosscheck",
+      "flowLabel": "信息流",
+      "name": "T+0.5s 监控飞行员/副驾驶→机组",
+      "edges": [
+        ["no-human-pm", "no-human-crew"],
+        ["no-human-fo", "no-human-crew"]
+      ]
+    },
+    {
+      "id": "human_no_info_02_crew_to_atc",
+      "flowLabel": "信息流",
+      "name": "T+2.0min 机组→空管",
+      "edges": [["no-human-crew", "no-human-atc"]]
+    },
+    {
+      "id": "human_no_info_03_maintenance_to_safety",
+      "flowLabel": "信息流",
+      "name": "落地后 机务→航安部门",
+      "edges": [["no-human-maint", "no-human-safety"]]
+    },
+    {
+      "id": "human_no_info_04_safety_to_ftm",
+      "flowLabel": "信息流",
+      "name": "落地后 航安部门→飞行技术管理部",
+      "edges": [["no-human-safety", "no-human-ftm"]]
+    },
+    {
+      "id": "human_no_control_00_ftm_to_crew",
+      "flowLabel": "控制流",
+      "name": "24h内 飞行技术管理部→当事机组",
+      "edges": [["no-human-ftm", "no-human-crew-party"]]
+    },
+    {
+      "id": "human_no_control_01_ftm_to_all_pilots",
+      "flowLabel": "控制流",
+      "name": "24h内 飞行技术管理部→全体飞行员",
+      "edges": [["no-human-ftm", "no-human-pilots-all"]]
+    }
+  ]
+}

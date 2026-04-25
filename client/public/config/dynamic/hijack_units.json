@@ -1,0 +1,301 @@
+{
+  "space": { "satellites": [] },
+  "ground": {
+    "clusters": [
+      {
+        "clusterId": "DYN_YES",
+        "name": "有云匣子链路节点",
+        "center": { "lon": 108.7519, "lat": 34.446756 },
+        "units": [
+          {
+            "id": "yes-hijack-flight-ctrl",
+            "type": "ground_unit",
+            "name": "飞行控制系统",
+            "lon": 108.74238,
+            "lat": 34.43984,
+            "alt": 0.12,
+            "image": "img/planeBillBoardImg.png",
+            "info": "劫机类应急场景中机载飞控子系统示意，与通感算链路与机载云匣子协同。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-hijack-tongan",
+            "type": "ground_unit",
+            "name": "机载通感算一体设备",
+            "lon": 108.74258,
+            "lat": 34.43999,
+            "alt": 2.2,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机载通感算一体能力，汇聚飞行状态、遥测与地面协同数据，是劫机处置链路中的核心机载枢纽。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-hijack-cloud-cvr",
+            "type": "ground_unit",
+            "name": "机载云匣子",
+            "lon": 108.74244,
+            "lat": 34.4399,
+            "alt": 0.12,
+            "image": "img/planeBillBoardImg.png",
+            "info": "机载云匣子侧数据接入与上送能力示意，经通感算一体与地面专家组及推演系统贯通。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "yes-hijack-expert",
+            "type": "ground_unit",
+            "name": "地面运营控制中心专家组",
+            "lon": 108.771811,
+            "lat": 34.445005,
+            "alt": 0,
+            "image": "img/06_地面运营控制中心专家组.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "文档摘要"
+          },
+          {
+            "id": "yes-hijack-safety-cmd",
+            "type": "ground_unit",
+            "name": "地面安全指挥中心",
+            "lon": 108.7684,
+            "lat": 34.4504,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "地面侧安全与应急综合指挥，衔接应急处置系统、体系推演、军方与民航管域协同。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-hijack-sim",
+            "type": "ground_unit",
+            "name": "体系应急决策推演系统",
+            "lon": 108.764833,
+            "lat": 34.439928,
+            "alt": 0,
+            "image": "img/05_体系应急决策推演系统.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "文档摘要"
+          },
+          {
+            "id": "yes-hijack-emergency",
+            "type": "ground_unit",
+            "name": "应急处置系统",
+            "lon": 108.7652,
+            "lat": 34.4511,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "多部门应急处置流程调度与过程记录，为地面安全指挥中心与上级协同提供能力支撑。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-hijack-mil-atc-dept",
+            "type": "ground_unit",
+            "name": "军方空管部门",
+            "lon": 108.7602,
+            "lat": 34.4432,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "军侧空管协调域，在劫机与空防联动场景中承接推演与专家指令的军域传递。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-hijack-civil-atc",
+            "type": "ground_unit",
+            "name": "民航空管",
+            "lon": 108.7681,
+            "lat": 34.4402,
+            "alt": 0,
+            "image": "img/04_空管.png",
+            "info": "民航空中交通管理执行节点，与专家组、安指、周边航班等形成民侧管控链路。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-hijack-mil-atc",
+            "type": "ground_unit",
+            "name": "军方空管",
+            "lon": 108.7526,
+            "lat": 34.4352,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "军侧空管与拦截协同入口，在劫机链路上承接安指与拦截机组处置指令的衔接。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-hijack-intercept",
+            "type": "ground_unit",
+            "name": "拦截机组",
+            "lon": 108.7471,
+            "lat": 34.4406,
+            "alt": 9.0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "空中空中拦截/伴飞力量示意，不随本机模型，仅作动态空域协同节点。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "yes-hijack-nearby",
+            "type": "ground_unit",
+            "name": "周边航班",
+            "lon": 108.7778,
+            "lat": 34.4442,
+            "alt": 11.0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "空域中周边民航班机态势与避障协同示意，不随本机模型。",
+            "infoSource": "阶段配置"
+          }
+        ]
+      },
+      {
+        "clusterId": "DYN_NO",
+        "name": "无云匣子链路节点",
+        "center": { "lon": 116.42906, "lat": 39.485763 },
+        "units": [
+          {
+            "id": "no-hijack-crew",
+            "type": "ground_unit",
+            "name": "机组",
+            "lon": 108.74255,
+            "lat": 34.43998,
+            "alt": 1.8,
+            "image": "img/02_机组.png",
+            "info": "机组为劫机/非法干扰处置的机上第一响应方，经甚高频/应答机等通道与地面通联。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-hijack-squawk-7500",
+            "type": "ground_unit",
+            "name": "应答机7500",
+            "lon": 108.7425,
+            "lat": 34.43986,
+            "alt": 0.45,
+            "image": "img/planeBillBoardImg.png",
+            "info": "应答机 7500 等非法劫机特情代码示意，为地面空管与安保识别提供信号语义。",
+            "infoSource": "阶段配置",
+            "attachToPlane": true
+          },
+          {
+            "id": "no-hijack-atc",
+            "type": "ground_unit",
+            "name": "空管",
+            "lon": 108.7535,
+            "lat": 34.4367,
+            "alt": 0,
+            "image": "img/04_空管.png",
+            "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
+            "infoSource": "补充说明"
+          },
+          {
+            "id": "no-hijack-atc-cmd-ctr",
+            "type": "ground_unit",
+            "name": "空管指挥中心",
+            "lon": 108.7695,
+            "lat": 34.4508,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "民航空管系统内部指挥中枢，对劫机与特情空域处置进行席位置换与信息汇聚。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-caac-police",
+            "type": "ground_unit",
+            "name": "民航局公安局",
+            "lon": 108.7712,
+            "lat": 34.4516,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "民航公安侧对机上非法干扰事件的警情接收、研判与跨部门协查统筹。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-mil-atc-cmd",
+            "type": "ground_unit",
+            "name": "军方空管指挥所",
+            "lon": 116.3985,
+            "lat": 39.4965,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "军空域指挥所，承接高等级劫机/空防联动指令与民航空域协同。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-caac-hall",
+            "type": "ground_unit",
+            "name": "民航局应急指挥大厅",
+            "lon": 116.4158,
+            "lat": 39.5002,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "民航主管部门应急态势汇聚与多席会商，衔接应急办与跨部委联动。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-caac-office",
+            "type": "ground_unit",
+            "name": "民航局应急办",
+            "lon": 116.4092,
+            "lat": 39.5038,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "局方应急办综合协调、文件流转与对公安部/国安/军方的高等级通联。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-gov-sec",
+            "type": "ground_unit",
+            "name": "公安部/国安部/军方",
+            "lon": 116.384,
+            "lat": 39.499,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "国家处置非法干扰与劫机特情的跨部门联合指挥与特情资源统筹示意。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-mil-atc",
+            "type": "ground_unit",
+            "name": "军方空管",
+            "lon": 108.7542,
+            "lat": 34.4344,
+            "alt": 0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "军空域管控执行节点，与民航空管、迫降场协调共同形成处置闭环。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-civil-atc",
+            "type": "ground_unit",
+            "name": "民航空管",
+            "lon": 108.7518,
+            "lat": 34.4329,
+            "alt": 0,
+            "image": "img/04_空管.png",
+            "info": "民航空管在劫机无云匣子时仍承担流量与进离场、周边航班安全间隔协调。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-nearby",
+            "type": "ground_unit",
+            "name": "周边航班",
+            "lon": 108.7805,
+            "lat": 34.4455,
+            "alt": 10.0,
+            "image": "img/planeBillBoardImg.png",
+            "info": "周边空域航班态势与让路/改航协同示意。",
+            "infoSource": "阶段配置"
+          },
+          {
+            "id": "no-hijack-divert",
+            "type": "ground_unit",
+            "name": "指定迫降机场",
+            "lon": 108.7583,
+            "lat": 34.4393,
+            "alt": 0,
+            "image": "img/03_机场.png",
+            "info": "处置方案中指定的备降/迫降场与场面救援准备，语义上为劫机无云匣子落地链终点。",
+            "infoSource": "阶段配置"
+          }
+        ]
+      }
+    ]
+  }
+}

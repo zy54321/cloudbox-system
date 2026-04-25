@@ -1,0 +1,110 @@
+{
+  "relations": [
+    {
+      "id": "hijack_yes_info_00_airborne_detect",
+      "flowLabel": "信息流",
+      "name": "T+0.0s 机载探测：飞控/云匣至机载通感算",
+      "edges": [
+        ["yes-hijack-flight-ctrl", "yes-hijack-tongan"],
+        ["yes-hijack-cloud-cvr", "yes-hijack-tongan"]
+      ]
+    },
+    {
+      "id": "hijack_yes_info_01_air_to_ground",
+      "flowLabel": "信息流",
+      "name": "T+0.3s 空地下传：机载通感算至专家组/飞控",
+      "edges": [
+        ["yes-hijack-tongan", "yes-hijack-expert"],
+        ["yes-hijack-tongan", "yes-hijack-flight-ctrl"]
+      ]
+    },
+    {
+      "id": "hijack_yes_control_00_command_to_atc",
+      "flowLabel": "控制流",
+      "name": "T+2.0s 指挥链至民航空管：安指—体系推演—军方空管部门",
+      "edges": [
+        ["yes-hijack-safety-cmd", "yes-hijack-sim"],
+        ["yes-hijack-sim", "yes-hijack-mil-atc-dept"],
+        ["yes-hijack-mil-atc-dept", "yes-hijack-civil-atc"]
+      ]
+    },
+    {
+      "id": "hijack_yes_control_01_emergency_to_command",
+      "flowLabel": "控制流",
+      "name": "T+15.0s 应急调度至安指",
+      "edges": [["yes-hijack-emergency", "yes-hijack-safety-cmd"]]
+    },
+    {
+      "id": "hijack_yes_control_02_intercept",
+      "flowLabel": "控制流",
+      "name": "T+30.0s 安指经军方空管至拦截",
+      "edges": [
+        ["yes-hijack-safety-cmd", "yes-hijack-mil-atc"],
+        ["yes-hijack-mil-atc", "yes-hijack-intercept"]
+      ]
+    },
+    {
+      "id": "hijack_yes_control_03_nearby_avoidance",
+      "flowLabel": "控制流",
+      "name": "T+30.0s 专家组经民航空管至周边航路避让",
+      "edges": [
+        ["yes-hijack-expert", "yes-hijack-civil-atc"],
+        ["yes-hijack-civil-atc", "yes-hijack-nearby"]
+      ]
+    },
+    {
+      "id": "hijack_no_info_00_crew_squawk_to_atc",
+      "flowLabel": "信息流",
+      "name": "T+0.0s 机组/应答机至空管",
+      "edges": [
+        ["no-hijack-crew", "no-hijack-atc"],
+        ["no-hijack-squawk-7500", "no-hijack-atc"]
+      ]
+    },
+    {
+      "id": "hijack_no_info_01_atc_to_security",
+      "flowLabel": "信息流",
+      "name": "T+0.5min 空管经民航公安至军方空管指挥所",
+      "edges": [
+        ["no-hijack-atc", "no-hijack-caac-police"],
+        ["no-hijack-caac-police", "no-hijack-mil-atc-cmd"]
+      ]
+    },
+    {
+      "id": "hijack_no_info_02_hall_office_to_gov",
+      "flowLabel": "信息流",
+      "name": "T+3.0min 局方至国家处置部门",
+      "edges": [
+        ["no-hijack-caac-hall", "no-hijack-gov-sec"],
+        ["no-hijack-caac-office", "no-hijack-gov-sec"]
+      ]
+    },
+    {
+      "id": "hijack_no_info_03_atc_situation_to_hall",
+      "flowLabel": "信息流",
+      "name": "态势同步：空管至民航局应急指挥大厅",
+      "edges": [["no-hijack-atc", "no-hijack-caac-hall"]]
+    },
+    {
+      "id": "hijack_no_info_04_atc_to_cmd_center",
+      "flowLabel": "信息流",
+      "name": "空管至空管指挥中心",
+      "edges": [["no-hijack-atc", "no-hijack-atc-cmd-ctr"]]
+    },
+    {
+      "id": "hijack_no_control_00_mil_civil_flights",
+      "flowLabel": "控制流",
+      "name": "T+10.0min 军空管经民空至周边航班",
+      "edges": [
+        ["no-hijack-mil-atc", "no-hijack-civil-atc"],
+        ["no-hijack-civil-atc", "no-hijack-nearby"]
+      ]
+    },
+    {
+      "id": "hijack_no_control_01_mil_divert",
+      "flowLabel": "控制流",
+      "name": "T+10.0min 军空管至指定迫降机场",
+      "edges": [["no-hijack-mil-atc", "no-hijack-divert"]]
+    }
+  ]
+}

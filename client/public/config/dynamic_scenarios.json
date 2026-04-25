@@ -2,6 +2,8 @@
   "scenarios": {
     "engine_failure": {
       "name": "单发失效",
+      "unitsUrl": "/config/dynamic/engine_failure_units.json",
+      "linksUrl": "/config/dynamic/engine_failure_links.json",
       "durationSec": 200,
       "narrativeMilestones": {
         "alarmRaw": 0,
@@ -142,6 +144,756 @@
             "actions": ["复盘归档"],
             "activeRelations": ["no-maint-to-tech", "no-tech-to-safety"]
           }
+        }
+      ]
+    },
+    "smoke": {
+      "name": "烟雾异味",
+      "unitsUrl": "/config/dynamic/smoke_units.json",
+      "linksUrl": "/config/dynamic/smoke_links.json",
+      "durationSec": 180,
+      "narrativeMilestones": {
+        "alarmRaw": 0,
+        "disposalStartRaw_yes": 0.4,
+        "disposalStartRaw_no": 60,
+        "completeRaw_yes": 40.4,
+        "completeRaw_no": 1500
+      },
+      "postReview": {
+        "title": "事后复盘",
+        "items": []
+      },
+      "nodes": [
+        {
+          "nodeId": 0,
+          "yes": {
+            "t": 0.0,
+            "title": "客舱或驾驶舱烟雾传感器检测到浓度超标",
+            "phase": "触发",
+            "state": "传感告警",
+            "summary": "烟感 → 机载通感与黑匣",
+            "desc": "传感器读数进入机载通感与记录链路。",
+            "alert": "烟雾浓度超阈值（示意）",
+            "events": ["读数进入机载处理（示意）"],
+            "evidence": ["传感读数摘要（示意）"],
+            "actions": ["触发记录与上送准备"],
+            "activeRelations": ["smoke_yes_info_00_sensor_to_blackbox"]
+          },
+          "no": {
+            "t": 0.0,
+            "title": "客舱出现烧焦味，乘务员通过内话报告驾驶舱",
+            "phase": "发现",
+            "state": "舱内通报",
+            "summary": "客舱 → 驾驶舱",
+            "desc": "乘务员经内话向驾驶舱报告异味。",
+            "alert": "客舱异味报告（示意）",
+            "events": ["内话通报（示意）"],
+            "evidence": ["口令与席位记录（示意）"],
+            "actions": ["驾驶舱接收并初判"],
+            "activeRelations": ["smoke_no_info_00_cabin_to_cockpit"]
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 1,
+          "yes": {
+            "t": 0.4,
+            "title": "机载通感算系统分析确认二级烟雾告警",
+            "phase": "识别",
+            "state": "告警确认",
+            "summary": "预警 → 天地链 → 专家推演",
+            "desc": "二级告警经链路上送地面并进入推演侧入口。",
+            "alert": "二级烟雾告警（示意）",
+            "events": ["告警特征入库并开始上送（示意）"],
+            "evidence": ["告警等级与特征（示意）"],
+            "actions": ["维持链路并推送专家组"],
+            "activeRelations": ["smoke_yes_info_01_warn_to_sim"]
+          },
+          "no": {
+            "t": 60.0,
+            "title": "机组穿戴烟雾面罩，执行烟雾检查单，决定紧急备降",
+            "phase": "处置",
+            "state": "按单操作",
+            "summary": "机组 → 空管",
+            "desc": "完成面罩与检查单程序，联系空管申请备降。",
+            "alert": "",
+            "events": ["检查单步骤执行（示意）"],
+            "evidence": ["通话简令（示意）"],
+            "actions": ["申请备降与优先"],
+            "activeRelations": ["smoke_no_info_01_crew_to_atc"]
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 2,
+          "yes": {
+            "t": 10.4,
+            "title": "地面数据汇聚中心接收完整告警包，实时重构完成，体系推演启动多方案仿真",
+            "phase": "融合",
+            "state": "推演中",
+            "summary": "汇聚重构 → 推演；推演回传专家组",
+            "desc": "告警包经汇聚与重构进入推演；仿真结果回传专家组。",
+            "alert": "",
+            "events": ["多方案仿真启动（示意）"],
+            "evidence": ["汇聚完整性校验（示意）"],
+            "actions": ["并行仿真与结果回传"],
+            "activeRelations": ["smoke_yes_info_02_recon_ready", "smoke_yes_control_01_sim_to_expert"]
+          },
+          "no": {
+            "t": 180.0,
+            "title": "空管通报机场运控中心，启动应急救援响应",
+            "phase": "应急",
+            "state": "联动启动",
+            "summary": "空管 → AOC → 救援",
+            "desc": "空管向机场运控通报并启动机场应急救援流程。",
+            "alert": "",
+            "events": ["应急席位响应（示意）"],
+            "evidence": ["通报时间与席位（示意）"],
+            "actions": ["救援单位待命出动"],
+            "activeRelations": ["smoke_no_info_02_atc_to_rescue", "smoke_no_control_01_emergency_dispatch"]
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 3,
+          "yes": {
+            "t": 40.4,
+            "title": "地面专家组发送方案至各部门",
+            "phase": "下发",
+            "state": "协同中",
+            "summary": "专家组 → 空管、机场、航司",
+            "desc": "处置要点同步至空管、机场运行与航司。",
+            "alert": "",
+            "events": ["预案要点推送（示意）"],
+            "evidence": ["方案条目清单（示意）"],
+            "actions": ["空地单位同步准备"],
+            "activeRelations": ["smoke_yes_control_02_expert_to_departments"]
+          },
+          "no": {
+            "t": 300.0,
+            "title": "消防、急救车辆沿应急路线赶往预定跑道集结",
+            "phase": "地面",
+            "state": "机动中",
+            "summary": "救援 → 塔台 → 机组",
+            "desc": "消防与急救按应急路线向预定跑道集结，塔台与机组保持协同。",
+            "alert": "",
+            "events": ["车辆出动与路线核对（示意）"],
+            "evidence": ["出动单与集结点（示意）"],
+            "actions": ["跑道侧资源就位"],
+            "activeRelations": ["smoke_no_info_03_rescue_to_tower", "smoke_no_control_01_emergency_dispatch"]
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 4,
+          "yes": {},
+          "no": {
+            "t": 1500.0,
+            "title": "飞机落地停稳，机务人员登机连接数据下载设备",
+            "phase": "落地",
+            "state": "数据采集",
+            "summary": "机务 → 航安 → 调查",
+            "desc": "停稳后机务登机连接下载设备，航安与调查侧接口准备。",
+            "alert": "",
+            "events": ["机务连接下载设备（示意）"],
+            "evidence": ["设备连接清单（示意）"],
+            "actions": ["数据下载与调查衔接"],
+            "activeRelations": ["smoke_no_info_04_maintenance_to_investigation", "smoke_no_control_02_post_landing_data"]
+          },
+          "effects": []
+        }
+      ]
+    },
+    "nav": {
+      "name": "导航失效",
+      "placeholder": false,
+      "unitsUrl": "/config/dynamic/nav_units.json",
+      "linksUrl": "/config/dynamic/nav_links.json",
+      "durationSec": 200,
+      "narrativeMilestones": {
+        "alarmRaw": 0,
+        "disposalStartRaw_yes": 0.3,
+        "disposalStartRaw_no": 60,
+        "completeRaw_yes": 40.3,
+        "completeRaw_no": 900
+      },
+      "postReview": {
+        "title": "落地后复盘",
+        "items": [
+          "机务电子车间人员登机，按工卡检查并更换机载导航计算机。",
+          "航材库按件号发料与换件记录衔接。",
+          "驾驶舱侧装机确认、通电检查与试车简令。",
+          "从机载系统下载与导航故障相关的数据，写入技术记录并归档。"
+        ]
+      },
+      "nodes": [
+        {
+          "nodeId": 0,
+          "yes": {
+            "t": 0.0,
+            "title": "预定航线路径与融合轨迹出现偏差",
+            "phase": "触发",
+            "state": "偏航示警",
+            "summary": "导航 → 机载感知",
+            "desc": "飞行路径与计划航迹不一致：预定航线路径开始虚化/闪烁，融合轨迹在图上生成（示意说明）。",
+            "alert": "航迹/导航与计划不一致（示意）",
+            "events": ["航迹/地图对比提示（示意）"],
+            "evidence": ["FMC/GNSS 等提示摘要（示意）"],
+            "actions": ["机载侧准备上送与机组提示"],
+            "activeRelations": ["nav_yes_info_00"],
+            "effects": {
+              "plannedRouteBlink": true,
+              "actualTrackGenerate": true,
+              "navigationWarningPulse": true
+            }
+          },
+          "no": {
+            "t": 0.0,
+            "title": "机组发现位置与航向指示不一致，请求雷达引导",
+            "phase": "发现",
+            "state": "通报空管",
+            "summary": "机组 → 空管",
+            "desc": "机组依据仪表与航图比对，向空管申请雷达引导与位置证实。",
+            "alert": "位置/航向与预期不符（示意）",
+            "events": ["空地话音申请雷达引导（示意）"],
+            "evidence": ["简令与请求记录（示意）"],
+            "actions": ["空管侧接收并准备协调"],
+            "activeRelations": ["nav_no_info_00"],
+            "effects": {
+              "plannedRouteBlink": true,
+              "actualTrackGenerate": true,
+              "navigationWarningPulse": true
+            }
+          }
+        },
+        {
+          "nodeId": 1,
+          "yes": {
+            "t": 0.3,
+            "title": "机载感知上送异常特征并提示机组",
+            "phase": "识别",
+            "state": "上送中",
+            "summary": "机载感知经链路至地面；机组提示",
+            "desc": "机载感知预警系统识别导航异常并沿链路上传；同屏向机组给出提示。",
+            "alert": "导航类异常已识别（示意）",
+            "events": ["上送与机组提示（示意）"],
+            "evidence": ["特征码/摘要（示意）"],
+            "actions": ["维持通联并推送地面"],
+            "activeRelations": ["nav_yes_info_01", "nav_yes_info_02"],
+            "effects": []
+          },
+          "no": {
+            "t": 60.0,
+            "title": "空管标定异常并协调进近/区域提供引导",
+            "phase": "空管",
+            "state": "引导协调",
+            "summary": "空管 → 进近/区域",
+            "desc": "空管将导航类异常记入手势席，与进近/区域席位协调提供雷达/程序引导。",
+            "alert": "",
+            "events": ["席位间协调与频率交接（示意）"],
+            "evidence": ["协调记录（示意）"],
+            "actions": ["对机组发布引导指令"],
+            "activeRelations": ["nav_no_info_01"],
+            "effects": []
+          }
+        },
+        {
+          "nodeId": 2,
+          "yes": {
+            "t": 10.3,
+            "title": "体系推演结果回传专家组",
+            "phase": "推演",
+            "state": "已回传",
+            "summary": "体系推演 → 专家组",
+            "desc": "体系应急决策推演系统完成本阶段推演，将结果回传至地面运营控制中心专家组。",
+            "alert": "",
+            "events": ["推演回传与席位确认（示意）"],
+            "evidence": ["建议条目（示意）"],
+            "actions": ["专家组收悉并拟制协同要点"],
+            "activeRelations": ["nav_yes_control_01"],
+            "effects": []
+          },
+          "no": {
+            "t": 300.0,
+            "title": "机组经卫星话联系航司技术支援并报故障信息",
+            "phase": "航司",
+            "state": "技术支援",
+            "summary": "机组 → 卫站 → 技术支援",
+            "desc": "机组通过卫星通信链路联系航司技术支援，按格式报告故障与运行限制。",
+            "alert": "",
+            "events": ["卫星话建立与报文（示意）"],
+            "evidence": ["故障代码/现象摘要（示意）"],
+            "actions": ["技术支援侧记录并反馈要点"],
+            "activeRelations": ["nav_no_info_02"],
+            "effects": []
+          }
+        },
+        {
+          "nodeId": 3,
+          "yes": {
+            "t": 40.3,
+            "title": "地面专家组下发方案至空管、机场、航司与机组",
+            "phase": "下发",
+            "state": "协同中",
+            "summary": "专家组经空管至机场/航司与机组",
+            "desc": "地面运营控制中心专家组将处置与运行协同要点，通过空管同步至机场、航司，并达机组。",
+            "alert": "",
+            "events": ["要点同步与证实（示意）"],
+            "evidence": ["协同清单（示意）"],
+            "actions": ["各席位按单执行与证实"],
+            "activeRelations": ["nav_yes_info_03", "nav_yes_info_04", "nav_yes_control_02"],
+            "effects": []
+          },
+          "no": {
+            "t": 900.0,
+            "title": "航司与空管定备降方案与航线",
+            "phase": "决策",
+            "state": "备降协同",
+            "summary": "签派/航司、空管、备降场",
+            "desc": "航司签派形成备降决策，空管协调备降机场运行与进离场/航线。",
+            "alert": "",
+            "events": ["运控与管制席位沟通（示意）"],
+            "evidence": ["备降场与简令（示意）"],
+            "actions": ["机组按新指令实施"],
+            "activeRelations": ["nav_no_info_03", "nav_no_control_01"],
+            "effects": []
+          }
+        }
+      ]
+    },
+    "hijack": {
+      "name": "劫机",
+      "placeholder": false,
+      "unitsUrl": "/config/dynamic/hijack_units.json",
+      "linksUrl": "/config/dynamic/hijack_links.json",
+      "durationSec": 600,
+      "narrativeMilestones": {
+        "alarmRaw": 0,
+        "disposalStartRaw_yes": 0.3,
+        "disposalStartRaw_no": 30,
+        "completeRaw_yes": 30,
+        "completeRaw_no": 600
+      },
+      "nodes": [
+        {
+          "nodeId": 0,
+          "yes": {
+            "t": 0.0,
+            "title": "机载多源数据汇聚至通感算",
+            "phase": "探测",
+            "state": "数据接入",
+            "summary": "飞控/云匣数据进入机载通感算",
+            "desc": "飞行控制系统异常提示与机载云匣子、飞控相关数据在机载通感算一体设备处汇聚，用于后续安全监测与上送。",
+            "alert": "飞控/数据汇聚（示意）",
+            "events": ["机载侧数据合流与队列登记（示意）"],
+            "evidence": ["通感算输入侧摘要（示意）"],
+            "actions": ["维持链路与机载安全监测入口"],
+            "activeRelations": ["hijack_yes_info_00_airborne_detect"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "no": {
+            "t": 0.0,
+            "title": "应答机特情码与空地识别",
+            "phase": "识别",
+            "state": "代码通报",
+            "summary": "机组、应答机至空管",
+            "desc": "机组将应答机选码设为特情相关编码（如 7500 示意场景），空管系统识别为劫机/非法干扰类特情。",
+            "alert": "特情代码识别（示意）",
+            "events": ["选码/二次雷达回波识别（示意）"],
+            "evidence": ["空管系统告警摘要（示意）"],
+            "actions": ["空管按程序核实与记录"],
+            "activeRelations": ["hijack_no_info_00_crew_squawk_to_atc"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 1,
+          "yes": {
+            "t": 0.3,
+            "title": "上送与飞控回执",
+            "phase": "上送",
+            "state": "通感算工作中",
+            "summary": "通感算上送专家组，并回执飞控",
+            "desc": "机载通感算一体设备按程序启动安全监测，向地面运营控制中心专家组上送；同时对飞行控制系统进行闭合反馈。",
+            "alert": "",
+            "events": ["上送与回执报文组帧（示意）"],
+            "evidence": ["链路与时戳摘要（示意）"],
+            "actions": ["保持空地链路与机载安全策略"],
+            "activeRelations": ["hijack_yes_info_01_air_to_ground"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "no": {
+            "t": 30.0,
+            "title": "管制专线通报公安与军指所",
+            "phase": "通报",
+            "state": "多席联动",
+            "summary": "空管至公安与军管指挥所；席位协同",
+            "desc": "空管识别为劫机相关状态后，经专线/专用流程向民航公安机关与军方空管指挥所同步情况；空管席位与空管指挥中心保持协同。",
+            "alert": "",
+            "events": ["专线/席位间通报与确认（示意）"],
+            "evidence": ["通报记录与回执时间（示意）"],
+            "actions": ["多部门接报并按预案初启"],
+            "activeRelations": ["hijack_no_info_01_atc_to_security", "hijack_no_info_04_atc_to_cmd_center"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 2,
+          "yes": {
+            "t": 2.0,
+            "title": "指挥链进入推演与管域",
+            "phase": "指挥",
+            "state": "指挥链建立",
+            "summary": "安指—体系推演—军空管部门—民空",
+            "desc": "地面安全指挥中心确认严重非法干扰/劫机特情，指挥链按预案进入体系应急决策推演、军方空管部门与民航空管协同。",
+            "alert": "指挥链与管域启封（示意）",
+            "events": ["方案入口与管域席位置换（示意）"],
+            "evidence": ["指挥链与席位状态（示意）"],
+            "actions": ["管域与推演席位按单响应"],
+            "activeRelations": ["hijack_yes_control_00_command_to_atc"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "no": {
+            "t": 180.0,
+            "title": "局方会商与多部门通联",
+            "phase": "协同",
+            "state": "会商启动",
+            "summary": "态势至大厅；局方对相关部门",
+            "desc": "在既有应急机制下，民航局应急指挥与应急办组织跨部门信息通报与会商；空管向应急指挥大厅同步空域态势。",
+            "alert": "",
+            "events": ["多部门通联与会议席启动（示意）"],
+            "evidence": ["通报与会商纪要摘要（示意）"],
+            "actions": ["依预案落实后续管域与安保协同"],
+            "activeRelations": ["hijack_no_info_03_atc_situation_to_hall", "hijack_no_info_02_hall_office_to_gov"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 3,
+          "yes": {
+            "t": 15.0,
+            "title": "处置方案回传安指",
+            "phase": "方案",
+            "state": "方案下达准备",
+            "summary": "应急处置至安指",
+            "desc": "应急处置系统形成本阶段可执行要点并回传地面安全指挥中心，为后续管域与拦截/避让等动作提供方案输入。",
+            "alert": "",
+            "events": ["方案项打包与回传（示意）"],
+            "evidence": ["方案条目与签核位（示意）"],
+            "actions": ["安指收悉并协调后续管域控制"],
+            "activeRelations": ["hijack_yes_control_01_emergency_to_command"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "no": {
+            "t": 600.0,
+            "title": "管域内拦截与备降/迫降组织",
+            "phase": "执行",
+            "state": "空域与场面协同",
+            "summary": "军管—民管—周边；军管至迫降场",
+            "desc": "按预案由军方空管下达拦截/护航等指令并指定或确认迫降机场；民航空管组织周边航班避让与进离场/场面衔接。本叙事节点为无云匣路径时间轴上末段。",
+            "alert": "空域与场面协同（示意）",
+            "events": ["管域内指令与流量调整（示意）"],
+            "evidence": ["流量与指令摘要（示意）"],
+            "actions": ["保持空地协同直至落地准备完成"],
+            "activeRelations": ["hijack_no_control_00_mil_civil_flights", "hijack_no_control_01_mil_divert"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 4,
+          "yes": {
+            "t": 30.0,
+            "title": "拦截与航路周围流量处置",
+            "phase": "执行",
+            "state": "多线并行",
+            "summary": "军空管拦截与民管避让",
+            "desc": "应急响应阶段：军方空管与拦截侧协同；地面专家组经民航空管对周边航班实施避让/隔离类流量组织（示意）。",
+            "alert": "拦截与流量组织（示意）",
+            "events": ["多路由指令下达（示意）"],
+            "evidence": ["管域与流量状态摘要（示意）"],
+            "actions": ["持续评估空域与目标机态势"],
+            "activeRelations": ["hijack_yes_control_02_intercept", "hijack_yes_control_03_nearby_avoidance"],
+            "effects": {
+              "controlAuthorityRedFlash": false,
+              "plannedRouteBreak": false,
+              "redWarningTrail": false,
+              "squawk7500Pulse": false,
+              "interceptCommandPulse": false
+            }
+          },
+          "no": {},
+          "effects": []
+        }
+      ]
+    },
+    "human": {
+      "name": "人为误操作",
+      "placeholder": false,
+      "unitsUrl": "/config/dynamic/human_units.json",
+      "linksUrl": "/config/dynamic/human_links.json",
+      "durationSec": 180,
+      "narrativeMilestones": {
+        "alarmRaw": 0,
+        "disposalStartRaw_yes": 0.5,
+        "disposalStartRaw_no": 0.5,
+        "completeRaw_yes": 12,
+        "completeRaw_no": 120
+      },
+      "postReview": {
+        "title": "事后复盘",
+        "items": [
+          {
+            "text": "机务下载 QAR 数据并提交航安部门",
+            "relatedRelationIds": ["human_no_info_03_maintenance_to_safety"]
+          },
+          {
+            "text": "航安部门启动事件分析并转飞行技术管理部",
+            "relatedRelationIds": ["human_no_info_04_safety_to_ftm"]
+          },
+          {
+            "text": "飞行技术管理部对当事机组进行技术讲评",
+            "relatedRelationIds": ["human_no_control_00_ftm_to_crew"]
+          },
+          {
+            "text": "飞行技术管理部向全体飞行员发布安全通告",
+            "relatedRelationIds": ["human_no_control_01_ftm_to_all_pilots"]
+          }
+        ]
+      },
+      "nodes": [
+        {
+          "nodeId": 0,
+          "yes": {
+            "t": 0.0,
+            "title": "操作异常触发并上送机载侧",
+            "phase": "触发",
+            "state": "检测中",
+            "summary": "操作检测系统 → 机载智能辅助系统",
+            "desc": "操作相关异常被机载操作检测发现，并传入机载智能辅助系统做后续处理。",
+            "alert": "操作类异常（示意）",
+            "events": ["检测侧识别异常并上送（示意）"],
+            "evidence": ["机载侧关键状态/操作摘要（示意）"],
+            "actions": ["进入机载智能分析链路"],
+            "activeRelations": ["human_yes_info_00_detect_to_ais"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "no": {
+            "t": 0.0,
+            "title": "操纵异常，监控方口头提醒",
+            "phase": "触发",
+            "state": "交叉监控",
+            "summary": "监控飞行员 → 操纵飞行员",
+            "desc": "监控飞行员发现与标准程序不一致或风险上升时，对操纵飞行员作出口头提醒。",
+            "alert": "CRM 口令提醒（示意）",
+            "events": ["标准喊话/提醒（示意）"],
+            "evidence": ["机组通信记录（示意）"],
+            "actions": ["立即中断或纠正与程序不一致的操作（示意）"],
+            "activeRelations": ["human_no_info_00_pm_to_pf"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 1,
+          "yes": {
+            "t": 0.5,
+            "title": "机载智能响应并上送地面",
+            "phase": "识别与上送",
+            "state": "协同中",
+            "summary": "显控提示；天地链路至地面监控中心",
+            "desc": "机载智能辅助系统结合提示逻辑向显控侧给出信息，并通过 5G/卫链等链路上送地面监控中心。",
+            "alert": "",
+            "events": ["显控侧提示/抑制信息更新（示意）", "上送通道建立或保持（示意）"],
+            "evidence": ["上送元数据/状态包（示意）"],
+            "actions": ["驾驶舱可查阅提示", "地面侧获得态势输入"],
+            "activeRelations": ["human_yes_info_01_ais_to_display", "human_yes_info_02_ais_to_ground"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "no": {
+            "t": 0.5,
+            "title": "交叉检查与阻止错误延续",
+            "phase": "舱内",
+            "state": "执行纠正",
+            "summary": "监控/副驾驶 → 机组协同",
+            "desc": "监控飞行员与副驾驶按分工制止错误操作延续，并执行简化的交叉检查与分工确认。",
+            "alert": "",
+            "events": ["标准喊话、交叉检查（示意）"],
+            "evidence": ["简令与分工记录（示意）"],
+            "actions": ["恢复稳定、保持最小必要机动（示意）"],
+            "activeRelations": ["human_no_info_01_crosscheck"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 2,
+          "yes": {
+            "t": 3.0,
+            "title": "地面评估与席位联动",
+            "phase": "评估",
+            "state": "地面协同",
+            "summary": "地面监控中心 → 专家与空管席位",
+            "desc": "地面监控中心按当前态势评估风险，联动飞行专家支持组与空管协调席位形成协同。",
+            "alert": "",
+            "events": ["专家席位与空管席接收任务/态势（示意）"],
+            "evidence": ["评估摘要/要点（示意）"],
+            "actions": ["组织专家分析", "与空管侧协调管域/流量等要素（示意）"],
+            "activeRelations": ["human_yes_control_00_gmc_to_expert", "human_yes_control_01_gmc_to_atc_seat"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "no": {
+            "t": 120.0,
+            "title": "状态稳定并视情通报空管",
+            "phase": "空地",
+            "state": "通报",
+            "summary": "机组 → 空管",
+            "desc": "纠正完成后，在飞行状态稳定且符合规定的前提下，将短暂偏离与恢复情况按程序通报空管。",
+            "alert": "",
+            "events": ["无线电通报（示意）"],
+            "evidence": ["空地通话要点（示意）"],
+            "actions": ["空管了解态势并做必要记录/协调（示意）"],
+            "activeRelations": ["human_no_info_02_crew_to_atc"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "effects": []
+        },
+        {
+          "nodeId": 3,
+          "yes": {
+            "t": 8.0,
+            "title": "专家结论回传与机载回注",
+            "phase": "回传",
+            "state": "分析完成",
+            "summary": "专家 → 地面与机载",
+            "desc": "飞行专家支持组完成分析并回传至地面监控中心，同时通过天地链向机载智能辅助系统下送纠正与操作建议要点。",
+            "alert": "",
+            "events": ["地面闭环更新", "机载侧接收下送包（示意）"],
+            "evidence": ["分析结论摘要（示意）", "下送元数据/要点（示意）"],
+            "actions": ["机载可承接下一步显控/指引逻辑（示意）"],
+            "activeRelations": ["human_yes_control_02_expert_to_gmc", "human_yes_info_03_expert_to_ais"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "no": {},
+          "effects": []
+        },
+        {
+          "nodeId": 4,
+          "yes": {
+            "t": 12.0,
+            "title": "下显操作指引与空地确报",
+            "phase": "执行与确报",
+            "state": "闭环",
+            "summary": "机载指引与空地确认",
+            "desc": "机载智能辅助系统通过驾驶舱操作界面向机组给出操作指引，地面经空管路径完成与机组的通信确认。",
+            "alert": "",
+            "events": ["下显/指引类信息更新", "空管-机组通话语义确认（示意）"],
+            "evidence": ["指引要点（示意）", "空地确认记录（示意）"],
+            "actions": ["按指引执行/核实", "完成必要口令确认（示意）"],
+            "activeRelations": ["human_yes_control_03_ais_to_cockpit_guide", "human_yes_control_04_gmc_to_crew_confirm"],
+            "effects": {
+              "panelPulse": false,
+              "parameterJump": false,
+              "correctionPopup": false,
+              "greenCorrectionTrail": false,
+              "cockpitGuidePulse": false
+            }
+          },
+          "no": {},
+          "effects": []
         }
       ]
     }

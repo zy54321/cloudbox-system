@@ -1,0 +1,106 @@
+{
+  "relations": [
+    {
+      "id": "smoke_yes_info_00_sensor_to_blackbox",
+      "flowLabel": "信息流",
+      "name": "传感链：烟感至机载通感与黑匣",
+      "edges": [
+        ["yes-smoke-sensor", "yes-smoke-tongan"],
+        ["yes-smoke-tongan", "yes-smoke-blackbox-cn"]
+      ]
+    },
+    {
+      "id": "smoke_yes_info_01_warn_to_sim",
+      "flowLabel": "信息流",
+      "name": "上送链：预警经天地链至专家推演",
+      "edges": [
+        ["yes-smoke-warn", "yes-smoke-link-5g-hts"],
+        ["yes-smoke-link-5g-hts", "yes-smoke-expert"],
+        ["yes-smoke-expert", "yes-smoke-sim"]
+      ]
+    },
+    {
+      "id": "smoke_yes_info_02_recon_ready",
+      "flowLabel": "信息流",
+      "name": "融合链：卫链/ATG经汇聚、重构进推演",
+      "edges": [
+        ["yes-smoke-link-5g-hts", "yes-smoke-data-hub"],
+        ["yes-smoke-data-hub", "yes-smoke-recon"],
+        ["yes-smoke-recon", "yes-smoke-sim"]
+      ]
+    },
+    {
+      "id": "smoke_yes_control_01_sim_to_expert",
+      "flowLabel": "控制流",
+      "name": "决策回传：体系推演回专家组",
+      "edges": [["yes-smoke-sim", "yes-smoke-expert"]]
+    },
+    {
+      "id": "smoke_yes_control_02_expert_to_departments",
+      "flowLabel": "控制流",
+      "name": "部门下发：专家组至空管机场航司",
+      "edges": [
+        ["yes-smoke-expert", "yes-smoke-atc"],
+        ["yes-smoke-atc", "yes-smoke-airport"],
+        ["yes-smoke-airport", "yes-smoke-airline"]
+      ]
+    },
+    {
+      "id": "smoke_no_info_00_cabin_to_cockpit",
+      "flowLabel": "信息流",
+      "name": "舱内第一报：客舱到驾驶舱",
+      "edges": [["no-smoke-cabin", "no-smoke-cockpit"]]
+    },
+    {
+      "id": "smoke_no_info_01_crew_to_atc",
+      "flowLabel": "信息流",
+      "name": "空地通报：机组至空管",
+      "edges": [["no-smoke-crew", "no-smoke-atc"]]
+    },
+    {
+      "id": "smoke_no_info_02_atc_to_rescue",
+      "flowLabel": "信息流",
+      "name": "应急升链：空管经AOC到救援",
+      "edges": [
+        ["no-smoke-atc", "no-smoke-aoc"],
+        ["no-smoke-aoc", "no-smoke-rescue"]
+      ]
+    },
+    {
+      "id": "smoke_no_info_03_rescue_to_tower",
+      "flowLabel": "信息流",
+      "name": "协同回呼：救援经塔台到机组",
+      "edges": [
+        ["no-smoke-rescue", "no-smoke-tower"],
+        ["no-smoke-tower", "no-smoke-crew"]
+      ]
+    },
+    {
+      "id": "smoke_no_info_04_maintenance_to_investigation",
+      "flowLabel": "信息流",
+      "name": "落地后闭环：机务到航安与调查",
+      "edges": [
+        ["no-smoke-maint", "no-smoke-safety"],
+        ["no-smoke-safety", "no-smoke-invest"]
+      ]
+    },
+    {
+      "id": "smoke_no_control_01_emergency_dispatch",
+      "flowLabel": "控制流",
+      "name": "机场应急调度：AOC-救援-机场",
+      "edges": [
+        ["no-smoke-aoc", "no-smoke-rescue"],
+        ["no-smoke-rescue", "no-smoke-airport"]
+      ]
+    },
+    {
+      "id": "smoke_no_control_02_post_landing_data",
+      "flowLabel": "控制流",
+      "name": "数据与责任链：机务-航安-调查",
+      "edges": [
+        ["no-smoke-maint", "no-smoke-safety"],
+        ["no-smoke-safety", "no-smoke-invest"]
+      ]
+    }
+  ]
+}
