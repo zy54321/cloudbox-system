@@ -62,6 +62,16 @@
     _creditEl.style.display = 'none';
   }
 
+  /** 父页收到 LOAD_SCENARIO 后停止重复发 READY，避免与 registerWindow 时序问题 */
+  var parentLoadScenarioReceived = false;
+  var readyRepeatTimeoutIds = [];
+  function clearReadyRepeatTimeouts() {
+    readyRepeatTimeoutIds.forEach(function (id) {
+      clearTimeout(id);
+    });
+    readyRepeatTimeoutIds = [];
+  }
+
   /** 与 CesiumViewport.vue 单屏一致：日光、雾、模型 environmentMap 亮度 */
   var SCENE_LIGHT_INTENSITY = 3.4;
   var MODEL_ENV_BRIGHTNESS = 30.35;
@@ -1615,6 +1625,9 @@
   }
 
   function triggerKeyframesBetween(fromTime, toTime) {
+    if (externalScenarioActive) {
+      return;
+    }
     keyframeEntries.forEach(function (entry) {
       if (fromTime < entry.time && toTime >= entry.time && !state.triggeredKeyframes[entry.id]) {
         state.triggeredKeyframes[entry.id] = true;
@@ -1838,6 +1851,8 @@
   }
 
   function handleLoadScenario(payload) {
+    parentLoadScenarioReceived = true;
+    clearReadyRepeatTimeouts();
     if (payload && payload.timelineMax != null) {
       parentTimelineMax = Math.max(Number(payload.timelineMax) || 0, 1e-6);
     }
@@ -1851,7 +1866,25 @@
       applyExternalScenario(payload);
     }
     updateSceneForTime(0);
+    try {
+      if (viewer && !viewer.isDestroyed()) {
+        viewer.trackedEntity = undefined;
+        if (viewer.camera && typeof viewer.camera.cancelFlight === 'function') {
+          viewer.camera.cancelFlight();
+        }
+      }
+    } catch (eLSCam) {}
     setCameraToInitialView();
+    var raf0 =
+      typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : function (cb) {
+        return setTimeout(cb, 0);
+      };
+    raf0(function () {
+      setCameraToInitialView();
+      if (viewer && viewer.scene) {
+        viewer.scene.requestRender();
+      }
+    });
     postSideStateThrottled();
   }
 
@@ -1995,15 +2028,30 @@
     });
   }
 
+  function scheduleReadyBurst() {
+    clearReadyRepeatTimeouts();
+    [0, 200, 500, 1000].forEach(function (ms) {
+      var id = setTimeout(function () {
+        if (parentLoadScenarioReceived) {
+          return;
+        }
+        sendReady();
+      }, ms);
+      readyRepeatTimeoutIds.push(id);
+    });
+  }
+
   function scheduleReady() {
     var n = 0;
     function tick() {
       if (viewer && !viewer.isDestroyed()) {
         sendReady();
+        scheduleReadyBurst();
         return;
       }
       if (++n > 120) {
         sendReady();
+        scheduleReadyBurst();
         return;
       }
       requestAnimationFrame(tick);

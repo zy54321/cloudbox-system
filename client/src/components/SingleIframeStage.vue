@@ -26,7 +26,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, onMounted } from 'vue';
+import { ref, onBeforeUnmount, onMounted, nextTick } from 'vue';
 
 const LOG = '[single-iframe-stage]';
 
@@ -82,5 +82,13 @@ onBeforeUnmount(() => {
 
 onMounted(() => {
   console.log(LOG, 'mounted', { leftFrameId: leftFrameId.value, leftSrc: leftSrc.value });
+  nextTick(() => {
+    const w = iframeRef.value?.contentWindow ?? null;
+    if (w) {
+      console.log(LOG, 'registerWindow(early)', { leftFrameId: leftFrameId.value });
+      props.bridge.registerWindow('left', w, leftFrameId.value);
+      props.bridge.registerWindow('right', null, null);
+    }
+  });
 });
 </script>

@@ -58,6 +58,8 @@
           :isCompare="isCompare"
           :use-single-iframe="!isCompare && useSingleMapIframe"
           :single-iframe-bridge="!isCompare && useSingleMapIframe ? singleIframeBridgeRef : null"
+          :single-iframe-mount-key="singleIframeMountKey"
+          :compare-iframe-mount-key="compareIframeMountKey"
           :skip-relation-node-focus="!isCompare"
           :compare-bridge="compareBridgeRef"
           :bindVpSingle="bindVpSingle"
@@ -391,21 +393,6 @@
           </div>
         </div>
 
-        <RightPanel v-show="!isCompare"
-          :dvTitleIconLeft="dvTitleIconLeft"
-          :dvMsgTabSelected="dvMsgTabSelected"
-          :dvMsgTabSelect="dvMsgTabSelect"
-          :rightTab="rightTab"
-          :toggleRightTab="toggleRightTab"
-          :infoFields="infoFields"
-          :disposalCards="panelDisposalCards"
-          :currentNodeId="currentNodeId"
-          :isCompare="isCompare"
-          :steps="steps"
-          :idxNo="idxNo"
-          :idxYes="idxYes"
-          @stepListReady="onStepListReady"
-        />
       </div>
 
       <TimelineDock
@@ -435,6 +422,7 @@
       />
 
       <AlertToast
+        v-if="isCompare"
         :visible="alertToastVisible"
         :title="alertTitle"
         :body="alertBody"
@@ -454,7 +442,6 @@ import ViewerStage from '../components/ViewerStage.vue';
 import FloatingCard from '../components/FloatingCard.vue';
 import AlertToast from '../components/AlertToast.vue';
 import TimelineDock from '../components/TimelineDock.vue';
-import RightPanel from '../components/RightPanel.vue';
 
 const boeingModelUrl = new URL('../assets/model/boeing_737.glb', import.meta.url).href;
 const dvTitleIconLeft = new URL('../assets/dynamicViewport/title_icon_left.png', import.meta.url).href;
@@ -493,6 +480,16 @@ const firedMarkStepIndexNo = ref(new Set());
 /** 单屏：有云匣子侧关键点叙事；与双屏左栏语义一致 */
 const firedMarkStepIndexSingle = ref(new Set());
 const singleNarrativeRunning = ref(false);
+/** 单屏 iframe：父页关键点叙事结束后是否应恢复 play（不依赖 playing，叙事中 SIDE_STATE 可能为 false） */
+const singleIframeShouldResumeAfterNarrative = ref(false);
+const singleIframeMountKey = ref(0);
+const compareIframeMountKey = ref(0);
+/** 子页已发 MSG_READY 且父页可发 LOAD_SCENARIO（与 bridge 内 ready 对齐） */
+const singleIframeReady = ref(false);
+/** 未 READY 或 push 不可发时仅记待办，READY 后用当前 activeScenario 补发 */
+const pendingSingleLoadScenario = ref(false);
+/** 本轮挂载内首次 READY 须带 force，避免被 lastSingleInitPushKey 挡住首包 */
+const singleIframeFirstReadyForce = ref(true);
 let singlePlayRafId = 0;
 let singlePlayLastTs = 0;
 
@@ -606,7 +603,7 @@ const FLIGHT_ANIM_MS = (60000 * 5) / 2; // 与 StaticHome togglePlaneMove 同量
 
 /**
  * @param {string} side
- * @param {{ parentControlsNarrative?: boolean }} [options] 单屏 iframe 传 false 由子页自控叙事；双屏传 true 或不传
+ * @param {{ parentControlsNarrative?: boolean }} [options] 默认 true：父页裁决 RUN_NARRATIVE（单屏 iframe 与双屏一致）
  */
 function buildIframeScenarioPayload(side, options = {}) {
   const parentControlsNarrative = Object.prototype.hasOwnProperty.call(
@@ -688,6 +685,41 @@ function clearCompareGlobalNarrativeState() {
   compareGlobalDisplayT.value = Math.max(tYes.value, tNo.value, 0);
 }
 
+/** 单屏/双屏切换时清空播放态，互不继承时间线与 fired 标记 */
+function resetDynamicFlowPlaybackIsolation() {
+  t.value = 0;
+  tYes.value = 0;
+  tNo.value = 0;
+  planeProgress.value = 0;
+  planeProgressLeft.value = 0;
+  planeProgressRight.value = 0;
+  playing.value = false;
+  playingLeft.value = false;
+  playingRight.value = false;
+  playingGlobal.value = false;
+  narrativeBusyLeft.value = false;
+  narrativeBusyRight.value = false;
+  singleNarrativeRunning.value = false;
+  singleIframeShouldResumeAfterNarrative.value = false;
+  globalNarrativeRunning.value = false;
+  globalNarrativePendingLeft.value = false;
+  globalNarrativePendingRight.value = false;
+  globalNarrativeStepIndexLeft.value = null;
+  globalNarrativeStepIndexRight.value = null;
+  globalNarrativeRoundDemoT.value = null;
+  compareGlobalDisplayT.value = 0;
+  firedMarkStepIndexSingle.value = new Set();
+  firedMarkStepIndexYes.value = new Set();
+  firedMarkStepIndexNo.value = new Set();
+  compareFaultAlertFiredYes.value = false;
+  compareFaultAlertFiredNo.value = false;
+  playbackMode.value = 'idle';
+  forceSceneUnlocked.value = false;
+  lastNodeIdNo.value = -1;
+  lastNodeIdYes.value = -1;
+  lastNodeIdSingle.value = -1;
+}
+
 function onNarrativeDoneFromChild(p) {
   if (!globalNarrativeRunning.value) return;
   const side = p.side;
@@ -733,6 +765,23 @@ function onNarrativeDoneFromChild(p) {
     } else if (mode === 'right') {
       b?.play?.('right', { parentControlsNarrative: true });
     }
+  }
+}
+
+function onSingleIframeNarrativeDone(p) {
+  if (!useSingleMapIframe || isCompare.value) return;
+  if (p?.side !== 'left') return;
+  singleNarrativeRunning.value = false;
+  const stepIdx = Number(p.stepIndex);
+  if (Number.isFinite(stepIdx)) {
+    const s = new Set(firedMarkStepIndexSingle.value);
+    s.add(stepIdx);
+    firedMarkStepIndexSingle.value = s;
+  }
+  const shouldResume = singleIframeShouldResumeAfterNarrative.value;
+  singleIframeShouldResumeAfterNarrative.value = false;
+  if (shouldResume) {
+    singleIframeBridgeRef.value?.play?.('left', { parentControlsNarrative: true });
   }
 }
 
@@ -789,18 +838,33 @@ let pushLoadScenarioToSingleIframeCount = 0;
 
 function pushLoadScenarioToSingleIframe(opts = {}) {
   const fromReady = !!opts.fromReady;
+  const force = !!opts.force;
   if (!useSingleMapIframe || isCompare.value) return;
   const b = singleIframeBridgeRef.value;
-  if (!b) return;
-  const fid = b.getFrameId?.('left') ?? '';
-  const key = `${fid}|${activeScenario.value}`;
-  if (fromReady && key && key === lastSingleInitPushKey) {
-    console.log('[DynamicFlowSingleIframe]', 'skip duplicate init', key);
+  if (!b) {
+    if (!fromReady) {
+      pendingSingleLoadScenario.value = true;
+    }
     return;
   }
+  if (!singleIframeReady.value) {
+    if (!fromReady) {
+      pendingSingleLoadScenario.value = true;
+    }
+    return;
+  }
+  const fid = b.getFrameId?.('left') ?? '';
+  const key = `${fid}|${activeScenario.value}`;
+  if (fromReady && !force && key && key === lastSingleInitPushKey) {
+    if (import.meta.env.DEV) {
+      console.log('[DynamicFlowSingleIframe]', 'skip duplicate init', key);
+    }
+    return;
+  }
+  pendingSingleLoadScenario.value = false;
   pushLoadScenarioToSingleIframeCount += 1;
   lastSingleInitPushKey = key;
-  b.loadScenario('left', buildIframeScenarioPayload('left', { parentControlsNarrative: false }));
+  b.loadScenario('left', buildIframeScenarioPayload('left', { parentControlsNarrative: true }));
 }
 
 let singleIframeSideStateRaf = 0;
@@ -817,11 +881,18 @@ const singleIframeBridgeRef = shallowRef(
     onReady(payload) {
       if (!useSingleMapIframe || isCompare.value) return;
       if (payload?.side !== 'left') return;
+      singleIframeReady.value = true;
       const b = singleIframeBridgeRef.value;
       const fid = b?.getFrameId?.('left') ?? '';
       const key = `${fid}|${activeScenario.value}`;
-      console.log('[DynamicFlowSingleIframe]', 'onReady', { key });
-      pushLoadScenarioToSingleIframe({ fromReady: true });
+      const force = singleIframeFirstReadyForce.value;
+      if (force) {
+        singleIframeFirstReadyForce.value = false;
+      }
+      if (import.meta.env.DEV) {
+        console.log('[DynamicFlowSingleIframe]', 'onReady', { key, force });
+      }
+      pushLoadScenarioToSingleIframe({ fromReady: true, force });
     },
     onSideState(p) {
       if (isCompare.value || !useSingleMapIframe) return;
@@ -832,7 +903,9 @@ const singleIframeBridgeRef = shallowRef(
       narrativeBusyLeft.value = !!p.narrativeBusy;
       updateCompareMarkers();
       scheduleSingleIframeRefreshFromSideState();
-    }
+      maybeStartSingleIframeNarrativeRound();
+    },
+    onNarrativeDone: onSingleIframeNarrativeDone
   })
 );
 singleIframeBridgeRef.value.setPushLoadScenarioCountGetter(() => pushLoadScenarioToSingleIframeCount);
@@ -973,6 +1046,19 @@ const scenarios = [
 ];
 
 const isCompare = ref(false);
+
+watch(singleIframeMountKey, () => {
+  lastSingleInitPushKey = '';
+  singleIframeReady.value = false;
+  singleIframeFirstReadyForce.value = true;
+});
+
+watch(isCompare, (cmp) => {
+  if (cmp) {
+    singleIframeReady.value = false;
+    pendingSingleLoadScenario.value = false;
+  }
+});
 
 const pathProgressForViewerStage = computed(() => {
   if (!isCompare.value) return planeProgress.value;
@@ -1665,6 +1751,28 @@ function maybeStartGlobalNarrativeRound() {
   }
 }
 
+/** 单屏 iframe：与双屏左侧独播同构，由父页在 SIDE_STATE 到达下一 yes 关键点时 pause/scrub/RUN_NARRATIVE */
+function maybeStartSingleIframeNarrativeRound() {
+  if (isCompare.value || !useSingleMapIframe) return;
+  if (singleNarrativeRunning.value) return;
+  const b = singleIframeBridgeRef.value;
+  if (!b) return;
+  if (!playing.value) return;
+  const eps = 1e-6;
+  const next = peekNextUnfiredMarkSingle();
+  if (!next) return;
+  if (t.value + eps < next.t) return;
+  singleNarrativeRunning.value = true;
+  singleIframeShouldResumeAfterNarrative.value = true;
+  t.value = next.t;
+  syncSinglePlaneProgressFromTime(t.value);
+  refreshAll(false);
+  b.pause('left');
+  b.scrub('left', next.t, { silent: true });
+  refreshAll(false);
+  b.runNarrative('left', { stepIndex: next.stepIndex, t: next.t });
+}
+
 const keyframeMarksYes = computed(() => {
   const demo =
     isCompare.value && playbackMode.value === 'global' ? compareGlobalDisplayT.value : tYes.value;
@@ -1796,6 +1904,7 @@ const hideAlertToast = () => {
 };
 
 const maybeFireAlert = (side, card) => {
+  if (!isCompare.value) return;
   if (!card?.alert) return;
   const key = `${activeScenario.value}|${side}|${card.nodeId}|${card.alert}`;
   if (firedAlerts.has(key)) return;
@@ -1918,6 +2027,7 @@ function resetCompareAll() {
   planeProgressRight.value = 0;
   lastNodeIdNo.value = -1;
   lastNodeIdYes.value = -1;
+  compareIframeMountKey.value += 1;
   if (isCompare.value) compareBridgeRef.value?.resetBoth?.();
   refreshAll(true);
 }
@@ -2063,9 +2173,10 @@ let scrubRaf = 0;
 
 const stopTimer = () => {
   if (!isCompare.value && useSingleMapIframe) {
+    singleIframeShouldResumeAfterNarrative.value = false;
+    singleNarrativeRunning.value = false;
     singleIframeBridgeRef.value?.pause?.('left');
     playing.value = false;
-    singleNarrativeRunning.value = false;
     return;
   }
   if (singlePlayRafId) {
@@ -2130,7 +2241,7 @@ const startTimer = () => {
     playing.value = true;
     singleIframeBridgeRef.value?.play?.('left', {
       fromStart: t.value < 0.01,
-      parentControlsNarrative: false
+      parentControlsNarrative: true
     });
     return;
   }
@@ -2150,12 +2261,16 @@ const jumpTo = (targetT) => {
     stopTimer();
   }
   if (useSingleMapIframe) {
+    singleNarrativeRunning.value = false;
+    singleIframeShouldResumeAfterNarrative.value = false;
     if (nextT === t.value) {
+      rebuildFiredSingleMarksFromScrub();
       refreshAll(true);
       return;
     }
     t.value = nextT;
     planeProgress.value = max > 0 ? clamp(nextT, 0, max) / max : 0;
+    rebuildFiredSingleMarksFromScrub();
     singleIframeBridgeRef.value?.scrub?.('left', nextT);
     refreshAll(true);
     console.log('[jumpTo]', nextT);
@@ -2188,7 +2303,9 @@ const onReset = () => {
   if (isCompare.value) return;
   stopTimer();
   if (useSingleMapIframe) {
-    singleIframeBridgeRef.value?.reset?.('left');
+    singleNarrativeRunning.value = false;
+    singleIframeShouldResumeAfterNarrative.value = false;
+    singleIframeMountKey.value += 1;
     t.value = 0;
     planeProgress.value = 0;
     lastNodeIdNo.value = -1;
@@ -2215,8 +2332,11 @@ const onScrub = (val) => {
   const max = timelineMax.value;
   const nextT = clamp(Number(val) ?? 0, 0, max);
   if (useSingleMapIframe) {
+    singleNarrativeRunning.value = false;
+    singleIframeShouldResumeAfterNarrative.value = false;
     t.value = nextT;
     planeProgress.value = max > 0 ? clamp(nextT, 0, max) / max : 0;
+    rebuildFiredSingleMarksFromScrub();
     singleIframeBridgeRef.value?.scrub?.('left', nextT);
     if (scrubRaf) cancelAnimationFrame(scrubRaf);
     scrubRaf = requestAnimationFrame(() => {
@@ -2284,11 +2404,6 @@ const onPlaneButtonClick = () => {
   }
 };
 
-const toggleRightTab = (tab) => {
-  rightTab.value = tab;
-  console.log('[DynamicFlow] rightTab', tab);
-};
-
 const buildSteps = (base) => {
   // base: [{ t, title, phase, summary, desc, events, evidence, actions, alert, state }]
   const saves = [0, 5, 10, 15, 20, 25, 35, 35, 35];
@@ -2328,11 +2443,6 @@ const buildDisposalCards = (items) => {
     .map((s) => toSideCard(s, 'yes'))
     .filter((card) => String(card.title || '').trim());
 };
-
-const panelDisposalCards = computed(() => {
-  if (isCompare.value) return [];
-  return disposalCards.value;
-});
 
 const loadScenario = async (key) => {
   activeScenario.value = key;
@@ -2395,6 +2505,7 @@ const loadScenario = async (key) => {
     disposalCards.value = buildDisposalCards(steps.value);
     stopTimer();
     stopAllCompareFlightAndScene();
+    singleIframeShouldResumeAfterNarrative.value = false;
     firedMarkStepIndexSingle.value = new Set();
     t.value = 0;
     tYes.value = 0;
@@ -2405,11 +2516,20 @@ const loadScenario = async (key) => {
     lastNodeIdNo.value = -1;
     lastNodeIdYes.value = -1;
     lastNodeIdSingle.value = -1;
+    if (isCompare.value) {
+      compareIframeMountKey.value += 1;
+    } else if (useSingleMapIframe) {
+      singleIframeMountKey.value += 1;
+    }
     refreshAll(true);
     selectedRelationId.value = steps.value[0]?.activeRelations_yes?.[0] ?? null;
     nextTick(() => {
       if (isCompare.value) pushLoadScenarioToIframes();
-      else if (useSingleMapIframe) pushLoadScenarioToSingleIframe();
+      else if (useSingleMapIframe) {
+        if (!singleIframeReady.value) {
+          pendingSingleLoadScenario.value = true;
+        }
+      }
     });
     console.log('[DynamicFlow] loadScenario', key);
   } catch (e) {
@@ -2419,34 +2539,26 @@ const loadScenario = async (key) => {
 
 const toggleCompare = () => {
   isCompare.value = !isCompare.value;
-  if (isCompare.value) {
-    closePopup();
-    hideInfoBox();
-    stopTimer();
-    stopAllCompareFlightAndScene();
-    tYes.value = 0;
-    tNo.value = 0;
-    planeProgressLeft.value = 0;
-    planeProgressRight.value = 0;
-    lastNodeIdNo.value = -1;
-    lastNodeIdYes.value = -1;
-    forceSceneUnlocked.value = false;
-  } else {
+  closePopup();
+  hideInfoBox();
+  stopTimer();
+  if (!isCompare.value) {
     compareBridgeRef.value?.clearActiveMarkerBoth?.();
-    closePopup();
-    stopAllCompareFlightAndScene();
-    t.value = tYes.value;
-    planeProgress.value = planeProgressLeft.value;
-    syncSinglePlaneProgressFromTime(t.value);
-    rebuildFiredSingleMarksFromScrub();
+  }
+  stopAllCompareFlightAndScene();
+  resetDynamicFlowPlaybackIsolation();
+  if (isCompare.value) {
+    compareIframeMountKey.value += 1;
+  } else {
+    singleIframeMountKey.value += 1;
   }
   nextTick(() => {
     if (!isCompare.value) {
       if (!useSingleMapIframe) {
         vpSingle.value?.resize?.();
         vpSingle.value?.requestRender?.();
-      } else {
-        pushLoadScenarioToSingleIframe();
+      } else if (!singleIframeReady.value) {
+        pendingSingleLoadScenario.value = true;
       }
     }
     updateCompareMarkers();
@@ -2466,6 +2578,8 @@ onBeforeUnmount(() => {
   planeScreenInfo.value = null;
   stopTimer();
   stopAllCompareFlightAndScene();
+  singleIframeReady.value = false;
+  pendingSingleLoadScenario.value = false;
   compareBridgeRef.value?.destroy?.();
   singleIframeBridgeRef.value?.destroy?.();
 });

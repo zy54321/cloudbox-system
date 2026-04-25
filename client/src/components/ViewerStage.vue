@@ -8,7 +8,10 @@
           v-if="!isCompare && useSingleIframe && singleIframeBridge"
           class="cb-viewport--single cb-viewer-single cb-viewport--single-iframe"
         >
-          <SingleIframeStage :bridge="singleIframeBridge">
+          <SingleIframeStage
+            :key="`si-${singleIframeMountKey}`"
+            :bridge="singleIframeBridge"
+          >
             <template #left-overlay>
               <slot name="single-iframe-left-overlay" />
             </template>
@@ -52,7 +55,11 @@
 
         <div v-if="isCompare" class="cb-viewer-split cb-viewer-split--iframe-absolute">
           <div class="cb-viewport cb-viewport--split-full cb-viewport--iframe-split-host">
-            <CompareIframeStage v-if="compareBridge" :bridge="compareBridge">
+            <CompareIframeStage
+              v-if="compareBridge"
+              :key="`ci-${compareIframeMountKey}`"
+              :bridge="compareBridge"
+            >
               <template #left-overlay>
                 <slot name="compare-left-overlay" />
               </template>
@@ -102,7 +109,10 @@ const props = defineProps({
   visibleRelationIdsRight: { type: Array, default: () => [] },
   visibleUnitClusterIdsLeft: { type: Array, default: () => [] },
   visibleUnitClusterIdsRight: { type: Array, default: () => [] },
-  skipRelationNodeFocus: { type: Boolean, default: false }
+  skipRelationNodeFocus: { type: Boolean, default: false },
+  /** 与 DynamicFlow 联动：变更则强制重挂 iframe、换新 frameId */
+  singleIframeMountKey: { type: Number, default: 0 },
+  compareIframeMountKey: { type: Number, default: 0 }
 });
 
 const effectiveIdsLeft = computed(() =>
