@@ -1,12 +1,21 @@
 # 当前任务状态（双 iframe compare + 静态架构）
 
-**更新**：2026-04-25
+**更新**：2026-04-29
+
+## 阶段 F-R：effects 专项暂停与稳定基线归档（冻结）
+
+- **effects / unitPulse 专项**：已**整体回滚**；不再作为当前交付与日常维护能力。子页曾实现的配置驱动 `unitPulse` 等**运行时 effects 不在此稳定版范围内验收**（详见 `docs/dynamic-effects-pause-note.md`）。
+- **当前稳定基线（演示版）名称**：**五大动态场景配置驱动 + 交互体验优化 + 客户演示文案精修版** — `dynamic_scenarios.json` + 各场景 `*_units.json` / `*_links.json` 驱动叙事与图元；双 iframe / 父页 narrative 协议与 FloatingCard 等交互已收敛；文案以当前配置为准。
+- **配置策略**：**非专项不得**再向 `dynamic_scenarios.json` 添加或依赖 **runtime effects**（含 `unitPulse` 数组等）。若未来重启 effects，须**先做独立 PoC 页面或独立分支验证**，**不得**直接接入当前稳定动态交互主页面。
+- **下一阶段建议（文档级）**：客户演示版 **打包 / 部署 / 备份**，或仅做 **配置级微调**（叙事时间、文案、`activeRelations` 与 units/links 对齐等），仍避免动 `scene.js` / `DynamicFlow.vue` 等运行代码。
+
+---
 
 ## 阶段 6-0：五大动态场景配置驱动（收口说明）
 
 - **状态**：**五大动态场景**（`engine_failure` / `smoke` / `nav` / `hijack` / `human`）已由 **`dynamic_scenarios.json` + 各场景 `*_units.json` / `*_links.json`** 驱动，本阶段配置驱动版可视为**已完成**。
-- **说明文档**：`docs/dynamic-scenario-config-guide.md`（分工、五场景资源表、命名与 `attachToPlane` / `postReview` / `effects` 等维护规则）。
-- **下一阶段（可选）**：**视觉效果专项**（如链路/粒子弹层等，需与现网协议协同），或 **人工体验优化**（交互与文案细节，仍优先走配置与轻量改法）。
+- **说明文档**：`docs/dynamic-scenario-config-guide.md`（分工、五场景资源表、命名与 `attachToPlane` / `postReview` 等维护规则）。**`effects` 运行时能力已暂停**，见该文档第 7 节与 `docs/dynamic-effects-pause-note.md`。
+- **下一阶段（可选）**：**人工体验优化**（交互与文案细节，仍优先走配置与轻量改法）。**视觉效果 / runtime effects** 非当前基线能力，重启前须独立 PoC，见 F-R。
 
 ---
 

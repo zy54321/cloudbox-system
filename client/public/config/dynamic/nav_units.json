@@ -13,7 +13,7 @@
             "name": "导航系统",
             "lon": 108.74246,
             "lat": 34.4399,
-            "alt": 0.2,
+            "alt": 0,
             "image": "img/planeBillBoardImg.png",
             "info": "机载侧导航/位置服务相关节点，为导航异常场景与空地协同提供机上演示点。",
             "infoSource": "阶段配置",
@@ -23,9 +23,9 @@
             "id": "yes-nav-sense",
             "type": "ground_unit",
             "name": "机载感知预警系统",
-            "lon": 108.74252,
-            "lat": 34.43997,
-            "alt": 2.35,
+            "lon": 108.742525,
+            "lat": 34.439971,
+            "alt": 2.1,
             "image": "img/planeBillBoardImg.png",
             "info": "机载侧告警/预警上送，与 5G/卫链回传、地面专家研判衔接。",
             "infoSource": "阶段配置",
@@ -38,6 +38,11 @@
             "lon": 108.7482,
             "lat": 34.4409,
             "alt": 12,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "天地一体化链路的抽象合并节点，用于导航与态势数据高通量/低时延回传。",
             "infoSource": "阶段配置"
@@ -49,6 +54,11 @@
             "lon": 108.771811,
             "lat": 34.445005,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/06_地面运营控制中心专家组.png",
             "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
             "infoSource": "文档摘要"
@@ -60,6 +70,11 @@
             "lon": 108.764833,
             "lat": 34.439928,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/05_体系应急决策推演系统.png",
             "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
             "infoSource": "文档摘要"
@@ -68,10 +83,10 @@
             "id": "yes-nav-crew",
             "type": "ground_unit",
             "name": "机组",
-            "lon": 108.74255,
-            "lat": 34.44,
-            "alt": 1.8,
-            "image": "img/02_机组.png",
+            "lon": 108.742544,
+            "lat": 34.439984,
+            "alt": 1.3,
+            "image": "img/planeBillBoardImg.png",
             "info": "机组为机上执行与空地通报主体；动态场景以独立 unit 与链路衔接。",
             "infoSource": "阶段配置",
             "attachToPlane": true
@@ -80,10 +95,15 @@
             "id": "yes-nav-atc",
             "type": "ground_unit",
             "name": "空管",
-            "lon": 108.766361,
-            "lat": 34.446522,
+            "lon": 108.753483,
+            "lat": 34.436707,
             "alt": 0,
-            "image": "img/04_空管.png",
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
+            "image": "img/planeBillBoardImg.png",
             "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
             "infoSource": "补充说明"
           },
@@ -91,10 +111,15 @@
             "id": "yes-nav-airport",
             "type": "ground_unit",
             "name": "机场",
-            "lon": 108.758305,
-            "lat": 34.439267,
+            "lon": 108.755438,
+            "lat": 34.441397,
             "alt": 0,
-            "image": "img/03_机场.png",
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
+            "image": "img/planeBillBoardImg.png",
             "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
             "infoSource": "补充说明"
           },
@@ -105,6 +130,11 @@
             "lon": 108.744077,
             "lat": 34.432633,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/01_航空公司.png",
             "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
             "infoSource": "补充说明"
@@ -120,10 +150,10 @@
             "id": "no-nav-crew",
             "type": "ground_unit",
             "name": "机组",
-            "lon": 108.74255,
-            "lat": 34.44,
-            "alt": 1.8,
-            "image": "img/02_机组.png",
+            "lon": 108.742544,
+            "lat": 34.439984,
+            "alt": 1.3,
+            "image": "img/planeBillBoardImg.png",
             "info": "机组为机上处置与甚高频/卫星话音通报主体。",
             "infoSource": "阶段配置",
             "attachToPlane": true
@@ -132,9 +162,9 @@
             "id": "no-nav-cockpit",
             "type": "ground_unit",
             "name": "驾驶舱",
-            "lon": 108.74248,
-            "lat": 34.43995,
-            "alt": 1.1,
+            "lon": 108.742524,
+            "lat": 34.439970,
+            "alt": 1.8,
             "image": "img/planeBillBoardImg.png",
             "info": "驾驶舱侧标准程序执行与对空地通报的示意。",
             "infoSource": "阶段配置",
@@ -144,10 +174,15 @@
             "id": "no-nav-atc",
             "type": "ground_unit",
             "name": "空管",
-            "lon": 116.395703,
-            "lat": 39.494101,
+            "lon": 108.753483,
+            "lat": 34.436707,
             "alt": 0,
-            "image": "img/04_空管.png",
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
+            "image": "img/planeBillBoardImg.png",
             "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
             "infoSource": "补充说明"
           },
@@ -158,6 +193,11 @@
             "lon": 108.7691,
             "lat": 34.4525,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "进近/区域空域与流量协同节点（与 engine 类场景塔台-进近逻辑对应的动态自建点）。",
             "infoSource": "阶段配置"
@@ -169,6 +209,11 @@
             "lon": 108.790894,
             "lat": 34.433823,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "卫星通信地面站承接卫星入地与业务转发。",
             "infoSource": "补充说明"
@@ -180,6 +225,11 @@
             "lon": 116.413751,
             "lat": 39.518911,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/01_航空公司.png",
             "info": "与静态 ground 同名的可合并标点；以静态 units 为准呈现坐标与素材。",
             "infoSource": "补充说明"
@@ -191,6 +241,11 @@
             "lon": 116.406143,
             "lat": 39.519143,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "航司技术侧对机务、签派、机组的远程技术支援。",
             "infoSource": "补充说明"
@@ -202,6 +257,11 @@
             "lon": 116.4045,
             "lat": 39.5128,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "备降场地面运行与资源协调节点。",
             "infoSource": "阶段配置"
@@ -213,6 +273,11 @@
             "lon": 116.431346,
             "lat": 39.494977,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "机务排故、维修与适航前检查执行主体。",
             "infoSource": "阶段配置"
@@ -224,6 +289,11 @@
             "lon": 116.4282,
             "lat": 39.4964,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "航材供应与件号调度节点。",
             "infoSource": "阶段配置"
@@ -235,6 +305,11 @@
             "lon": 116.435,
             "lat": 39.522,
             "alt": 0,
+            "scale": 0.2,
+            "offset": [
+              0,
+              0
+            ],
             "image": "img/planeBillBoardImg.png",
             "info": "技术记录/维修记录归档与闭环。",
             "infoSource": "阶段配置"

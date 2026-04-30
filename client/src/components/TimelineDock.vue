@@ -39,11 +39,11 @@
               <div
                 v-for="(ms, mi) in milestoneList"
                 :key="'ms-' + ms.key + '-' + mi"
-                :class="['cb-time-tick', milestoneTickClass(ms.key)]"
+                :class="milestoneTickFullClass(ms)"
                 :style="milestoneTickStyle(ms.t, ms.key)"
               >
                 <span
-                  :class="['cb-time-milestone-label', milestoneTierClass(ms.key), milestoneLabelLayoutClass(ms.key)]"
+                  :class="milestoneLabelFullClass(ms)"
                 >{{ ms.label }}</span>
                 <div class="cb-time-tick-line" />
               </div>
@@ -136,11 +136,11 @@
           <div
             v-for="(ms, mi) in milestoneList"
             :key="'ms2-' + ms.key + '-' + mi"
-            :class="['cb-time-tick', milestoneTickClass(ms.key)]"
+            :class="milestoneTickFullClass(ms)"
             :style="milestoneTickStyle(ms.t, ms.key)"
           >
             <span
-              :class="['cb-time-milestone-label', milestoneTierClass(ms.key), milestoneLabelLayoutClass(ms.key)]"
+              :class="milestoneLabelFullClass(ms)"
             >{{ ms.label }}</span>
             <div class="cb-time-tick-line" />
           </div>
@@ -315,7 +315,9 @@ const props = defineProps({
    * 未传时回退 markerYesLeft/markerNoLeft 的百分比（旧行为）。
    */
   markerYesDemoT: { type: Number, default: undefined },
-  markerNoDemoT: { type: Number, default: undefined }
+  markerNoDemoT: { type: Number, default: undefined },
+  /** 父页叙事进行中：{ key, t } 与 alarm/disposal/complete 某一枚一致时才对该标牌应用闪烁；叙事结束应置 null */
+  pulsingMilestone: { type: Object, default: null }
 });
 
 const marksBySide = computed(() => {
@@ -350,6 +352,78 @@ const embedMarkerYesVisible = computed(() => {
 });
 
 const milestoneList = computed(() => (props.milestones || []).filter((m) => m && Number.isFinite(Number(m.t))));
+
+/** 三枚阶段标牌在时间上靠后的优先为「当前」；同刻时 alarm < disposal < complete */
+const MILESTONE_KEY_TIE = { alarm: 0, disposal: 1, complete: 2 };
+
+const latestReachedMilestone = computed(() => {
+  const cur = Number(props.modelValue) || 0;
+  const eps = 1e-4;
+  const list = milestoneList.value;
+  const sorted = [...list]
+    .filter((m) => m && Object.hasOwn(MILESTONE_KEY_TIE, String(m.key || '')))
+    .sort((a, b) => {
+      const ta = Number(a.t);
+      const tb = Number(b.t);
+      if (ta !== tb) return ta - tb;
+      return (MILESTONE_KEY_TIE[String(a.key)] ?? 99) - (MILESTONE_KEY_TIE[String(b.key)] ?? 99);
+    });
+  let latest = null;
+  for (const ms of sorted) {
+    if (cur + eps >= Number(ms.t)) latest = ms;
+  }
+  return latest;
+});
+
+function milestoneState(ms) {
+  const k = String(ms.key || '');
+  if (MILESTONE_KEY_TIE[k] === undefined) return 'none';
+  const cur = Number(props.modelValue) || 0;
+  const t = Number(ms.t);
+  if (!Number.isFinite(t) || cur + 1e-4 < t) return 'none';
+  const latest = latestReachedMilestone.value;
+  if (!latest) return 'none';
+  if (String(latest.key) === k && Math.abs(Number(latest.t) - t) < 1e-5) return 'current';
+  return 'passed';
+}
+
+function pulsingMatchesMilestone(ms) {
+  const p = props.pulsingMilestone;
+  if (!p || p.key == null) return false;
+  const t = Number(ms.t);
+  const k = String(ms.key || '');
+  if (k !== String(p.key)) return false;
+  if (!Number.isFinite(t) || !Number.isFinite(Number(p.t))) return false;
+  return Math.abs(t - Number(p.t)) < 1e-3;
+}
+
+function milestoneLabelFullClass(ms) {
+  const st = milestoneState(ms);
+  const isCurrent = st === 'current';
+  const pulse = isCurrent && pulsingMatchesMilestone(ms);
+  const currentSettled = isCurrent && !pulsingMatchesMilestone(ms);
+  return [
+    'cb-time-milestone-label',
+    milestoneTierClass(ms.key),
+    milestoneLabelLayoutClass(ms.key),
+    pulse && 'is-milestone-pulsing',
+    currentSettled && 'is-current-milestone-settled',
+    st === 'passed' && 'is-milestone-passed'
+  ].filter(Boolean);
+}
+
+function milestoneTickFullClass(ms) {
+  const st = milestoneState(ms);
+  const isCurrent = st === 'current';
+  const pulse = isCurrent && pulsingMatchesMilestone(ms);
+  const currentSettled = isCurrent && !pulsingMatchesMilestone(ms);
+  return [
+    'cb-time-tick',
+    milestoneTickClass(ms.key),
+    pulse && 'is-tick-milestone-pulsing',
+    currentSettled && 'is-tick-milestone-settled'
+  ].filter(Boolean);
+}
 
 const embedSplitTrackNoUpperMarks = computed(() => {
   const noMile = !milestoneList.value.length;
@@ -675,5 +749,87 @@ function onMarkClick(tVal) {
   color: rgba(235, 248, 255, 0.92);
   white-space: nowrap;
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.65);
+}
+
+/* 阶段标牌：已到达但非「时间轴上当前段」的较早里程碑，略增可见度、不抢戏 */
+.cb-time-milestone-label.is-milestone-passed {
+  color: rgba(190, 235, 255, 0.9);
+  text-shadow:
+    0 0 5px rgba(0, 0, 0, 0.6),
+    0 0 7px rgba(50, 130, 210, 0.32);
+}
+/* 当前最新已到达、叙事已结束或无可匹配 pulsing：明显「已完成」态，不闪 */
+.cb-time-milestone-label.is-current-milestone-settled {
+  color: #d8f6ff;
+  background: linear-gradient(180deg, rgba(80, 160, 220, 0.14), rgba(50, 120, 190, 0.08));
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.6),
+    0 0 8px rgba(100, 200, 255, 0.28);
+  box-shadow: 0 0 0 1px rgba(120, 200, 255, 0.2);
+}
+/* 与父页 pulsingMilestone 键+t 一致且为当前段：高亮橙黄 + 外发光，仅动画光效无布局位移 */
+.cb-time-milestone-label.is-milestone-pulsing {
+  color: #ffeb3b;
+  background: linear-gradient(180deg, rgba(255, 180, 40, 0.22), rgba(255, 200, 60, 0.1));
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  animation: cb-milestone-label-pulse-c1 1.1s ease-in-out infinite;
+  box-shadow:
+    0 0 0 1px rgba(255, 200, 80, 0.35),
+    0 0 12px rgba(255, 200, 60, 0.35);
+}
+@keyframes cb-milestone-label-pulse-c1 {
+  0%,
+  100% {
+    color: #ffe082;
+    text-shadow:
+      0 0 6px rgba(0, 0, 0, 0.7),
+      0 0 10px rgba(255, 200, 80, 0.55),
+      0 0 18px rgba(255, 180, 40, 0.35);
+    filter: brightness(1);
+  }
+  50% {
+    color: #ffeb3b;
+    text-shadow:
+      0 0 6px rgba(0, 0, 0, 0.7),
+      0 0 16px rgba(255, 220, 100, 0.85),
+      0 0 26px rgba(255, 150, 30, 0.45);
+    filter: brightness(1.08);
+  }
+}
+/* 与文案同步的竖线：settled=较强静态光；pulsing=更亮橙黄脉动，不对 tick 做位移动画 */
+.cb-time-tick.is-tick-milestone-settled .cb-time-tick-line {
+  background: linear-gradient(180deg, rgba(150, 210, 255, 0.9), rgba(100, 170, 240, 0.38));
+  box-shadow: 0 0 6px rgba(100, 190, 255, 0.38);
+  filter: brightness(1.04);
+}
+.cb-time-tick.is-tick-milestone-pulsing .cb-time-tick-line {
+  background: linear-gradient(180deg, rgba(255, 210, 120, 0.95), rgba(255, 160, 50, 0.45));
+  animation: cb-milestone-line-pulse-c1 1.1s ease-in-out infinite;
+}
+@keyframes cb-milestone-line-pulse-c1 {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(255, 180, 50, 0.35);
+    filter: brightness(1.02);
+  }
+  50% {
+    box-shadow:
+      0 0 10px rgba(255, 200, 80, 0.65),
+      0 0 18px rgba(255, 150, 40, 0.35);
+    filter: brightness(1.15);
+  }
+}
+.cb-time-tick--stack.is-tick-milestone-pulsing .cb-time-tick-line {
+  animation: cb-milestone-line-pulse-c1 1.1s ease-in-out infinite;
+}
+.cb-time-tick--stack.is-tick-milestone-settled .cb-time-tick-line {
+  background: linear-gradient(180deg, rgba(150, 210, 255, 0.9), rgba(100, 170, 240, 0.38));
+  box-shadow: 0 0 6px rgba(100, 190, 255, 0.35);
+  filter: brightness(1.04);
 }
 </style>
