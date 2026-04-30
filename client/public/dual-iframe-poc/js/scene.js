@@ -684,6 +684,7 @@
   }
 
   function clearEngineOverlays() {
+    clearAircraftNarrativeDim();
     Object.keys(engineUnitEntities).forEach(function (k) {
       var e = engineUnitEntities[k];
       if (e) viewer.entities.remove(e);
@@ -922,6 +923,30 @@
     position: toCartesian(scenario.airplane.path[0].position)
   });
 
+  /**
+   * 叙事期飞机 glTF 半透明：与 CesiumViewport.vue applyPlaneDimHighlightVisual / clearPlaneHighlightVisual 一致
+   * （WHITE.withAlpha(0.4)、ColorBlendMode.MIX、colorBlendAmount 0.35）
+   */
+  function applyAircraftNarrativeDim() {
+    if (!aircraftEntity || !aircraftEntity.model) return;
+    try {
+      aircraftEntity.model.color = new Cesium.ConstantProperty(Cesium.Color.WHITE.withAlpha(0.4));
+      aircraftEntity.model.colorBlendMode = new Cesium.ConstantProperty(Cesium.ColorBlendMode.MIX);
+      aircraftEntity.model.colorBlendAmount = new Cesium.ConstantProperty(0.35);
+    } catch (eDim) {}
+    if (viewer && viewer.scene) viewer.scene.requestRender();
+  }
+
+  function clearAircraftNarrativeDim() {
+    if (!aircraftEntity || !aircraftEntity.model) return;
+    try {
+      aircraftEntity.model.color = undefined;
+      aircraftEntity.model.colorBlendMode = undefined;
+      aircraftEntity.model.colorBlendAmount = undefined;
+    } catch (eClr) {}
+    if (viewer && viewer.scene) viewer.scene.requestRender();
+  }
+
   function getUnitEntityPosition(entity) {
     if (!entity || !entity.position) return null;
     try {
@@ -982,6 +1007,7 @@
 
   function cancelNarrativeSequence() {
     cancelNarrativeTimers();
+    clearAircraftNarrativeDim();
     narrativeBusy = false;
     currentNarrativeStepIndex = null;
     narrativeResumePending = false;
@@ -1106,6 +1132,7 @@
     var relIds = stepRow[relKey] || [];
     narrativeActiveRelationOverride = Array.isArray(relIds) ? relIds.map(String) : [];
     updateSceneForTime(state.currentTime);
+    applyAircraftNarrativeDim();
     if (viewer.scene) viewer.scene.requestRender();
     postSideStateThrottled();
     runNarrativeSequence();
@@ -1119,6 +1146,7 @@
 
     function finishNarrative() {
       cancelNarrativeTimers();
+      clearAircraftNarrativeDim();
       narrativeActiveRelationOverride = null;
       narrativeBusy = false;
       var doneIdx = currentNarrativeStepIndex;
