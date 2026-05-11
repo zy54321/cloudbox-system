@@ -4,13 +4,33 @@
       "id": "human_yes_info_00_detect_to_ais",
       "flowLabel": "信息流",
       "name": "T+0.0s 操作检测系统→机载智能辅助系统",
-      "edges": [["yes-human-detect", "yes-human-ais"]]
+      "edges": [["yes-human-detect", "yes-human-ais"]],
+      "transfers": [
+        {
+          "fromId": "yes-human-detect",
+          "toId": "yes-human-ais",
+          "fromLabel": "操作检测系统",
+          "toLabel": "机载智能辅助系统",
+          "payload": "异常操作类型、参数越限状态、操作时间、相关系统状态",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "human_yes_info_01_ais_to_display",
       "flowLabel": "信息流",
       "name": "T+0.5s 机载智能辅助系统→驾驶舱显示系统",
-      "edges": [["yes-human-ais", "yes-human-display"]]
+      "edges": [["yes-human-ais", "yes-human-display"]],
+      "transfers": [
+        {
+          "fromId": "yes-human-ais",
+          "toId": "yes-human-display",
+          "fromLabel": "机载智能辅助系统",
+          "toLabel": "驾驶舱显示系统",
+          "payload": "纠正提示、异常参数、操作风险说明、推荐操作步骤",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "human_yes_info_02_ais_to_ground",
@@ -19,25 +39,73 @@
       "edges": [
         ["yes-human-ais", "yes-human-link-5g-hts"],
         ["yes-human-link-5g-hts", "yes-human-gmc"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-human-ais",
+          "toId": "yes-human-link-5g-hts",
+          "fromLabel": "机载智能辅助系统",
+          "toLabel": "5G ATG链路/HTS卫星链路",
+          "payload": "误操作告警、飞行参数异常、机组操作状态、风险等级",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-human-link-5g-hts",
+          "toId": "yes-human-gmc",
+          "fromLabel": "5G ATG链路/HTS卫星链路",
+          "toLabel": "地面监控中心",
+          "payload": "上送数据包、链路与时间同步元数据、席位分发路由",
+          "kind": "data"
+        }
       ]
     },
     {
       "id": "human_yes_control_00_gmc_to_expert",
       "flowLabel": "控制流",
       "name": "T+3.0s 地面监控中心→飞行专家支持组",
-      "edges": [["yes-human-gmc", "yes-human-expert-support"]]
+      "edges": [["yes-human-gmc", "yes-human-expert-support"]],
+      "transfers": [
+        {
+          "fromId": "yes-human-gmc",
+          "toId": "yes-human-expert-support",
+          "fromLabel": "地面监控中心",
+          "toLabel": "飞行专家支持组",
+          "payload": "风险评估请求、异常操作记录、飞行状态、待分析问题",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "human_yes_control_01_gmc_to_atc_seat",
       "flowLabel": "控制流",
       "name": "T+3.0s 地面监控中心→空管协调席位",
-      "edges": [["yes-human-gmc", "yes-human-atc-seat"]]
+      "edges": [["yes-human-gmc", "yes-human-atc-seat"]],
+      "transfers": [
+        {
+          "fromId": "yes-human-gmc",
+          "toId": "yes-human-atc-seat",
+          "fromLabel": "地面监控中心",
+          "toLabel": "空管协调席位",
+          "payload": "潜在风险提示、航迹/高度协调需求、通信关注要求",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "human_yes_control_02_expert_to_gmc",
       "flowLabel": "控制流",
       "name": "T+8.0s 飞行专家支持组→地面监控中心",
-      "edges": [["yes-human-expert-support", "yes-human-gmc"]]
+      "edges": [["yes-human-expert-support", "yes-human-gmc"]],
+      "transfers": [
+        {
+          "fromId": "yes-human-expert-support",
+          "toId": "yes-human-gmc",
+          "fromLabel": "飞行专家支持组",
+          "toLabel": "地面监控中心",
+          "payload": "专家分析结论、纠正建议、风险缓解方案",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "human_yes_info_03_expert_to_ais",
@@ -46,13 +114,41 @@
       "edges": [
         ["yes-human-expert-support", "yes-human-link-5g-hts"],
         ["yes-human-link-5g-hts", "yes-human-ais"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-human-expert-support",
+          "toId": "yes-human-link-5g-hts",
+          "fromLabel": "飞行专家支持组",
+          "toLabel": "5G ATG链路/HTS卫星链路",
+          "payload": "纠正建议方案、操作限制、辅助系统执行建议、结构化下显载荷",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-human-link-5g-hts",
+          "toId": "yes-human-ais",
+          "fromLabel": "5G ATG链路/HTS卫星链路",
+          "toLabel": "机载智能辅助系统",
+          "payload": "下行专家方案包、完整性校验、生效时间与版本标识",
+          "kind": "data"
+        }
       ]
     },
     {
       "id": "human_yes_control_03_ais_to_cockpit_guide",
       "flowLabel": "控制流",
       "name": "T+12.0s 机载智能辅助系统→驾驶舱操作指引",
-      "edges": [["yes-human-ais", "yes-human-cockpit-guide"]]
+      "edges": [["yes-human-ais", "yes-human-cockpit-guide"]],
+      "transfers": [
+        {
+          "fromId": "yes-human-ais",
+          "toId": "yes-human-cockpit-guide",
+          "fromLabel": "机载智能辅助系统",
+          "toLabel": "驾驶舱操作指引",
+          "payload": "纠正操作步骤、操作顺序、注意事项",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "human_yes_control_04_gmc_to_crew_confirm",
@@ -61,13 +157,41 @@
       "edges": [
         ["yes-human-gmc", "yes-human-atc"],
         ["yes-human-atc", "yes-human-comm-confirm"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-human-gmc",
+          "toId": "yes-human-atc",
+          "fromLabel": "地面监控中心",
+          "toLabel": "空管",
+          "payload": "地面确认信息、管制协调建议、机组确认请求",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-human-atc",
+          "toId": "yes-human-comm-confirm",
+          "fromLabel": "空管",
+          "toLabel": "机组通信确认",
+          "payload": "需机组复述的关键指令、频率守听要求、确认闭环标记",
+          "kind": "control"
+        }
       ]
     },
     {
       "id": "human_no_info_00_pm_to_pf",
       "flowLabel": "信息流",
       "name": "T+0.0s 监控飞行员→操纵飞行员",
-      "edges": [["no-human-pm", "no-human-pf"]]
+      "edges": [["no-human-pm", "no-human-pf"]],
+      "transfers": [
+        {
+          "fromId": "no-human-pm",
+          "toId": "no-human-pf",
+          "fromLabel": "监控飞行员",
+          "toLabel": "操纵飞行员",
+          "payload": "异常喊话、交叉检查结论、建议立即修正的动作",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "human_no_info_01_crosscheck",
@@ -76,37 +200,105 @@
       "edges": [
         ["no-human-pm", "no-human-crew"],
         ["no-human-fo", "no-human-crew"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-human-pm",
+          "toId": "no-human-crew",
+          "fromLabel": "监控飞行员",
+          "toLabel": "机组",
+          "payload": "PM 监控摘要、风险喊话、CRM 协同需求",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-human-fo",
+          "toId": "no-human-crew",
+          "fromLabel": "副驾驶",
+          "toLabel": "机组",
+          "payload": "FO 观察与记录、任务分工更新、手册依据引用",
+          "kind": "data"
+        }
       ]
     },
     {
       "id": "human_no_info_02_crew_to_atc",
       "flowLabel": "信息流",
       "name": "T+2.0min 机组→空管",
-      "edges": [["no-human-crew", "no-human-atc"]]
+      "edges": [["no-human-crew", "no-human-atc"]],
+      "transfers": [
+        {
+          "fromId": "no-human-crew",
+          "toId": "no-human-atc",
+          "fromLabel": "机组",
+          "toLabel": "空管",
+          "payload": "不一致/偏离报告、当前意图与航迹、协助与引导请求",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "human_no_info_03_maintenance_to_safety",
       "flowLabel": "信息流",
       "name": "落地后 机务→航安部门",
-      "edges": [["no-human-maint", "no-human-safety"]]
+      "edges": [["no-human-maint", "no-human-safety"]],
+      "transfers": [
+        {
+          "fromId": "no-human-maint",
+          "toId": "no-human-safety",
+          "fromLabel": "机务",
+          "toLabel": "航安部门",
+          "payload": "机械/电子检查结果、故障描述、保留项目与适航意见",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "human_no_info_04_safety_to_ftm",
       "flowLabel": "信息流",
       "name": "落地后 航安部门→飞行技术管理部",
-      "edges": [["no-human-safety", "no-human-ftm"]]
+      "edges": [["no-human-safety", "no-human-ftm"]],
+      "transfers": [
+        {
+          "fromId": "no-human-safety",
+          "toId": "no-human-ftm",
+          "fromLabel": "航安部门",
+          "toLabel": "飞行技术管理部",
+          "payload": "事件基本信息、安全风险初判、调查协查与技术复核需求",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "human_no_control_00_ftm_to_crew",
       "flowLabel": "控制流",
       "name": "24h内 飞行技术管理部→当事机组",
-      "edges": [["no-human-ftm", "no-human-crew-party"]]
+      "edges": [["no-human-ftm", "no-human-crew-party"]],
+      "transfers": [
+        {
+          "fromId": "no-human-ftm",
+          "toId": "no-human-crew-party",
+          "fromLabel": "飞行技术管理部",
+          "toLabel": "当事机组",
+          "payload": "临时运行限制、面谈与材料要求、整改与技术通告要点",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "human_no_control_01_ftm_to_all_pilots",
       "flowLabel": "控制流",
       "name": "24h内 飞行技术管理部→全体飞行员",
-      "edges": [["no-human-ftm", "no-human-pilots-all"]]
+      "edges": [["no-human-ftm", "no-human-pilots-all"]],
+      "transfers": [
+        {
+          "fromId": "no-human-ftm",
+          "toId": "no-human-pilots-all",
+          "fromLabel": "飞行技术管理部",
+          "toLabel": "全体飞行员",
+          "payload": "安全警示通函、同类风险预防训练要求、标准操作重申",
+          "kind": "control"
+        }
+      ]
     }
   ]
 }

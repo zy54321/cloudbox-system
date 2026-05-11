@@ -40,7 +40,7 @@
         </template>
       </template>
 
-      <!-- 展开详情：顶（当前/待命提示）+ 中（可滚动：列表+补充）+ 底（固定：链路节点） -->
+      <!-- 展开详情：顶（当前/待命提示）+ 中（可滚动：列表+补充）+ 底（extra 插槽，可空） -->
       <div v-else class="card-details card-details--sectioned">
         <div class="card-details-layout">
           <div class="card-details-top">
@@ -102,9 +102,46 @@
                           <li v-for="(ac, ai) in row.fullCard.actions" :key="keyPrefix + 'ac' + ai">{{ ac }}</li>
                         </ul>
                       </div>
-                      <div v-if="row.activeRelationIds?.length" class="keyblock">
-                        <div class="k">关联链路 id</div>
-                        <p class="rel-ids">{{ row.activeRelationIds.join(' · ') }}</p>
+                      <div v-if="row.transferRows?.length" class="keyblock keyblock-transfer">
+                        <div class="k">链路传递信息</div>
+                        <ul class="transfer-list">
+                          <li v-for="tr in row.transferRows" :key="keyPrefix + 'tr' + tr.id">
+                            <div class="transfer-info-block">
+                              <div
+                                class="transfer-main-click"
+                                role="button"
+                                tabindex="0"
+                                :aria-disabled="!canPreview"
+                                title="聚焦整条链路"
+                                @click.stop="onTransferRowClick(tr, row)"
+                                @keydown.enter.stop.prevent="onTransferRowClick(tr, row)"
+                                @keydown.space.stop.prevent="onTransferRowClick(tr, row)"
+                              >
+                                <div class="transfer-path">
+                                  <span class="transfer-kind">{{ tr.flowLabel || (tr.kind === 'control' ? '控制流' : '信息流') }}</span>
+                                  <span class="transfer-route">{{ tr.fromLabel }} → {{ tr.toLabel }}</span>
+                                </div>
+
+                                <div class="transfer-payload">传递内容：{{ tr.payload }}</div>
+                              </div>
+
+                              <div v-if="buildTransferNodes(tr).length" class="transfer-node-tail">
+                                <span class="transfer-node-tail-label">所在链路节点</span>
+                                <button
+                                  v-for="node in buildTransferNodes(tr)"
+                                  :key="keyPrefix + 'tr-node-' + tr.id + '-' + node.id"
+                                  class="transfer-node-btn"
+                                  type="button"
+                                  :disabled="!canPreview"
+                                  :title="'聚焦节点：' + node.label"
+                                  @click.stop="onTransferNodeClick(tr, row, node)"
+                                >
+                                  {{ node.label }}
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        </ul>
                       </div>
                     </div>
                   </template>
@@ -181,7 +218,13 @@ const props = defineProps({
   previewSide: { type: String, default: 'yes' }
 });
 
-const emit = defineEmits(['toggle-collapsed', 'toggle-details', 'preview-keyframe']);
+const emit = defineEmits([
+  'toggle-collapsed',
+  'toggle-details',
+  'preview-keyframe',
+  'focus-transfer',
+  'focus-transfer-node'
+]);
 
 function onKeyframeRowClick(row, index) {
   if (!props.canPreview) return;
@@ -196,16 +239,86 @@ function onKeyframeRowClick(row, index) {
     item: row
   });
 }
+
+function onTransferRowClick(tr, row) {
+  if (!props.canPreview) return;
+  if (!tr?.relationId) return;
+
+  emit('focus-transfer', {
+    side: props.previewSide,
+    relationId: String(tr.relationId),
+    transferId: tr.id,
+    fromId: tr.fromId,
+    toId: tr.toId,
+    nodeIds: buildTransferNodes(tr).map((node) => node.id),
+    item: row,
+    transfer: tr
+  });
+}
+
+function normalizeTransferNodeId(id) {
+  const s = String(id ?? '').trim();
+  if (!s || s === 'undefined' || s === 'null') return '';
+  return s;
+}
+
+function buildTransferNodes(tr) {
+  const out = [];
+  const seen = new Set();
+
+  function push(id, label) {
+    const nodeId = normalizeTransferNodeId(id);
+    if (!nodeId || seen.has(nodeId)) return;
+    seen.add(nodeId);
+    out.push({
+      id: nodeId,
+      label: String(label || nodeId)
+    });
+  }
+
+  push(tr?.fromId, tr?.fromLabel);
+  push(tr?.toId, tr?.toLabel);
+
+  return out;
+}
+
+function onTransferNodeClick(tr, row, node) {
+  if (!props.canPreview) return;
+
+  const unitId = normalizeTransferNodeId(node?.id);
+  if (!unitId) return;
+
+  emit('focus-transfer-node', {
+    side: props.previewSide,
+    unitId,
+    label: node?.label,
+    item: row,
+    transfer: tr
+  });
+}
 </script>
 
 <style scoped>
 /* 展开详情：抬高整体可展示高度（与 proto 全局 280px 解耦；折叠态无此类） */
 .floating-card-body.floating-card-body--sectioned {
-  max-height: min(72vh, 620px) !important;
+  max-height: min(65vh, 560px) !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+
+@media (max-height: 820px) {
+  .floating-card-body.floating-card-body--sectioned {
+    max-height: min(48vh, 420px) !important;
+  }
+}
+
+@media (max-height: 720px) {
+  .floating-card-body.floating-card-body--sectioned {
+    max-height: min(40vh, 340px) !important;
+  }
+}
+
 .card-details--sectioned {
   flex: 1 1 auto;
   min-height: 0;
@@ -312,6 +425,10 @@ function onKeyframeRowClick(row, index) {
   border-left: 3px solid rgba(100, 200, 255, 0.9);
   padding-left: 7px;
 }
+.floating-keyframe-item:not(.is-clickable) {
+  cursor: default;
+  opacity: 0.88;
+}
 .floating-keyframe-item.is-clickable {
   cursor: pointer;
   outline: none;
@@ -393,13 +510,112 @@ function onKeyframeRowClick(row, index) {
   color: rgba(255, 255, 255, 0.9);
   line-height: 1.5;
 }
-.rel-ids {
-  margin: 0;
-  font-size: 11px;
-  word-break: break-all;
-  color: rgba(200, 230, 255, 0.9);
-  line-height: 1.45;
+.keyblock-transfer {
+  margin-top: 8px;
 }
+
+.transfer-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transfer-list li {
+  padding: 0;
+  border: 1px solid rgba(120, 180, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 35, 70, 0.28);
+}
+
+.transfer-info-block {
+  width: 100%;
+  display: block;
+  text-align: left;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: transparent;
+  color: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.transfer-main-click {
+  border-radius: 7px;
+  padding: 2px 2px;
+  cursor: pointer;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.transfer-main-click:hover {
+  background: rgba(51, 142, 219, 0.16);
+}
+
+.transfer-main-click[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.transfer-node-tail {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.transfer-node-tail-label {
+  font-size: 11px;
+  color: rgba(180, 210, 235, 0.72);
+}
+
+.transfer-node-btn {
+  border: 1px solid rgba(80, 170, 240, 0.42);
+  background: rgba(8, 48, 109, 0.48);
+  color: rgba(220, 242, 255, 0.96);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.transfer-node-btn:hover:not(:disabled) {
+  background: rgba(24, 108, 186, 0.72);
+}
+
+.transfer-node-btn:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.transfer-path {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.transfer-kind {
+  color: rgba(255, 213, 74, 0.92);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.transfer-route {
+  color: rgba(220, 240, 255, 0.96);
+  font-weight: 600;
+}
+
+.transfer-payload {
+  color: rgba(220, 235, 250, 0.82);
+  line-height: 1.45;
+  font-size: 12px;
+}
+
 .keyframe-empty {
   font-size: 11px;
   padding: 6px 0 10px;

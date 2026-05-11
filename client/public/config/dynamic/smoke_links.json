@@ -7,6 +7,24 @@
       "edges": [
         ["yes-smoke-sensor", "yes-smoke-tongan"],
         ["yes-smoke-tongan", "yes-smoke-blackbox-cn"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-smoke-sensor",
+          "toId": "yes-smoke-tongan",
+          "fromLabel": "烟雾传感器",
+          "toLabel": "机载通感算一体设备",
+          "payload": "烟雾浓度、触发舱段、采样时间、浓度变化趋势、告警等级",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-smoke-tongan",
+          "toId": "yes-smoke-blackbox-cn",
+          "fromLabel": "机载通感算一体设备",
+          "toLabel": "国产黑匣子",
+          "payload": "烟雾告警记录、舱内环境参数、飞行状态快照、事件时间戳",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -17,6 +35,32 @@
         ["yes-smoke-warn", "yes-smoke-link-5g-hts"],
         ["yes-smoke-link-5g-hts", "yes-smoke-expert"],
         ["yes-smoke-expert", "yes-smoke-sim"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-smoke-warn",
+          "toId": "yes-smoke-link-5g-hts",
+          "fromLabel": "机载感知预警系统",
+          "toLabel": "5G ATG链路/HTS卫星链路",
+          "payload": "烟雾告警类型、舱段位置、浓度数据、飞行状态、告警等级、现场处置需求",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-smoke-link-5g-hts",
+          "toId": "yes-smoke-expert",
+          "fromLabel": "5G ATG链路/HTS卫星链路",
+          "toLabel": "地面运营控制中心专家组",
+          "payload": "完整告警包、多源数据切片、链路质量与时间戳、上送优先级标记",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-smoke-expert",
+          "toId": "yes-smoke-sim",
+          "fromLabel": "地面运营控制中心专家组",
+          "toLabel": "体系应急决策推演系统",
+          "payload": "专家初判要点、场景约束与待推演目标、关键数据引用索引",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -27,13 +71,49 @@
         ["yes-smoke-link-5g-hts", "yes-smoke-data-hub"],
         ["yes-smoke-data-hub", "yes-smoke-recon"],
         ["yes-smoke-recon", "yes-smoke-sim"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-smoke-link-5g-hts",
+          "toId": "yes-smoke-data-hub",
+          "fromLabel": "5G ATG链路/HTS卫星链路",
+          "toLabel": "地面数据汇聚中心",
+          "payload": "下行原始数据流、会话与路由元数据、数据完整性校验结果",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-smoke-data-hub",
+          "toId": "yes-smoke-recon",
+          "fromLabel": "地面数据汇聚中心",
+          "toLabel": "地面飞行场景实时重构系统",
+          "payload": "多源数据汇聚结果、时空对齐后的场景切片、数据质量与缺口标记",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-smoke-recon",
+          "toId": "yes-smoke-sim",
+          "fromLabel": "地面飞行场景实时重构系统",
+          "toLabel": "体系应急决策推演系统",
+          "payload": "场景重构结果、风险态势摘要、可供推演的结构化状态向量",
+          "kind": "data"
+        }
       ]
     },
     {
       "id": "smoke_yes_control_01_sim_to_expert",
       "flowLabel": "控制流",
       "name": "决策回传：体系推演回专家组",
-      "edges": [["yes-smoke-sim", "yes-smoke-expert"]]
+      "edges": [["yes-smoke-sim", "yes-smoke-expert"]],
+      "transfers": [
+        {
+          "fromId": "yes-smoke-sim",
+          "toId": "yes-smoke-expert",
+          "fromLabel": "体系应急决策推演系统",
+          "toLabel": "地面运营控制中心专家组",
+          "payload": "烟雾处置推演结果、备降建议、客舱/驾驶舱风险评估、应急资源建议",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "smoke_yes_control_02_expert_to_departments",
@@ -43,19 +123,65 @@
         ["yes-smoke-expert", "yes-smoke-atc"],
         ["yes-smoke-atc", "yes-smoke-airport"],
         ["yes-smoke-airport", "yes-smoke-airline"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-smoke-expert",
+          "toId": "yes-smoke-atc",
+          "fromLabel": "地面运营控制中心专家组",
+          "toLabel": "空管",
+          "payload": "处置方案摘要、空域协调要求、流量与间隔约束、特情通报要素",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-smoke-atc",
+          "toId": "yes-smoke-airport",
+          "fromLabel": "空管",
+          "toLabel": "机场",
+          "payload": "机场应急保障需求、优先起降协调、救援与场面资源准备指令",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-smoke-airport",
+          "toId": "yes-smoke-airline",
+          "fromLabel": "机场",
+          "toLabel": "航空公司",
+          "payload": "航司运行协同要求、签派与客舱运行衔接、运力与旅客安置要点",
+          "kind": "control"
+        }
       ]
     },
     {
       "id": "smoke_no_info_00_cabin_to_cockpit",
       "flowLabel": "信息流",
       "name": "舱内第一报：客舱到驾驶舱",
-      "edges": [["no-smoke-cabin", "no-smoke-cockpit"]]
+      "edges": [["no-smoke-cabin", "no-smoke-cockpit"]],
+      "transfers": [
+        {
+          "fromId": "no-smoke-cabin",
+          "toId": "no-smoke-cockpit",
+          "fromLabel": "客舱/乘务组",
+          "toLabel": "驾驶舱",
+          "payload": "异味/烟雾异常第一报、舱段与客舱观察、初步疏散与处置需求",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "smoke_no_info_01_crew_to_atc",
       "flowLabel": "信息流",
       "name": "空地通报：机组至空管",
-      "edges": [["no-smoke-crew", "no-smoke-atc"]]
+      "edges": [["no-smoke-crew", "no-smoke-atc"]],
+      "transfers": [
+        {
+          "fromId": "no-smoke-crew",
+          "toId": "no-smoke-atc",
+          "fromLabel": "机组",
+          "toLabel": "空管",
+          "payload": "PAN/应急通报、飞机状态、意图与航迹、申援与优先指挥请求",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "smoke_no_info_02_atc_to_rescue",
@@ -64,6 +190,24 @@
       "edges": [
         ["no-smoke-atc", "no-smoke-aoc"],
         ["no-smoke-aoc", "no-smoke-rescue"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-smoke-atc",
+          "toId": "no-smoke-aoc",
+          "fromLabel": "空管",
+          "toLabel": "机场运行控制中心",
+          "payload": "应急等级、空域与进离场态势、机组通报摘要、协调席位接入请求",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-smoke-aoc",
+          "toId": "no-smoke-rescue",
+          "fromLabel": "机场运行控制中心",
+          "toLabel": "救援系统",
+          "payload": "救援出动需求、预计落地窗口、场面路线与资源调配信息",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -73,6 +217,24 @@
       "edges": [
         ["no-smoke-rescue", "no-smoke-tower"],
         ["no-smoke-tower", "no-smoke-crew"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-smoke-rescue",
+          "toId": "no-smoke-tower",
+          "fromLabel": "救援系统",
+          "toLabel": "塔台/进近管制",
+          "payload": "救援到位状态、场面能力与限制、与进近协同所需技术参数",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-smoke-tower",
+          "toId": "no-smoke-crew",
+          "fromLabel": "塔台/进近管制",
+          "toLabel": "机组",
+          "payload": "进近/跑道指令摘要、救援与空管协同回呼、关键运行限制",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -82,6 +244,24 @@
       "edges": [
         ["no-smoke-maint", "no-smoke-safety"],
         ["no-smoke-safety", "no-smoke-invest"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-smoke-maint",
+          "toId": "no-smoke-safety",
+          "fromLabel": "机务",
+          "toLabel": "航安部门",
+          "payload": "机上检查记录、疑似火源/线路结论、保留与适航意见、技术附件",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-smoke-safety",
+          "toId": "no-smoke-invest",
+          "fromLabel": "航安部门",
+          "toLabel": "事件调查组",
+          "payload": "事件报送材料、安全风险研判、调查协查清单与证据索引",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -91,6 +271,24 @@
       "edges": [
         ["no-smoke-aoc", "no-smoke-rescue"],
         ["no-smoke-rescue", "no-smoke-airport"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-smoke-aoc",
+          "toId": "no-smoke-rescue",
+          "fromLabel": "机场运行控制中心",
+          "toLabel": "救援系统",
+          "payload": "应急出动指令、任务优先级、汇合点与通信频点、安全约束",
+          "kind": "control"
+        },
+        {
+          "fromId": "no-smoke-rescue",
+          "toId": "no-smoke-airport",
+          "fromLabel": "救援系统",
+          "toLabel": "机场",
+          "payload": "场面封控与路线需求、消防/医疗布防、跑道与滑行道使用安排",
+          "kind": "control"
+        }
       ]
     },
     {
@@ -100,6 +298,24 @@
       "edges": [
         ["no-smoke-maint", "no-smoke-safety"],
         ["no-smoke-safety", "no-smoke-invest"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-smoke-maint",
+          "toId": "no-smoke-safety",
+          "fromLabel": "机务",
+          "toLabel": "航安部门",
+          "payload": "技术责任边界说明、维修记录签转、后续检查与停场建议",
+          "kind": "control"
+        },
+        {
+          "fromId": "no-smoke-safety",
+          "toId": "no-smoke-invest",
+          "fromLabel": "航安部门",
+          "toLabel": "事件调查组",
+          "payload": "正式调查配合要求、资料移交清单、保密与接口责任人",
+          "kind": "control"
+        }
       ]
     }
   ]

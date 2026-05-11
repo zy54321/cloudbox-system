@@ -4,7 +4,17 @@
       "id": "nav_yes_info_00",
       "flowLabel": "信息流",
       "name": "导航-感知链：机载导航至机载预警",
-      "edges": [["yes-nav-gnss", "yes-nav-sense"]]
+      "edges": [["yes-nav-gnss", "yes-nav-sense"]],
+      "transfers": [
+        {
+          "fromId": "yes-nav-gnss",
+          "toId": "yes-nav-sense",
+          "fromLabel": "导航系统",
+          "toLabel": "机载感知预警系统",
+          "payload": "导航偏差、航迹偏离、定位异常、系统状态、时间戳",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "nav_yes_info_01",
@@ -14,6 +24,32 @@
         ["yes-nav-sense", "yes-nav-5g-hts"],
         ["yes-nav-5g-hts", "yes-nav-expert"],
         ["yes-nav-expert", "yes-nav-sim"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-nav-sense",
+          "toId": "yes-nav-5g-hts",
+          "fromLabel": "机载感知预警系统",
+          "toLabel": "5G ATG链路/HTS卫星链路",
+          "payload": "导航故障告警、实时位置、实际航迹、预定航迹偏差、飞行状态",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-nav-5g-hts",
+          "toId": "yes-nav-expert",
+          "fromLabel": "5G ATG链路/HTS卫星链路",
+          "toLabel": "地面运营控制中心专家组",
+          "payload": "告警数据包、链路质量元数据、关键导航参量与时间同步信息",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-nav-expert",
+          "toId": "yes-nav-sim",
+          "fromLabel": "地面运营控制中心专家组",
+          "toLabel": "体系应急决策推演系统",
+          "payload": "研判输入、约束条件、待评估改航/备降策略集合",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -23,6 +59,24 @@
       "edges": [
         ["yes-nav-sense", "yes-nav-5g-hts"],
         ["yes-nav-5g-hts", "yes-nav-crew"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-nav-sense",
+          "toId": "yes-nav-5g-hts",
+          "fromLabel": "机载感知预警系统",
+          "toLabel": "5G ATG链路/HTS卫星链路",
+          "payload": "导航异常提示载荷、航迹偏差量、备份导航可用性状态、时间戳",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-nav-5g-hts",
+          "toId": "yes-nav-crew",
+          "fromLabel": "5G ATG链路/HTS卫星链路",
+          "toLabel": "机组",
+          "payload": "导航异常提示、航迹偏差提醒、修正建议、备份导航提示",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -33,6 +87,32 @@
         ["yes-nav-expert", "yes-nav-atc"],
         ["yes-nav-atc", "yes-nav-airport"],
         ["yes-nav-airport", "yes-nav-airline"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-nav-expert",
+          "toId": "yes-nav-atc",
+          "fromLabel": "地面运营控制中心专家组",
+          "toLabel": "空管",
+          "payload": "空域协同方案要点、流量与间隔建议、特情通报与优先级",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-nav-atc",
+          "toId": "yes-nav-airport",
+          "fromLabel": "空管",
+          "toLabel": "机场",
+          "payload": "备降/改航保障需求、跑道与场面资源状态、进近协调摘要",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-nav-airport",
+          "toId": "yes-nav-airline",
+          "fromLabel": "机场",
+          "toLabel": "航空公司",
+          "payload": "地面保障衔接、旅客与运行恢复、签派协同信息摘要",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -42,13 +122,41 @@
       "edges": [
         ["yes-nav-expert", "yes-nav-atc"],
         ["yes-nav-atc", "yes-nav-crew"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-nav-expert",
+          "toId": "yes-nav-atc",
+          "fromLabel": "地面运营控制中心专家组",
+          "toLabel": "空管",
+          "payload": "航迹修正建议草案、备降/返航备选、风险与通信要点",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-nav-atc",
+          "toId": "yes-nav-crew",
+          "fromLabel": "空管",
+          "toLabel": "机组",
+          "payload": "航迹修正建议、管制指令、备降/返航方案、通信确认要素",
+          "kind": "data"
+        }
       ]
     },
     {
       "id": "nav_yes_control_01",
       "flowLabel": "控制流",
       "name": "决策回传：体系推演回专家组",
-      "edges": [["yes-nav-sim", "yes-nav-expert"]]
+      "edges": [["yes-nav-sim", "yes-nav-expert"]],
+      "transfers": [
+        {
+          "fromId": "yes-nav-sim",
+          "toId": "yes-nav-expert",
+          "fromLabel": "体系应急决策推演系统",
+          "toLabel": "地面运营控制中心专家组",
+          "payload": "导航故障处置推演结果、改航方案、风险评估、方案优先级",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "nav_yes_control_02",
@@ -57,19 +165,57 @@
       "edges": [
         ["yes-nav-atc", "yes-nav-airport"],
         ["yes-nav-atc", "yes-nav-crew"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-nav-atc",
+          "toId": "yes-nav-airport",
+          "fromLabel": "空管",
+          "toLabel": "机场",
+          "payload": "备降接收与场面保障指令、跑道使用与救援准备要求",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-nav-atc",
+          "toId": "yes-nav-crew",
+          "fromLabel": "空管",
+          "toLabel": "机组",
+          "payload": "生效管制指令、高度/航向许可、紧急程序与通信确认要求",
+          "kind": "control"
+        }
       ]
     },
     {
       "id": "nav_no_info_00",
       "flowLabel": "信息流",
       "name": "空地第一报：机组至空管",
-      "edges": [["no-nav-crew", "no-nav-atc"]]
+      "edges": [["no-nav-crew", "no-nav-atc"]],
+      "transfers": [
+        {
+          "fromId": "no-nav-crew",
+          "toId": "no-nav-atc",
+          "fromLabel": "机组",
+          "toLabel": "空管",
+          "payload": "导航失效或重大偏差报告、意图、航迹与位置、申援信息",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "nav_no_info_01",
       "flowLabel": "信息流",
       "name": "管制移交：空管至进近/区域",
-      "edges": [["no-nav-atc", "no-nav-approach"]]
+      "edges": [["no-nav-atc", "no-nav-approach"]],
+      "transfers": [
+        {
+          "fromId": "no-nav-atc",
+          "toId": "no-nav-approach",
+          "fromLabel": "空管",
+          "toLabel": "进近管制/区域管制",
+          "payload": "航班标识、移交高度与航迹、导航异常摘要、协调电话与频率",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "nav_no_info_02",
@@ -78,6 +224,24 @@
       "edges": [
         ["no-nav-crew", "no-nav-sat-gw"],
         ["no-nav-sat-gw", "no-nav-tech"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-nav-crew",
+          "toId": "no-nav-sat-gw",
+          "fromLabel": "机组",
+          "toLabel": "卫星通信地面站",
+          "payload": "ACARS/卫星话音数据、故障现象、所需技术支援类型",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-nav-sat-gw",
+          "toId": "no-nav-tech",
+          "fromLabel": "卫星通信地面站",
+          "toLabel": "航司技术支援",
+          "payload": "入地转发包、机组联系信息与排故会话标识",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -88,6 +252,32 @@
         ["no-nav-airline", "no-nav-atc"],
         ["no-nav-tech", "no-nav-atc"],
         ["no-nav-atc", "no-nav-alt-ops"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-nav-airline",
+          "toId": "no-nav-atc",
+          "fromLabel": "航空公司",
+          "toLabel": "空管",
+          "payload": "签派协同、运行限制与旅客保障需求、备降决策支撑信息",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-nav-tech",
+          "toId": "no-nav-atc",
+          "fromLabel": "航司技术支援",
+          "toLabel": "空管",
+          "payload": "技术评估结论、推荐程序与设备状态假设、风险缓释要点",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-nav-atc",
+          "toId": "no-nav-alt-ops",
+          "fromLabel": "空管",
+          "toLabel": "备降机场运控",
+          "payload": "备降航班动态、预计到达、场面与救援需求、协调接口",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -98,13 +288,49 @@
         ["no-nav-maint", "no-nav-warehouse"],
         ["no-nav-warehouse", "no-nav-cockpit"],
         ["no-nav-cockpit", "no-nav-trecord"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-nav-maint",
+          "toId": "no-nav-warehouse",
+          "fromLabel": "机务维修",
+          "toLabel": "航材库",
+          "payload": "航材需求单、件号与互换性、紧急订货与调拨请求",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-nav-warehouse",
+          "toId": "no-nav-cockpit",
+          "fromLabel": "航材库",
+          "toLabel": "驾驶舱",
+          "payload": "件号发放记录、适航标签与追溯信息、装机许可要点",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-nav-cockpit",
+          "toId": "no-nav-trecord",
+          "fromLabel": "驾驶舱",
+          "toLabel": "技术记录",
+          "payload": "故障描述闭环、机组与技术记录签转、维修条目索引",
+          "kind": "data"
+        }
       ]
     },
     {
       "id": "nav_no_control_01",
       "flowLabel": "控制流",
       "name": "运控与放行：空管对备降场",
-      "edges": [["no-nav-atc", "no-nav-alt-ops"]]
+      "edges": [["no-nav-atc", "no-nav-alt-ops"]],
+      "transfers": [
+        {
+          "fromId": "no-nav-atc",
+          "toId": "no-nav-alt-ops",
+          "fromLabel": "空管",
+          "toLabel": "备降机场运控",
+          "payload": "备降落地许可条件、流量与间隔指令、应急保障启动要求",
+          "kind": "control"
+        }
+      ]
     }
   ]
 }

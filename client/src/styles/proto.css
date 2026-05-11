@@ -1960,30 +1960,34 @@ header {
   z-index: 3;
 }
 
-/* FloatingCard 与 extra 内滚动条统一（6px，track 略淡，thumb 蓝青渐变） */
+/* FloatingCard 与 extra / 链路传递浮层：滚动条统一（6px，track 略淡，thumb 蓝青渐变） */
 .cb-wrap--dynamic .floating-card-scroll,
 .cb-wrap--dynamic .floating-card-extra .floating-card-extra-scroll,
-.cb-wrap--dynamic .floating-card-extra .relation-node-list {
+.cb-wrap--dynamic .floating-card-extra .relation-node-list,
+.cb-wrap--dynamic .cb-narrative-transfer-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(82, 221, 255, 0.52) rgba(8, 48, 109, 0.22);
 }
 
 .cb-wrap--dynamic .floating-card-scroll::-webkit-scrollbar,
 .cb-wrap--dynamic .floating-card-extra .floating-card-extra-scroll::-webkit-scrollbar,
-.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar {
+.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar,
+.cb-wrap--dynamic .cb-narrative-transfer-scroll::-webkit-scrollbar {
   width: 6px;
 }
 
 .cb-wrap--dynamic .floating-card-scroll::-webkit-scrollbar-track,
 .cb-wrap--dynamic .floating-card-extra .floating-card-extra-scroll::-webkit-scrollbar-track,
-.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar-track {
+.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar-track,
+.cb-wrap--dynamic .cb-narrative-transfer-scroll::-webkit-scrollbar-track {
   background: rgba(8, 48, 109, 0.22);
   border-radius: 100px;
 }
 
 .cb-wrap--dynamic .floating-card-scroll::-webkit-scrollbar-thumb,
 .cb-wrap--dynamic .floating-card-extra .floating-card-extra-scroll::-webkit-scrollbar-thumb,
-.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar-thumb {
+.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar-thumb,
+.cb-wrap--dynamic .cb-narrative-transfer-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(82, 221, 255, 0.55), rgba(42, 116, 201, 0.72));
   border-radius: 100px;
   min-height: 40px;
@@ -1991,7 +1995,8 @@ header {
 
 .cb-wrap--dynamic .floating-card-scroll::-webkit-scrollbar-thumb:hover,
 .cb-wrap--dynamic .floating-card-extra .floating-card-extra-scroll::-webkit-scrollbar-thumb:hover,
-.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar-thumb:hover {
+.cb-wrap--dynamic .floating-card-extra .relation-node-list::-webkit-scrollbar-thumb:hover,
+.cb-wrap--dynamic .cb-narrative-transfer-scroll::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(82, 221, 255, 0.78), rgba(42, 116, 201, 0.88));
 }
 

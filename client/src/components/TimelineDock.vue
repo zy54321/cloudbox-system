@@ -443,8 +443,8 @@ function milestoneStyle(tSec) {
   };
 }
 
-/** 三枚阶段里程碑同刻或近刻时上下错行（与 ms.key 绑定，避免水平叠字） */
-const MILESTONE_STAGGER_PX = { alarm: 0, disposal: 20, complete: 40, other: 58 };
+/** 阶段里程碑同刻或近刻时上下错行（与 ms.key 绑定，避免水平叠字；prewarn 仅显示、不参与 current 判定） */
+const MILESTONE_STAGGER_PX = { prewarn: 20, alarm: 20, disposal: 40, complete: 60, other: 78 };
 
 function milestoneTickStyle(tSec, key) {
   const k = String(key || 'other');
@@ -473,24 +473,26 @@ function keyframeTickStyle(tSec) {
 
 function milestoneTierClass(key) {
   const k = String(key || '');
+  if (k === 'prewarn') return 'cb-time-milestone--prewarn';
   if (k === 'alarm') return 'cb-time-milestone--alarm';
   if (k === 'disposal') return 'cb-time-milestone--disposal';
   if (k === 'complete') return 'cb-time-milestone--complete';
   return 'cb-time-milestone--other';
 }
 
-/** 开始告警=竖线左侧文案，开始处置=右侧；完成/其他=中线 */
+/** 开始预警=左侧；开始告警/处置=右侧；完成=中线 */
 function milestoneLabelLayoutClass(key) {
   const k = String(key || '');
-  if (k === 'alarm') return 'cb-time-milestone-label--l';
+  if (k === 'prewarn') return 'cb-time-milestone-label--l';
+  if (k === 'alarm') return 'cb-time-milestone-label--r';
   if (k === 'disposal') return 'cb-time-milestone-label--r';
   return 'cb-time-milestone-label--c';
 }
 
-/** 与竖线同锚（侧排 label）或中线叠放（开始完成等） */
+/** 与竖线同锚（侧排 label）或中线叠放（完成等） */
 function milestoneTickClass(key) {
   const k = String(key || '');
-  if (k === 'alarm' || k === 'disposal') return 'cb-time-tick--side';
+  if (k === 'prewarn' || k === 'alarm' || k === 'disposal') return 'cb-time-tick--side';
   return 'cb-time-tick--stack';
 }
 
@@ -676,7 +678,7 @@ function onMarkClick(tVal) {
   pointer-events: none;
 }
 .cb-time-embed-rail--milestones .cb-time-milestone-spacer {
-  min-height: 64px;
+  min-height: 76px;
   height: auto;
 }
 .cb-time-tick {
@@ -749,6 +751,10 @@ function onMarkClick(tVal) {
   color: rgba(235, 248, 255, 0.92);
   white-space: nowrap;
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.65);
+}
+
+.cb-time-milestone--prewarn {
+  color: rgba(255, 224, 130, 0.92);
 }
 
 /* 阶段标牌：已到达但非「时间轴上当前段」的较早里程碑，略增可见度、不抢戏 */

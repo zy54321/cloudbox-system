@@ -21,6 +21,7 @@
   var MSG_RUN_NARRATIVE = 'RUN_NARRATIVE';
   var MSG_NARRATIVE_DONE = 'NARRATIVE_DONE';
   var MSG_FOCUS_UNIT = 'FOCUS_UNIT';
+  var MSG_FOCUS_RELATION = 'FOCUS_RELATION';
 
   var params = new URLSearchParams(window.location.search);
   var frameIdFromUrl = String(params.get('frameId') || '');
@@ -256,6 +257,11 @@
   var narrativeFlightTimeoutId = 0;
   var narrativeFlashIntervalId = 0;
   var narrativeIntroTimeoutId = 0;
+  var NARRATIVE_CAMERA_FLY_SEC = 1.35;
+  var NARRATIVE_FLASH_INTERVAL_MS = 280;
+  var NARRATIVE_FLASH_TOGGLE_COUNT = 8;
+  var NARRATIVE_BETWEEN_NODE_WAIT_MS = 1600;
+  var NARRATIVE_INTRO_WAIT_MS = 500;
   /** 与父页 CRUISE_PATH_PROGRESS 一致：叙事起点时刻飞机应到达的航迹弧长进度 u∈(0,1] */
   var cruisePathProgressU = 0.55;
   var ROUTE_ENTITY_ID = 'poc-flight-route-xa-bj';
@@ -1076,7 +1082,7 @@
     var sphere = new Cesium.BoundingSphere(c3, 1);
     narrativeFlightTimeoutId = 0;
     viewer.camera.flyToBoundingSphere(sphere, {
-      duration: 0.85,
+      duration: NARRATIVE_CAMERA_FLY_SEC,
       offset: offset,
       complete: function () {
         onDone && onDone();
@@ -1106,7 +1112,7 @@
         if (textEnt && textEnt.billboard) textEnt.billboard.show = on;
       } catch (e) {}
       count++;
-      if (count >= 6) {
+      if (count >= NARRATIVE_FLASH_TOGGLE_COUNT) {
         clearInterval(narrativeFlashIntervalId);
         narrativeFlashIntervalId = 0;
         try {
@@ -1116,7 +1122,7 @@
         if (viewer && viewer.scene) viewer.scene.requestRender();
         onDone && onDone();
       } else if (viewer && viewer.scene) viewer.scene.requestRender();
-    }, 200);
+    }, NARRATIVE_FLASH_INTERVAL_MS);
   }
 
   /**
@@ -1187,7 +1193,7 @@
           if (hasNext) {
             setTimeout(function () {
               afterAllNodes(nodeIdx + 1);
-            }, 1000);
+            }, NARRATIVE_BETWEEN_NODE_WAIT_MS);
           } else {
             afterAllNodes(nodeIdx + 1);
           }
@@ -1202,7 +1208,7 @@
     narrativeIntroTimeoutId = setTimeout(function () {
       narrativeIntroTimeoutId = 0;
       afterAllNodes(0);
-    }, 350);
+    }, NARRATIVE_INTRO_WAIT_MS);
   }
 
   function updateEngineLinkPositions(aircraftPositionObj) {
@@ -1961,6 +1967,98 @@
     postSideStateThrottled();
   }
 
+  function getCurrentCartesianForUnitId(unitId) {
+    var uid = String(unitId || '').trim();
+    if (!uid) return null;
+
+    if (uid === 'plane') {
+      return toCartesian(getInterpolatedAircraftPosition(state.currentTime));
+    }
+
+    var ent = engineUnitEntities[uid];
+    if (!ent) return null;
+
+    return getUnitEntityPosition(ent);
+  }
+
+  function collectFocusRelationNodeIds(payload, rel) {
+    var out = [];
+    var seen = {};
+
+    function push(id) {
+      var uid = String(id || '').trim();
+      if (!uid || seen[uid]) return;
+      seen[uid] = true;
+      out.push(uid);
+    }
+
+    if (payload && Array.isArray(payload.nodeIds)) {
+      payload.nodeIds.forEach(push);
+    }
+
+    if (!out.length && payload) {
+      push(payload.fromId);
+      push(payload.toId);
+    }
+
+    if (!out.length && rel && Array.isArray(rel.edges)) {
+      rel.edges.forEach(function (edge) {
+        if (!edge) return;
+        push(edge.fromId);
+        push(edge.toId);
+      });
+    }
+
+    return out;
+  }
+
+  function handleFocusRelation(payload) {
+    var relationId = payload && payload.relationId != null ? String(payload.relationId).trim() : '';
+    if (!relationId) return;
+
+    var rel = null;
+    for (var i = 0; i < engineRelations.length; i++) {
+      if (String(engineRelations[i].id) === relationId) {
+        rel = engineRelations[i];
+        break;
+      }
+    }
+
+    if (!viewer || viewer.isDestroyed()) return;
+
+    var focusNodeIds = collectFocusRelationNodeIds(payload, rel);
+    if (!focusNodeIds.length) return;
+
+    var points = [];
+    focusNodeIds.forEach(function (uid) {
+      var p = getCurrentCartesianForUnitId(uid);
+      if (p) points.push(Cesium.Cartesian3.clone(p));
+    });
+
+    if (!points.length) return;
+
+    try {
+      viewer.trackedEntity = undefined;
+    } catch (eTrack) {}
+
+    var sphere = Cesium.BoundingSphere.fromPoints(points);
+    if (!sphere) return;
+
+    var range = Math.max(80, sphere.radius * 2.8);
+    var offset = new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-38), range);
+
+    viewer.camera.flyToBoundingSphere(sphere, {
+      duration: 1.1,
+      offset: offset,
+      complete: function () {
+        if (viewer && viewer.scene) viewer.scene.requestRender();
+      },
+      cancel: function () {
+        if (viewer && viewer.scene) viewer.scene.requestRender();
+      }
+    });
+  }
+
   function handleFocusUnit(payload) {
     var uid = payload && payload.unitId != null ? String(payload.unitId).trim() : '';
     if (!uid) return;
@@ -2036,6 +2134,9 @@
         break;
       case MSG_FOCUS_UNIT:
         handleFocusUnit(p);
+        break;
+      case MSG_FOCUS_RELATION:
+        handleFocusRelation(p);
         break;
       case MSG_SET_ACTIVE_RELATIONS:
       case MSG_CLEAR_ACTIVE_MARKER:

@@ -12,7 +12,10 @@
   </header>
 
   <div class="cb-wrap cb-wrap--dynamic">
-    <section class="cb-scene-bar cb-scene-panel cb-scene-panel--overlay">
+    <section
+      ref="scenePanelRef"
+      class="cb-scene-bar cb-scene-panel cb-scene-panel--overlay"
+    >
       <div v-if="!isCompare" class="cb-scene-node">当前节点：{{ currentNodeName }}</div>
       <div class="cb-scene-head">
         <div class="cb-scene-title">
@@ -21,7 +24,7 @@
         </div>
         <div v-if="isCompare" class="cb-scene-global-playback">
           <button type="button" class="cb-action-btn" @click="toggleGlobalComparePlay">
-            {{ playingGlobal ? '⏸ 全局暂停' : '▶ 全局播放' }}
+            {{ compareGlobalTimelinePlaying ? '⏸ 全局暂停' : '▶ 全局播放' }}
           </button>
           <button type="button" class="cb-action-btn ghost" @click="resetCompareAll">⟲ 全局复位</button>
         </div>
@@ -88,6 +91,49 @@
 
           <template #single-iframe-left-overlay>
             <div class="cb-compare-side-overlay-inner">
+              <div
+                v-if="narrativeTransferOverlaySingle"
+                class="cb-narrative-transfer-overlay"
+                :style="{ top: narrativeTransferOverlayTopPx + 'px' }"
+                role="status"
+              >
+                <div class="cb-narrative-transfer-head">
+                  <span class="cb-narrative-transfer-side">{{ narrativeTransferOverlaySingle.sideLabel }}</span>
+                  <button
+                    v-if="narrativeTransferOverlaySingle.mode === 'preview'"
+                    class="cb-narrative-transfer-close"
+                    type="button"
+                    aria-label="关闭链路传递信息"
+                    @click.stop="closeNarrativeTransferOverlay('yes')"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div class="cb-narrative-transfer-title-line">
+                  <span class="cb-narrative-transfer-time-badge">{{ narrativeTransferOverlaySingle.timeLabel }}</span>
+                  <span class="cb-narrative-transfer-title-text">｜ {{ narrativeTransferOverlaySingle.title }}</span>
+                </div>
+                <div class="cb-narrative-transfer-scroll" tabindex="0">
+                  <ul class="cb-narrative-transfer-list">
+                    <li
+                      v-for="row in narrativeTransferOverlaySingle.rows"
+                      :key="'single-transfer-overlay-' + row.id"
+                      class="cb-narrative-transfer-row"
+                    >
+                      <div class="cb-narrative-transfer-route">
+                        <span class="cb-narrative-transfer-kind">
+                          {{ row.flowLabel || (row.kind === 'control' ? '控制流' : '信息流') }}
+                        </span>
+                        <span>{{ row.fromLabel }} → {{ row.toLabel }}</span>
+                      </div>
+                      <div class="cb-narrative-transfer-payload">传递内容：{{ row.payload }}</div>
+                    </li>
+                  </ul>
+                  <div v-if="narrativeTransferOverlaySingle.restCount" class="cb-narrative-transfer-more">
+                    其余 {{ narrativeTransferOverlaySingle.restCount }} 条已在右下角详情中展示
+                  </div>
+                </div>
+              </div>
               <div class="cb-split-hint">双屏对比（有/无云匣子）｜全局播放双机同飞；侧栏各自 T+</div>
               <FloatingCard
                 id="disposalFloatingCardNo"
@@ -99,27 +145,13 @@
                 :detailsOpen="detailsOpenNo"
                 keyPrefix="no-"
                 preview-side="yes"
+                :can-preview="canPreviewKeyframes"
                 @toggle-collapsed="floatingCardNoCollapsed = !floatingCardNoCollapsed"
                 @toggle-details="detailsOpenNo = !detailsOpenNo"
                 @preview-keyframe="previewKeyframe"
-              >
-                <template v-if="compareCurrentRelationNodesYes.length" #extra>
-                  <div class="cb-floating-relation-nodes">
-                    <div class="cb-floating-relation-nodes-title">链路节点</div>
-                    <div class="cb-floating-relation-nodes-btns relation-node-list floating-card-extra-scroll">
-                      <button
-                        v-for="(rn, ri) in compareCurrentRelationNodesYes"
-                        :key="'single-embed-rel-' + ri + '-' + rn.id"
-                        type="button"
-                        class="cb-floating-relation-node-btn"
-                        @click="onCompareRelationNodeClick('left', rn)"
-                      >
-                        {{ rn.name }}
-                      </button>
-                    </div>
-                  </div>
-                </template>
-              </FloatingCard>
+                @focus-transfer="focusTransferRelation"
+                @focus-transfer-node="focusTransferNode"
+              />
               <div
                 v-show="compareFaultAlertFiredYes"
                 class="cb-compare-fault-alert"
@@ -138,7 +170,7 @@
                 :milestones="singleMilestones"
                 :keyframeMarks="singleKeyframeMarks"
                 :dvTitleIconLeft="dvTitleIconLeft"
-                :playing="playing"
+                :playing="singleTimelinePlaying"
                 :currentTimeLabel="currentTimeLabel"
                 :isCompare="true"
                 per-side-time-marker="yes"
@@ -186,6 +218,49 @@
             <div class="cb-overlay-plane" v-show="activeSymbol === 'plane'"></div>
             <div class="cb-overlay-flow" v-show="activeSymbol === 'flow'"></div>
             <div class="cb-overlay-control" v-show="activeSymbol === 'control'"></div>
+            <div
+              v-if="narrativeTransferOverlaySingle && !useSingleMapIframe"
+              class="cb-narrative-transfer-overlay"
+              :style="{ top: narrativeTransferOverlayTopPx + 'px' }"
+              role="status"
+            >
+              <div class="cb-narrative-transfer-head">
+                <span class="cb-narrative-transfer-side">{{ narrativeTransferOverlaySingle.sideLabel }}</span>
+                <button
+                  v-if="narrativeTransferOverlaySingle.mode === 'preview'"
+                  class="cb-narrative-transfer-close"
+                  type="button"
+                  aria-label="关闭链路传递信息"
+                  @click.stop="closeNarrativeTransferOverlay('yes')"
+                >
+                  ×
+                </button>
+              </div>
+              <div class="cb-narrative-transfer-title-line">
+                <span class="cb-narrative-transfer-time-badge">{{ narrativeTransferOverlaySingle.timeLabel }}</span>
+                <span class="cb-narrative-transfer-title-text">｜ {{ narrativeTransferOverlaySingle.title }}</span>
+              </div>
+              <div class="cb-narrative-transfer-scroll" tabindex="0">
+                <ul class="cb-narrative-transfer-list">
+                  <li
+                    v-for="row in narrativeTransferOverlaySingle.rows"
+                    :key="'single-transfer-overlay-' + row.id"
+                    class="cb-narrative-transfer-row"
+                  >
+                    <div class="cb-narrative-transfer-route">
+                      <span class="cb-narrative-transfer-kind">
+                        {{ row.flowLabel || (row.kind === 'control' ? '控制流' : '信息流') }}
+                      </span>
+                      <span>{{ row.fromLabel }} → {{ row.toLabel }}</span>
+                    </div>
+                    <div class="cb-narrative-transfer-payload">传递内容：{{ row.payload }}</div>
+                  </li>
+                </ul>
+                <div v-if="narrativeTransferOverlaySingle.restCount" class="cb-narrative-transfer-more">
+                  其余 {{ narrativeTransferOverlaySingle.restCount }} 条已在右下角详情中展示
+                </div>
+              </div>
+            </div>
             <FloatingCard
               v-if="!useSingleMapIframe"
               id="disposalFloatingCard"
@@ -197,9 +272,12 @@
               :detailsOpen="detailsOpen"
               keyPrefix=""
               preview-side="yes"
+              :can-preview="canPreviewKeyframes"
               @toggle-collapsed="floatingCardCollapsed = !floatingCardCollapsed"
               @toggle-details="detailsOpen = !detailsOpen"
               @preview-keyframe="previewKeyframe"
+              @focus-transfer="focusTransferRelation"
+              @focus-transfer-node="focusTransferNode"
             />
             <div class="cb-infobox cb-dv-infobox" v-show="infoBoxVisible">
               <div class="hd">
@@ -222,6 +300,49 @@
 
           <template #compare-left-overlay>
             <div class="cb-compare-side-overlay-inner">
+              <div
+                v-if="narrativeTransferOverlayYes"
+                class="cb-narrative-transfer-overlay cb-narrative-transfer-overlay--compare"
+                :style="{ top: narrativeTransferOverlayTopPx + 'px' }"
+                role="status"
+              >
+                <div class="cb-narrative-transfer-head">
+                  <span class="cb-narrative-transfer-side">{{ narrativeTransferOverlayYes.sideLabel }}</span>
+                  <button
+                    v-if="narrativeTransferOverlayYes.mode === 'preview'"
+                    class="cb-narrative-transfer-close"
+                    type="button"
+                    aria-label="关闭链路传递信息"
+                    @click.stop="closeNarrativeTransferOverlay('yes')"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div class="cb-narrative-transfer-title-line">
+                  <span class="cb-narrative-transfer-time-badge">{{ narrativeTransferOverlayYes.timeLabel }}</span>
+                  <span class="cb-narrative-transfer-title-text">｜ {{ narrativeTransferOverlayYes.title }}</span>
+                </div>
+                <div class="cb-narrative-transfer-scroll" tabindex="0">
+                  <ul class="cb-narrative-transfer-list">
+                    <li
+                      v-for="row in narrativeTransferOverlayYes.rows"
+                      :key="'yes-transfer-overlay-' + row.id"
+                      class="cb-narrative-transfer-row"
+                    >
+                      <div class="cb-narrative-transfer-route">
+                        <span class="cb-narrative-transfer-kind">
+                          {{ row.flowLabel || (row.kind === 'control' ? '控制流' : '信息流') }}
+                        </span>
+                        <span>{{ row.fromLabel }} → {{ row.toLabel }}</span>
+                      </div>
+                      <div class="cb-narrative-transfer-payload">传递内容：{{ row.payload }}</div>
+                    </li>
+                  </ul>
+                  <div v-if="narrativeTransferOverlayYes.restCount" class="cb-narrative-transfer-more">
+                    其余 {{ narrativeTransferOverlayYes.restCount }} 条已在右下角详情中展示
+                  </div>
+                </div>
+              </div>
               <div class="cb-split-hint">双屏对比（有/无云匣子）｜全局播放双机同飞；侧栏各自 T+</div>
               <FloatingCard
                 id="disposalFloatingCardNo"
@@ -233,27 +354,13 @@
                 :detailsOpen="detailsOpenNo"
                 keyPrefix="no-"
                 preview-side="yes"
+                :can-preview="canPreviewKeyframes"
                 @toggle-collapsed="floatingCardNoCollapsed = !floatingCardNoCollapsed"
                 @toggle-details="detailsOpenNo = !detailsOpenNo"
                 @preview-keyframe="previewKeyframe"
-              >
-                <template v-if="compareCurrentRelationNodesYes.length" #extra>
-                  <div class="cb-floating-relation-nodes">
-                    <div class="cb-floating-relation-nodes-title">链路节点</div>
-                    <div class="cb-floating-relation-nodes-btns relation-node-list floating-card-extra-scroll">
-                      <button
-                        v-for="(rn, ri) in compareCurrentRelationNodesYes"
-                        :key="'rel-yes-' + ri + '-' + rn.id"
-                        type="button"
-                        class="cb-floating-relation-node-btn"
-                        @click="onCompareRelationNodeClick('left', rn)"
-                      >
-                        {{ rn.name }}
-                      </button>
-                    </div>
-                  </div>
-                </template>
-              </FloatingCard>
+                @focus-transfer="focusTransferRelation"
+                @focus-transfer-node="focusTransferNode"
+              />
               <div
                 v-show="compareFaultAlertFiredYes"
                 class="cb-compare-fault-alert"
@@ -272,7 +379,7 @@
                 :milestones="compareMilestonesYes"
                 :keyframeMarks="keyframeMarksYes"
                 :dvTitleIconLeft="dvTitleIconLeft"
-                :playing="playingGlobal || playingLeft"
+                :playing="compareLeftTimelinePlaying"
                 :currentTimeLabel="currentTimeLabelYes"
                 :isCompare="true"
                 per-side-time-marker="yes"
@@ -296,6 +403,49 @@
 
           <template #compare-right-overlay>
             <div class="cb-compare-side-overlay-inner">
+              <div
+                v-if="narrativeTransferOverlayNo"
+                class="cb-narrative-transfer-overlay cb-narrative-transfer-overlay--compare"
+                :style="{ top: narrativeTransferOverlayTopPx + 'px' }"
+                role="status"
+              >
+                <div class="cb-narrative-transfer-head">
+                  <span class="cb-narrative-transfer-side">{{ narrativeTransferOverlayNo.sideLabel }}</span>
+                  <button
+                    v-if="narrativeTransferOverlayNo.mode === 'preview'"
+                    class="cb-narrative-transfer-close"
+                    type="button"
+                    aria-label="关闭链路传递信息"
+                    @click.stop="closeNarrativeTransferOverlay('no')"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div class="cb-narrative-transfer-title-line">
+                  <span class="cb-narrative-transfer-time-badge">{{ narrativeTransferOverlayNo.timeLabel }}</span>
+                  <span class="cb-narrative-transfer-title-text">｜ {{ narrativeTransferOverlayNo.title }}</span>
+                </div>
+                <div class="cb-narrative-transfer-scroll" tabindex="0">
+                  <ul class="cb-narrative-transfer-list">
+                    <li
+                      v-for="row in narrativeTransferOverlayNo.rows"
+                      :key="'no-transfer-overlay-' + row.id"
+                      class="cb-narrative-transfer-row"
+                    >
+                      <div class="cb-narrative-transfer-route">
+                        <span class="cb-narrative-transfer-kind">
+                          {{ row.flowLabel || (row.kind === 'control' ? '控制流' : '信息流') }}
+                        </span>
+                        <span>{{ row.fromLabel }} → {{ row.toLabel }}</span>
+                      </div>
+                      <div class="cb-narrative-transfer-payload">传递内容：{{ row.payload }}</div>
+                    </li>
+                  </ul>
+                  <div v-if="narrativeTransferOverlayNo.restCount" class="cb-narrative-transfer-more">
+                    其余 {{ narrativeTransferOverlayNo.restCount }} 条已在右下角详情中展示
+                  </div>
+                </div>
+              </div>
               <FloatingCard
                 id="disposalFloatingCardYes"
                 :card="displayCardNo ? { ...displayCardNo, phase: '无云匣子' } : {}"
@@ -306,27 +456,13 @@
                 :detailsOpen="detailsOpenYes"
                 keyPrefix="yes-"
                 preview-side="no"
+                :can-preview="canPreviewKeyframes"
                 @toggle-collapsed="floatingCardYesCollapsed = !floatingCardYesCollapsed"
                 @toggle-details="detailsOpenYes = !detailsOpenYes"
                 @preview-keyframe="previewKeyframe"
-              >
-                <template v-if="compareCurrentRelationNodesNo.length" #extra>
-                  <div class="cb-floating-relation-nodes">
-                    <div class="cb-floating-relation-nodes-title">链路节点</div>
-                    <div class="cb-floating-relation-nodes-btns relation-node-list floating-card-extra-scroll">
-                      <button
-                        v-for="(rn, ri) in compareCurrentRelationNodesNo"
-                        :key="'rel-no-' + ri + '-' + rn.id"
-                        type="button"
-                        class="cb-floating-relation-node-btn"
-                        @click="onCompareRelationNodeClick('right', rn)"
-                      >
-                        {{ rn.name }}
-                      </button>
-                    </div>
-                  </div>
-                </template>
-              </FloatingCard>
+                @focus-transfer="focusTransferRelation"
+                @focus-transfer-node="focusTransferNode"
+              />
               <div
                 v-show="compareFaultAlertFiredNo"
                 class="cb-compare-fault-alert"
@@ -345,7 +481,7 @@
                 :milestones="compareMilestonesNo"
                 :keyframeMarks="keyframeMarksNo"
                 :dvTitleIconLeft="dvTitleIconLeft"
-                :playing="playingGlobal || playingRight"
+                :playing="compareRightTimelinePlaying"
                 :currentTimeLabel="currentTimeLabelNo"
                 :isCompare="true"
                 per-side-time-marker="no"
@@ -426,7 +562,7 @@
         :milestones="singleMilestones"
         :keyframeMarks="singleKeyframeMarks"
         :dvTitleIconLeft="dvTitleIconLeft"
-        :playing="playing"
+        :playing="singleTimelinePlaying"
         :currentTimeLabel="currentTimeLabel"
         :isCompare="false"
         :marker-yes-demo-t="t"
@@ -446,7 +582,6 @@
       />
 
       <AlertToast
-        v-if="isCompare"
         :visible="alertToastVisible"
         :title="alertTitle"
         :body="alertBody"
@@ -457,7 +592,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import * as Cesium from 'cesium';
 import { buildFlightPathFromRunways } from '../utils/flightPath';
@@ -496,12 +631,57 @@ function resolveScenarioAssetPath(p) {
 
 const vpSingle = ref(null);
 
+const scenePanelRef = ref(null);
+const narrativeTransferOverlayTopPx = ref(112);
+
+const NARRATIVE_TRANSFER_OVERLAY_GAP_PX = 1.5;
+const NARRATIVE_TRANSFER_OVERLAY_FALLBACK_TOP_PX = 112;
+
+function updateNarrativeTransferOverlayTop() {
+  nextTick(() => {
+    const panelEl = scenePanelRef.value;
+    if (!panelEl || typeof panelEl.getBoundingClientRect !== 'function') {
+      narrativeTransferOverlayTopPx.value = NARRATIVE_TRANSFER_OVERLAY_FALLBACK_TOP_PX;
+      return;
+    }
+
+    const panelRect = panelEl.getBoundingClientRect();
+    const wrapEl = panelEl.closest?.('.cb-wrap--dynamic') ?? document.querySelector?.('.cb-wrap--dynamic');
+    if (!wrapEl) {
+      narrativeTransferOverlayTopPx.value = NARRATIVE_TRANSFER_OVERLAY_FALLBACK_TOP_PX;
+      return;
+    }
+
+    /** 与浮窗 position:absolute 的定位父一致：iframe/双屏为 .cb-compare-side-overlay-inner，单屏原生 Cesium 为 .cb-viewer-single */
+    const hostEl =
+      wrapEl.querySelector('.cb-compare-side-overlay-inner') || wrapEl.querySelector('.cb-viewer-single');
+
+    if (!hostEl || typeof hostEl.getBoundingClientRect !== 'function') {
+      narrativeTransferOverlayTopPx.value = NARRATIVE_TRANSFER_OVERLAY_FALLBACK_TOP_PX;
+      return;
+    }
+
+    const hostRect = hostEl.getBoundingClientRect();
+    const nextTop = Math.round(panelRect.bottom - hostRect.top + NARRATIVE_TRANSFER_OVERLAY_GAP_PX);
+
+    narrativeTransferOverlayTopPx.value = nextTop;
+  });
+}
+
 /** 对比模式：全局 / 左单屏 / 右单屏 互斥；idle 表示未在自动沿线+场景驱动 */
 const playbackMode = ref('idle'); // 'idle' | 'global' | 'left' | 'right'
 
 const playingGlobal = ref(false);
 const playingLeft = ref(false);
 const playingRight = ref(false);
+
+/** 父页整段演示会话（沿线 + 关键点叙事）；与 SIDE_STATE.playing（仅沿线推进）解耦 */
+const singlePlaybackSessionActive = ref(false);
+const singlePlaybackResumeFromCurrent = ref(false);
+const comparePlaybackResumeFromCurrent = ref(false);
+
+/** 关键点预览后继播：沿 demo 轴微推，避免子 iframe parentControlsNarrative 卡在关键点时刻 */
+const RESUME_AFTER_KEYFRAME_EPS = 0.05;
 
 /** 子页关键点叙事中（由 SIDE_STATE 同步，仅观察，不参与裁决） */
 const narrativeBusyLeft = ref(false);
@@ -791,6 +971,9 @@ function resetDynamicFlowPlaybackIsolation() {
   compareFaultAlertFiredYes.value = false;
   compareFaultAlertFiredNo.value = false;
   playbackMode.value = 'idle';
+  singlePlaybackSessionActive.value = false;
+  singlePlaybackResumeFromCurrent.value = false;
+  comparePlaybackResumeFromCurrent.value = false;
   forceSceneUnlocked.value = false;
   lastNodeIdNo.value = -1;
   lastNodeIdYes.value = -1;
@@ -903,6 +1086,7 @@ const compareBridgeRef = shallowRef(
       }
       updateCompareMarkers();
       maybeStartGlobalNarrativeRound();
+      markCompareSessionEndedIfReachedEnd();
     },
     onNarrativeDone: onNarrativeDoneFromChild,
     onMarkerClick: onCompareBridgeMarkerClick,
@@ -985,6 +1169,20 @@ const singleIframeBridgeRef = shallowRef(
       updateCompareMarkers();
       scheduleSingleIframeRefreshFromSideState();
       maybeStartSingleIframeNarrativeRound();
+
+      const maxS = timelineMaxSingle.value;
+      if (
+        !isCompare.value &&
+        singlePlaybackSessionActive.value &&
+        !p.playing &&
+        !p.narrativeBusy &&
+        !singleNarrativeRunning.value &&
+        maxS > 0 &&
+        t.value >= maxS - 1e-3
+      ) {
+        singlePlaybackSessionActive.value = false;
+        singlePlaybackResumeFromCurrent.value = false;
+      }
     },
     onNarrativeDone: onSingleIframeNarrativeDone
   })
@@ -1128,6 +1326,42 @@ const scenarios = [
 
 const isCompare = ref(false);
 
+const isNarrativeInProgress = computed(
+  () =>
+    !!singleNarrativeRunning.value ||
+    !!globalNarrativeRunning.value ||
+    !!narrativeBusyLeft.value ||
+    !!narrativeBusyRight.value
+);
+
+const isSinglePlaybackSessionActive = computed(
+  () => !isCompare.value && !!singlePlaybackSessionActive.value
+);
+
+const isComparePlaybackSessionActive = computed(
+  () => isCompare.value && playbackMode.value !== 'idle'
+);
+
+const canPreviewKeyframes = computed(
+  () => !isSinglePlaybackSessionActive.value && !isComparePlaybackSessionActive.value
+);
+
+const singleTimelinePlaying = computed(
+  () => !isCompare.value && !!singlePlaybackSessionActive.value
+);
+
+const compareGlobalTimelinePlaying = computed(
+  () => isCompare.value && playbackMode.value === 'global'
+);
+
+const compareLeftTimelinePlaying = computed(
+  () => isCompare.value && (playbackMode.value === 'global' || playbackMode.value === 'left')
+);
+
+const compareRightTimelinePlaying = computed(
+  () => isCompare.value && (playbackMode.value === 'global' || playbackMode.value === 'right')
+);
+
 watch(singleIframeMountKey, () => {
   lastSingleInitPushKey = '';
   singleIframeReady.value = false;
@@ -1145,6 +1379,7 @@ watch(isCompare, (cmp) => {
     singleIframeReady.value = false;
     pendingSingleLoadScenario.value = false;
   }
+  updateNarrativeTransferOverlayTop();
 });
 
 const pathProgressForViewerStage = computed(() => {
@@ -1188,6 +1423,8 @@ const timelineMax = ref(100);
 const timelineMaxSingle = ref(100);
 /** 处置完成后沿航迹到终点的固定 demo 秒（与 scene.js 末段、JSON duration 对齐用） */
 const FINAL_FLIGHT_DEMO_SEC = 10;
+/** 「开始预警」纯显示里程碑：相对「开始告警」demo 时刻提前的秒数（不参与关键帧/叙事） */
+const PREWARN_DEMO_LEAD_SEC = 2;
 /** 与 iframe scene.js narrativeT0 对齐：语义时间轴「T+0」对应 demo 时间起点 */
 const compareNarrativeBaseT = 10;
 /** 语义秒 → demo 秒压缩比（与 scene.js SEMANTIC_TIME_COMPRESS 一致）；只调此项可整体快慢联动 */
@@ -1290,6 +1527,11 @@ const lastNodeIdYes = ref(-1);
 const lastNodeIdSingle = ref(-1);
 const currentNodeId = ref(-1);
 const activeScenario = ref('engine');
+
+watch(activeScenario, () => {
+  updateNarrativeTransferOverlayTop();
+});
+
 const steps = ref([]);
 const scenarioNodes = ref([]);
 
@@ -1312,8 +1554,11 @@ function buildMilestoneRowsForSide(side) {
     completeRaw = Number(completeRaw);
   }
   const maxT = isCompare.value ? timelineMax.value : timelineMaxSingle.value;
+  const alarmDemoT = semanticToDemoT(alarmRaw);
+  const prewarnDemoT = Math.max(0, alarmDemoT - PREWARN_DEMO_LEAD_SEC);
   const rows = [
-    { key: 'alarm', label: '开始告警', t: semanticToDemoT(alarmRaw) },
+    { key: 'prewarn', label: '开始预警', t: prewarnDemoT },
+    { key: 'alarm', label: '开始告警', t: alarmDemoT },
     { key: 'disposal', label: '开始处置', t: semanticToDemoT(disposalRaw) },
     { key: 'complete', label: '处置完成', t: semanticToDemoT(completeRaw) }
   ];
@@ -1671,6 +1916,85 @@ function buildRelationNodeList(side, card) {
     }
   }
   return out;
+}
+
+/**
+ * 供 FloatingCard 展示：当前激活链路下每条 transfer 的传递内容（仅读 relation.transfers，不从 edges 推断）
+ * @param {'yes'|'no'} side
+ * @param {ReturnType<typeof toSideCard>} card
+ */
+function buildRelationTransferRows(side, card) {
+  if (!card) return [];
+  const relIds =
+    side === 'no'
+      ? Array.isArray(card.activeRelations_no)
+        ? card.activeRelations_no
+        : []
+      : Array.isArray(card.activeRelations_yes)
+        ? card.activeRelations_yes
+        : [];
+  const relations = dynamicRelationMap.value?.relations || [];
+  const unitMap = dynamicUnitMap.value || {};
+
+  function normalizePayload(payload) {
+    if (payload == null) return '';
+    if (typeof payload === 'string') return payload.trim();
+    if (typeof payload === 'number' || typeof payload === 'boolean') return String(payload);
+    try {
+      return JSON.stringify(payload);
+    } catch {
+      return String(payload);
+    }
+  }
+
+  function endpointLabel(transfer, axis) {
+    const explicit = axis === 'from' ? transfer.fromLabel : transfer.toLabel;
+    if (explicit != null && String(explicit).trim() !== '') return String(explicit).trim();
+    const rawId = axis === 'from' ? transfer.fromId : transfer.toId;
+    const id = String(rawId ?? '').trim();
+    if (!id) return '';
+    if (id === 'plane') return '飞机';
+    const u = unitMap[id];
+    if (u?.name != null && String(u.name).trim() !== '') return String(u.name);
+    return id;
+  }
+
+  const rows = [];
+  for (let ri = 0; ri < relIds.length; ri++) {
+    const rid = relIds[ri];
+    const rel = relations.find((r) => String(r?.id ?? '') === String(rid));
+    if (!rel || !Array.isArray(rel.transfers)) continue;
+    const relationId = String(rel.id ?? rid);
+    const relationName = rel.name != null ? String(rel.name) : '';
+    const flowLabel = rel.flowLabel != null ? String(rel.flowLabel) : '';
+
+    for (let ti = 0; ti < rel.transfers.length; ti++) {
+      const transfer = rel.transfers[ti];
+      if (!transfer || typeof transfer !== 'object') continue;
+      const payload = normalizePayload(transfer.payload);
+      if (!payload) continue;
+
+      const fromLabel = endpointLabel(transfer, 'from');
+      const toLabel = endpointLabel(transfer, 'to');
+      const fromId = transfer.fromId != null ? String(transfer.fromId) : '';
+      const toId = transfer.toId != null ? String(transfer.toId) : '';
+      const kind = transfer.kind === 'control' ? 'control' : 'data';
+
+      rows.push({
+        id: `${relationId}-${ti}`,
+        relationId,
+        relationName,
+        flowLabel,
+        kind,
+        fromId,
+        toId,
+        fromLabel,
+        toLabel,
+        payload
+      });
+    }
+  }
+  return rows;
 }
 
 const compareCurrentRelationNodesYes = computed(() => {
@@ -2166,6 +2490,7 @@ function buildTimelineItemsForSide(side) {
 
     const relKey = side === 'yes' ? 'activeRelations_yes' : 'activeRelations_no';
     const activeRelationIds = Array.isArray(fullCard[relKey]) ? fullCard[relKey] : [];
+    const transferRows = buildRelationTransferRows(side, fullCard);
 
     return {
       markStepIndex: m.stepIndex,
@@ -2174,6 +2499,7 @@ function buildTimelineItemsForSide(side) {
       name,
       fullCard,
       activeRelationIds,
+      transferRows,
       isReached,
       isNarrating,
       isHighlight,
@@ -2185,6 +2511,108 @@ function buildTimelineItemsForSide(side) {
 
 const timelineItemsYes = computed(() => buildTimelineItemsForSide('yes'));
 const timelineItemsNo = computed(() => buildTimelineItemsForSide('no'));
+
+function buildNarrativeTransferOverlay(items, sideLabel, previewStepIndex = null) {
+  const list = Array.isArray(items) ? items : [];
+
+  const narratingItem = list.find(
+    (item) => item?.isNarrating && Array.isArray(item.transferRows) && item.transferRows.length
+  );
+
+  const previewItem =
+    previewStepIndex != null
+      ? list.find(
+          (item) =>
+            item?.markStepIndex === previewStepIndex &&
+            Array.isArray(item.transferRows) &&
+            item.transferRows.length
+        )
+      : null;
+
+  const current = narratingItem || previewItem;
+  if (!current) return null;
+
+  const rows = current.transferRows
+    .filter((row) => row && String(row.payload || '').trim())
+    .slice(0, 5);
+
+  if (!rows.length) return null;
+
+  return {
+    sideLabel,
+    timeLabel: current.timeLabel,
+    title: current.name,
+    rows,
+    restCount: Math.max(0, current.transferRows.length - rows.length),
+    mode: narratingItem ? 'narrative' : 'preview'
+  };
+}
+
+const narrativeTransferOverlaySingle = computed(() => {
+  if (isCompare.value) return null;
+
+  const hasNarrative = !!singleNarrativeRunning.value;
+  const hasPreview =
+    keyframeListPreviewStepIndexYes.value != null &&
+    !isSinglePlaybackSessionActive.value;
+
+  if (!hasNarrative && !hasPreview) return null;
+
+  return buildNarrativeTransferOverlay(
+    timelineItemsYes.value,
+    '有云匣子',
+    keyframeListPreviewStepIndexYes.value
+  );
+});
+
+const narrativeTransferOverlayYes = computed(() => {
+  if (!isCompare.value) return null;
+
+  const hasNarrative =
+    !!globalNarrativeRunning.value &&
+    !!globalNarrativePendingLeft.value;
+
+  const hasPreview =
+    keyframeListPreviewStepIndexYes.value != null &&
+    !isComparePlaybackSessionActive.value;
+
+  if (!hasNarrative && !hasPreview) return null;
+
+  return buildNarrativeTransferOverlay(
+    timelineItemsYes.value,
+    '有云匣子',
+    keyframeListPreviewStepIndexYes.value
+  );
+});
+
+const narrativeTransferOverlayNo = computed(() => {
+  if (!isCompare.value) return null;
+
+  const hasNarrative =
+    !!globalNarrativeRunning.value &&
+    !!globalNarrativePendingRight.value;
+
+  const hasPreview =
+    keyframeListPreviewStepIndexNo.value != null &&
+    !isComparePlaybackSessionActive.value;
+
+  if (!hasNarrative && !hasPreview) return null;
+
+  return buildNarrativeTransferOverlay(
+    timelineItemsNo.value,
+    '无云匣子',
+    keyframeListPreviewStepIndexNo.value
+  );
+});
+
+function closeNarrativeTransferOverlay(side) {
+  if (side === 'no') {
+    keyframeListPreviewStepIndexNo.value = null;
+    return;
+  }
+
+  keyframeListPreviewStepIndexYes.value = null;
+}
 
 /** 与「链路节点」按钮同口径：对关键点代表卡片取一节点，首节点优先，否则飞机 */
 function getRepresentativeUnitIdForKeyframeCard(side, fullCard) {
@@ -2217,17 +2645,70 @@ function focusUnitAfterKeyframePreview(side, item) {
   }
 }
 
+function focusTransferNode(payload) {
+  if (!canPreviewKeyframes.value) return;
+
+  const unitId = String(payload?.unitId ?? '').trim();
+  const side = payload?.side;
+
+  if (!isValidCompareFocusUnitId(unitId)) return;
+  if (side !== 'yes' && side !== 'no') return;
+
+  if (isCompare.value) {
+    const bridgeSide = side === 'yes' ? 'left' : 'right';
+    compareBridgeRef.value?.focusUnit?.(bridgeSide, { unitId });
+    return;
+  }
+
+  if (useSingleMapIframe && side === 'yes') {
+    singleIframeBridgeRef.value?.focusUnit?.('left', { unitId });
+  }
+}
+
+function focusTransferRelation(payload) {
+  if (!canPreviewKeyframes.value) return;
+
+  const relationId = String(payload?.relationId ?? '').trim();
+  const side = payload?.side;
+  if (!relationId) return;
+  if (side !== 'yes' && side !== 'no') return;
+
+  if (isCompare.value) {
+    const bridgeSide = side === 'yes' ? 'left' : 'right';
+    compareBridgeRef.value?.focusRelation?.(bridgeSide, {
+      relationId,
+      fromId: payload?.fromId,
+      toId: payload?.toId,
+      nodeIds: Array.isArray(payload?.nodeIds) ? payload.nodeIds : []
+    });
+    return;
+  }
+
+  if (useSingleMapIframe && side === 'yes') {
+    singleIframeBridgeRef.value?.focusRelation?.('left', {
+      relationId,
+      fromId: payload?.fromId,
+      toId: payload?.toId,
+      nodeIds: Array.isArray(payload?.nodeIds) ? payload.nodeIds : []
+    });
+  }
+}
+
 /**
  * 从 FloatingCard 关键时间点：停播、清 pulsing、设时间、silent scrub、refresh 后再单次 focus（见上）。不跑叙事。
  */
 function pausePlaybackForKeyframePreview() {
   if (!isCompare.value) {
     stopTimer();
+    singlePlaybackSessionActive.value = false;
+    singlePlaybackResumeFromCurrent.value = true;
   } else {
     compareBridgeRef.value?.pauseBoth?.();
+    playbackMode.value = 'idle';
     playingGlobal.value = false;
     playingLeft.value = false;
     playingRight.value = false;
+    comparePlaybackResumeFromCurrent.value = true;
     clearCompareGlobalNarrativeState();
   }
   clearPulsingMilestones();
@@ -2281,6 +2762,8 @@ function previewKeyframe(payload) {
     compareGlobalDisplayT.value = Math.max(tYes.value, tNo.value, 0);
     compareBridgeRef.value?.scrub?.('right', tNo.value, { silent: true });
   }
+
+  if (isCompare.value) rebuildFiredCompareMarksFromScrub();
 
   nextTick(() => {
     refreshAll(true);
@@ -2378,6 +2861,130 @@ function shouldGateSceneInCompare() {
   return false;
 }
 
+function resetCompareResumeFlag() {
+  comparePlaybackResumeFromCurrent.value = false;
+}
+
+function isNearKeyframeDemoT(side, demoT) {
+  const targetSide = side === 'no' ? 'no' : 'yes';
+  const tNum = Number(demoT);
+  if (!Number.isFinite(tNum)) return false;
+  const marks = keyframeMarks.value || [];
+  return marks.some((m) => m.side === targetSide && Math.abs(Number(m.t) - tNum) <= 1e-4);
+}
+
+function nudgeSingleResumeTimePastKeyframe() {
+  if (!singlePlaybackResumeFromCurrent.value) return;
+  const max = timelineMaxSingle.value;
+  if (max <= 0) return;
+  if (!isNearKeyframeDemoT('yes', t.value)) return;
+
+  const nextT = clamp(t.value + RESUME_AFTER_KEYFRAME_EPS, 0, max);
+  if (Math.abs(nextT - t.value) <= 1e-6) return;
+
+  t.value = nextT;
+  syncSinglePlaneProgressFromTime(t.value);
+  rebuildFiredSingleMarksFromScrub();
+
+  if (useSingleMapIframe) {
+    singleIframeBridgeRef.value?.scrub?.('left', t.value, { silent: true });
+  }
+
+  refreshAll(false);
+}
+
+function nudgeCompareResumeSidePastKeyframe(side) {
+  const isYes = side === 'yes';
+  const max = timelineMax.value;
+  if (max <= 0) return;
+
+  const curT = isYes ? tYes.value : tNo.value;
+  if (!isNearKeyframeDemoT(isYes ? 'yes' : 'no', curT)) return;
+
+  const nextT = clamp(curT + RESUME_AFTER_KEYFRAME_EPS, 0, max);
+  if (Math.abs(nextT - curT) <= 1e-6) return;
+
+  if (isYes) {
+    tYes.value = nextT;
+    planeProgressLeft.value = max > 0 ? clamp(nextT / max, 0, 1) : 0;
+    compareBridgeRef.value?.scrub?.('left', tYes.value, { silent: true });
+  } else {
+    tNo.value = nextT;
+    planeProgressRight.value = max > 0 ? clamp(nextT / max, 0, 1) : 0;
+    compareBridgeRef.value?.scrub?.('right', tNo.value, { silent: true });
+  }
+}
+
+function nudgeCompareResumeTimesPastKeyframes(sides = ['yes', 'no']) {
+  if (!comparePlaybackResumeFromCurrent.value) return;
+  if (!Array.isArray(sides)) return;
+
+  sides.forEach((sd) => {
+    if (sd === 'yes' || sd === 'no') {
+      nudgeCompareResumeSidePastKeyframe(sd);
+    }
+  });
+
+  compareGlobalDisplayT.value = Math.max(tYes.value, tNo.value, 0);
+  rebuildFiredCompareMarksFromScrub();
+  updateCompareMarkers();
+  refreshAll(false);
+}
+
+function rebuildFiredCompareMarksFromScrub() {
+  const yesSet = new Set();
+  const noSet = new Set();
+  const list = keyframeMarks.value || [];
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    if (m.side === 'yes' && m.t <= tYes.value + 1e-5) yesSet.add(m.stepIndex);
+    if (m.side === 'no' && m.t <= tNo.value + 1e-5) noSet.add(m.stepIndex);
+  }
+  firedMarkStepIndexYes.value = yesSet;
+  firedMarkStepIndexNo.value = noSet;
+}
+
+function markCompareSessionEndedIfReachedEnd() {
+  if (!isCompare.value) return;
+  if (playbackMode.value === 'idle') return;
+  if (isNarrativeInProgress.value) return;
+
+  const max = timelineMax.value;
+  const eps = 1e-3;
+
+  if (playbackMode.value === 'global') {
+    if (
+      !playingLeft.value &&
+      !playingRight.value &&
+      tYes.value >= max - eps &&
+      tNo.value >= max - eps
+    ) {
+      playingGlobal.value = false;
+      playbackMode.value = 'idle';
+      resetCompareResumeFlag();
+      clearPulsingMilestones();
+    }
+    return;
+  }
+
+  if (playbackMode.value === 'left') {
+    if (!playingLeft.value && tYes.value >= max - eps) {
+      playbackMode.value = 'idle';
+      resetCompareResumeFlag();
+      pulsingMilestoneYes.value = null;
+    }
+    return;
+  }
+
+  if (playbackMode.value === 'right') {
+    if (!playingRight.value && tNo.value >= max - eps) {
+      playbackMode.value = 'idle';
+      resetCompareResumeFlag();
+      pulsingMilestoneNo.value = null;
+    }
+  }
+}
+
 function stopAllCompareFlightAndScene() {
   compareBridgeRef.value?.pauseBoth?.();
   singleIframeBridgeRef.value?.pause?.('left');
@@ -2385,6 +2992,7 @@ function stopAllCompareFlightAndScene() {
   playingLeft.value = false;
   playingRight.value = false;
   playbackMode.value = 'idle';
+  resetCompareResumeFlag();
   clearCompareGlobalNarrativeState();
   clearPulsingMilestones();
 }
@@ -2393,45 +3001,87 @@ function stopAllCompareFlightAndScene() {
 function startGlobalPlayback() {
   if (!isCompare.value) return;
   forceSceneUnlocked.value = false;
-  clearCompareGlobalNarrativeState();
-  clearCompareFaultAlerts();
-  clearKeyframeEntryState();
+
+  const shouldResumeFromCurrent = comparePlaybackResumeFromCurrent.value;
+  const fromStart = !shouldResumeFromCurrent;
+
+  if (!shouldResumeFromCurrent) {
+    clearCompareGlobalNarrativeState();
+    clearCompareFaultAlerts();
+    clearKeyframeEntryState();
+  } else {
+    clearCompareGlobalNarrativeState();
+    rebuildFiredCompareMarksFromScrub();
+  }
+
   compareBridgeRef.value?.pauseBoth?.();
   playingGlobal.value = true;
   playbackMode.value = 'global';
-  compareBridgeRef.value?.playBoth?.({ fromStart: true, parentControlsNarrative: true });
+  if (shouldResumeFromCurrent) {
+    nudgeCompareResumeTimesPastKeyframes(['yes', 'no']);
+  }
+  compareBridgeRef.value?.playBoth?.({ fromStart, parentControlsNarrative: true });
+  comparePlaybackResumeFromCurrent.value = false;
 }
 
 /** 单侧播放：对侧复位后本侧从头播（父页裁决关键点，与全局播一致） */
 function startSidePlayback(side) {
   if (!isCompare.value) return;
   forceSceneUnlocked.value = false;
-  clearCompareGlobalNarrativeState();
-  clearCompareFaultAlerts();
-  clearKeyframeEntryState();
+
+  const shouldResumeFromCurrent = comparePlaybackResumeFromCurrent.value;
+  const fromStart = !shouldResumeFromCurrent;
+
   playingGlobal.value = false;
+
+  if (!shouldResumeFromCurrent) {
+    clearCompareGlobalNarrativeState();
+    clearCompareFaultAlerts();
+    clearKeyframeEntryState();
+  } else {
+    clearCompareGlobalNarrativeState();
+    rebuildFiredCompareMarksFromScrub();
+  }
+
   compareBridgeRef.value?.pauseBoth?.();
   if (side === 'left') {
     playbackMode.value = 'left';
-    compareBridgeRef.value?.reset('right');
-    compareBridgeRef.value?.play('left', { fromStart: true, parentControlsNarrative: true });
+    if (!shouldResumeFromCurrent) compareBridgeRef.value?.reset('right');
+    if (shouldResumeFromCurrent) {
+      nudgeCompareResumeTimesPastKeyframes(['yes']);
+    }
+    compareBridgeRef.value?.play('left', { fromStart, parentControlsNarrative: true });
   } else {
     playbackMode.value = 'right';
-    compareBridgeRef.value?.reset('left');
-    compareBridgeRef.value?.play('right', { fromStart: true, parentControlsNarrative: true });
+    if (!shouldResumeFromCurrent) compareBridgeRef.value?.reset('left');
+    if (shouldResumeFromCurrent) {
+      nudgeCompareResumeTimesPastKeyframes(['no']);
+    }
+    compareBridgeRef.value?.play('right', { fromStart, parentControlsNarrative: true });
   }
+  comparePlaybackResumeFromCurrent.value = false;
 }
 
 function pauseGlobalPlayback() {
   if (!isCompare.value) return;
+  if (isNarrativeInProgress.value) {
+    showAlertToast('叙事播放中', '当前正在展示关键链路叙事，暂不支持暂停。');
+    return;
+  }
   compareBridgeRef.value?.pauseBoth?.();
   playingGlobal.value = false;
   playbackMode.value = 'idle';
   clearCompareGlobalNarrativeState();
   clearPulsingMilestones();
+  comparePlaybackResumeFromCurrent.value = false;
 }
 
 function pauseLeftPlayback() {
+  if (!isCompare.value) return;
+  if (isNarrativeInProgress.value) {
+    showAlertToast('叙事播放中', '当前正在展示关键链路叙事，暂不支持暂停。');
+    return;
+  }
   compareBridgeRef.value?.pause('left');
   if (playbackMode.value === 'left') {
     globalNarrativeRunning.value = false;
@@ -2441,10 +3091,18 @@ function pauseLeftPlayback() {
     globalNarrativeStepIndexRight.value = null;
     globalNarrativeRoundDemoT.value = null;
     pulsingMilestoneYes.value = null;
+    playbackMode.value = 'idle';
+    playingLeft.value = false;
+    comparePlaybackResumeFromCurrent.value = false;
   }
 }
 
 function pauseRightPlayback() {
+  if (!isCompare.value) return;
+  if (isNarrativeInProgress.value) {
+    showAlertToast('叙事播放中', '当前正在展示关键链路叙事，暂不支持暂停。');
+    return;
+  }
   compareBridgeRef.value?.pause('right');
   if (playbackMode.value === 'right') {
     globalNarrativeRunning.value = false;
@@ -2454,6 +3112,9 @@ function pauseRightPlayback() {
     globalNarrativeStepIndexRight.value = null;
     globalNarrativeRoundDemoT.value = null;
     pulsingMilestoneNo.value = null;
+    playbackMode.value = 'idle';
+    playingRight.value = false;
+    comparePlaybackResumeFromCurrent.value = false;
   }
 }
 
@@ -2476,7 +3137,7 @@ function resetCompareAll() {
 
 function toggleGlobalComparePlay() {
   if (!isCompare.value) return;
-  if (playingGlobal.value) {
+  if (compareGlobalTimelinePlaying.value) {
     pauseGlobalPlayback();
     return;
   }
@@ -2485,19 +3146,23 @@ function toggleGlobalComparePlay() {
 
 function toggleCompareSidePlay(side) {
   if (!isCompare.value) return;
+  if (playbackMode.value === 'global') {
+    pauseGlobalPlayback();
+    return;
+  }
   if (side === 'left') {
-    if (playingLeft.value && playbackMode.value === 'left') {
+    if (compareLeftTimelinePlaying.value && playbackMode.value === 'left') {
       pauseLeftPlayback();
       return;
     }
     startSidePlayback('left');
-  } else {
-    if (playingRight.value && playbackMode.value === 'right') {
-      pauseRightPlayback();
-      return;
-    }
-    startSidePlayback('right');
+    return;
   }
+  if (compareRightTimelinePlaying.value && playbackMode.value === 'right') {
+    pauseRightPlayback();
+    return;
+  }
+  startSidePlayback('right');
 }
 
 function onScrubCompareYes(val) {
@@ -2520,6 +3185,7 @@ function onScrubCompareNo(val) {
 
 function resetCompareSide(side) {
   if (!isCompare.value) return;
+  comparePlaybackResumeFromCurrent.value = false;
   forceSceneUnlocked.value = true;
   if (playbackMode.value === 'global') {
     clearCompareGlobalNarrativeState();
@@ -2622,6 +3288,8 @@ const stopTimer = () => {
     singleIframeBridgeRef.value?.pause?.('left');
     playing.value = false;
     clearPulsingMilestones();
+    singlePlaybackSessionActive.value = false;
+    singlePlaybackResumeFromCurrent.value = false;
     return;
   }
   if (singlePlayRafId) {
@@ -2635,6 +3303,8 @@ const stopTimer = () => {
     vpSingle.value?.cancelRelationFocusSequence?.();
   }
   clearPulsingMilestones();
+  singlePlaybackSessionActive.value = false;
+  singlePlaybackResumeFromCurrent.value = false;
 };
 
 function singlePlayTick(ts) {
@@ -2687,16 +3357,26 @@ const startTimer = () => {
   if (isCompare.value) return;
   keyframeListPreviewStepIndexYes.value = null;
   keyframeListPreviewStepIndexNo.value = null;
+
   if (!isCompare.value && useSingleMapIframe) {
+    singlePlaybackSessionActive.value = true;
     playing.value = true;
+    const shouldResumeFromCurrent = singlePlaybackResumeFromCurrent.value;
+    const fromStart = !shouldResumeFromCurrent && t.value < 0.01;
+    if (shouldResumeFromCurrent) {
+      nudgeSingleResumeTimePastKeyframe();
+    }
     singleIframeBridgeRef.value?.play?.('left', {
-      fromStart: t.value < 0.01,
+      fromStart,
       parentControlsNarrative: true
     });
+    singlePlaybackResumeFromCurrent.value = false;
     return;
   }
   if (singlePlayRafId) return;
+  singlePlaybackSessionActive.value = true;
   playing.value = true;
+  singlePlaybackResumeFromCurrent.value = false;
   planePathEnabled.value = true;
   vpSingle.value?.setPlaneCameraFollow?.(true);
   singlePlayLastTs = 0;
@@ -2741,7 +3421,11 @@ const jumpTo = (targetT) => {
 
 const togglePlay = () => {
   if (isCompare.value) return;
-  if (playing.value) {
+  if (isNarrativeInProgress.value && singlePlaybackSessionActive.value) {
+    showAlertToast('叙事播放中', '当前正在展示关键链路叙事，暂不支持暂停。');
+    return;
+  }
+  if (singlePlaybackSessionActive.value) {
     stopTimer();
   } else {
     startTimer();
@@ -2752,6 +3436,8 @@ const togglePlay = () => {
 const onReset = () => {
   if (isCompare.value) return;
   stopTimer();
+  singlePlaybackSessionActive.value = false;
+  singlePlaybackResumeFromCurrent.value = false;
   if (useSingleMapIframe) {
     singleNarrativeRunning.value = false;
     singleIframeShouldResumeAfterNarrative.value = false;
@@ -3045,7 +3731,13 @@ const toggleCompare = () => {
 
 loadScenario(activeScenario.value);
 
+onMounted(() => {
+  updateNarrativeTransferOverlayTop();
+  window.addEventListener('resize', updateNarrativeTransferOverlayTop);
+});
+
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateNarrativeTransferOverlayTop);
   if (singleIframeSideStateRaf) {
     cancelAnimationFrame(singleIframeSideStateRaf);
     singleIframeSideStateRaf = 0;
@@ -3198,6 +3890,159 @@ onBeforeUnmount(() => {
 }
 .cb-airborne-popup-follow {
   pointer-events: auto;
+}
+
+.cb-narrative-transfer-overlay {
+  position: absolute;
+  top: 112px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 32;
+  width: min(416px, calc(80% - 38.4px));
+  max-height: min(25.2vh, 192px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 190, 255, 0.34);
+  background: rgba(6, 28, 64, 0.76);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  color: rgba(230, 246, 255, 0.96);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.cb-narrative-transfer-overlay--compare {
+  left: 16px;
+  right: auto;
+  transform: none;
+}
+
+.cb-narrative-transfer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: rgba(200, 230, 255, 0.76);
+  flex-shrink: 0;
+}
+
+.cb-narrative-transfer-side {
+  color: rgba(255, 213, 74, 0.96);
+  font-weight: 700;
+}
+
+.cb-narrative-transfer-close {
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 190, 255, 0.42);
+  background: rgba(8, 48, 109, 0.72);
+  color: rgba(230, 246, 255, 0.96);
+  cursor: pointer;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cb-narrative-transfer-close:hover {
+  background: rgba(20, 87, 160, 0.86);
+}
+
+.cb-narrative-transfer-title-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-bottom: 7px;
+  flex-shrink: 0;
+}
+
+.cb-narrative-transfer-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-right: -4px;
+  padding-right: 4px;
+  outline: none;
+}
+
+.cb-narrative-transfer-scroll:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(120, 200, 255, 0.55);
+  border-radius: 6px;
+}
+
+.cb-narrative-transfer-time-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 160, 230, 0.35);
+  background: rgba(8, 48, 109, 0.5);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(180, 220, 255, 0.92);
+}
+
+.cb-narrative-transfer-title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.cb-narrative-transfer-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cb-narrative-transfer-list .cb-narrative-transfer-row {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(8, 48, 109, 0.44);
+  border: 1px solid rgba(90, 160, 230, 0.24);
+}
+
+.cb-narrative-transfer-route {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cb-narrative-transfer-kind {
+  color: rgba(255, 213, 74, 0.94);
+  font-size: 11px;
+}
+
+.cb-narrative-transfer-payload {
+  color: rgba(220, 238, 255, 0.84);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cb-narrative-transfer-more {
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(190, 220, 245, 0.68);
 }
 
 </style>

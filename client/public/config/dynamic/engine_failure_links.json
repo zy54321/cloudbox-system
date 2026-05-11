@@ -4,79 +4,225 @@
       "id": "yes-engine-to-warn",
       "flowLabel": "信息流",
       "name": "发动机异常至机载预警",
-      "edges": [["plane", "yes-engine"], ["yes-engine", "yes-onboard-warn"]]
+      "edges": [["plane", "yes-engine"], ["yes-engine", "yes-onboard-warn"]],
+      "transfers": [
+        {
+          "fromId": "plane",
+          "toId": "yes-engine",
+          "fromLabel": "航空器",
+          "toLabel": "发动机",
+          "payload": "飞行状态快照、发动机关联工况采样与时间基准、振动/温度等遥测对齐信息",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-engine",
+          "toId": "yes-onboard-warn",
+          "fromLabel": "发动机",
+          "toLabel": "机载感知预警系统",
+          "payload": "发动机转速骤降、振动异常、温度异常、故障位置、采样时间、飞行状态快照",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "yes-warn-to-expert",
       "flowLabel": "信息流",
       "name": "机载预警至地面专家组",
-      "edges": [["yes-onboard-warn", "yes-expert-group"]]
+      "edges": [["yes-onboard-warn", "yes-expert-group"]],
+      "transfers": [
+        {
+          "fromId": "yes-onboard-warn",
+          "toId": "yes-expert-group",
+          "fromLabel": "机载感知预警系统",
+          "toLabel": "地面专家组",
+          "payload": "发动机故障告警、飞行高度、速度、航向、位置、告警等级、时间戳",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "yes-expert-to-sim",
       "flowLabel": "信息流",
       "name": "专家组至体系推演",
-      "edges": [["yes-expert-group", "yes-sim-system"]]
+      "edges": [["yes-expert-group", "yes-sim-system"]],
+      "transfers": [
+        {
+          "fromId": "yes-expert-group",
+          "toId": "yes-sim-system",
+          "fromLabel": "地面专家组",
+          "toLabel": "体系推演系统",
+          "payload": "告警确认结果、风险等级、当前飞行状态、备降/返航约束、待推演处置目标",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "yes-sim-to-expert",
       "flowLabel": "控制流",
       "name": "推演结果回传专家组",
-      "edges": [["yes-sim-system", "yes-expert-group"]]
+      "edges": [["yes-sim-system", "yes-expert-group"]],
+      "transfers": [
+        {
+          "fromId": "yes-sim-system",
+          "toId": "yes-expert-group",
+          "fromLabel": "体系推演系统",
+          "toLabel": "地面专家组",
+          "payload": "推演结果、推荐处置方案、风险评估结论、备选方案优先级",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "yes-expert-to-atc",
       "flowLabel": "控制流",
       "name": "专家组指令至空管",
-      "edges": [["yes-expert-group", "yes-atc"]]
+      "edges": [["yes-expert-group", "yes-atc"]],
+      "transfers": [
+        {
+          "fromId": "yes-expert-group",
+          "toId": "yes-atc",
+          "fromLabel": "地面专家组",
+          "toLabel": "空管",
+          "payload": "应急处置方案、空域协同要求、优先通行/备降协调指令",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "yes-atc-to-airport",
       "flowLabel": "控制流",
       "name": "空管协同至机场",
-      "edges": [["yes-atc", "yes-airport"]]
+      "edges": [["yes-atc", "yes-airport"]],
+      "transfers": [
+        {
+          "fromId": "yes-atc",
+          "toId": "yes-airport",
+          "fromLabel": "空管",
+          "toLabel": "机场",
+          "payload": "备降接收请求、跑道保障需求、优先落地安排、应急资源准备要求",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "no-crew-to-tower",
       "flowLabel": "信息流",
       "name": "机组 MAYDAY 至塔台/进近",
-      "edges": [["plane", "no-crew"], ["no-crew", "no-tower"]]
+      "edges": [["plane", "no-crew"], ["no-crew", "no-tower"]],
+      "transfers": [
+        {
+          "fromId": "plane",
+          "toId": "no-crew",
+          "fromLabel": "航空器",
+          "toLabel": "机组",
+          "payload": "MAYDAY 触发、险情类型与航空器标识、初步发动机失效描述、位置与时间戳",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-crew",
+          "toId": "no-tower",
+          "fromLabel": "机组",
+          "toLabel": "塔台/进近管制",
+          "payload": "MAYDAY 通报、险情描述、发动机失效信息、当前飞行状态、优先指挥与引导请求",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "no-atc-to-emergency",
       "flowLabel": "信息流",
       "name": "空管至应急处置系统",
-      "edges": [["no-atc", "no-emergency-sys"]]
+      "edges": [["no-atc", "no-emergency-sys"]],
+      "transfers": [
+        {
+          "fromId": "no-atc",
+          "toId": "no-emergency-sys",
+          "fromLabel": "空管",
+          "toLabel": "应急处理系统",
+          "payload": "险情通报、空域态势、航班动态与协调要点、应急处置升级信息",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "no-airport-ops-to-tower",
       "flowLabel": "信息流",
       "name": "机场运行至塔台协同",
-      "edges": [["no-airport-ops", "no-tower"]]
+      "edges": [["no-airport-ops", "no-tower"]],
+      "transfers": [
+        {
+          "fromId": "no-airport-ops",
+          "toId": "no-tower",
+          "fromLabel": "机场运行控制中心",
+          "toLabel": "塔台/进近管制",
+          "payload": "场面保障能力、跑道与救援资源状态、运行限制、与备降/返航衔接信息",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "no-dispatch-to-satgw",
       "flowLabel": "信息流",
       "name": "签派至卫星地面站",
-      "edges": [["no-dispatch", "no-sat-gw"]]
+      "edges": [["no-dispatch", "no-sat-gw"]],
+      "transfers": [
+        {
+          "fromId": "no-dispatch",
+          "toId": "no-sat-gw",
+          "fromLabel": "航司签派/运控中心",
+          "toLabel": "卫星通信地面站",
+          "payload": "运行决策支撑请求、卫星话音/数据会商需求、技术要点与机组联络优先级",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "no-satgw-to-crew",
       "flowLabel": "信息流",
       "name": "卫星地面站至机组",
-      "edges": [["no-sat-gw", "no-crew"]]
+      "edges": [["no-sat-gw", "no-crew"]],
+      "transfers": [
+        {
+          "fromId": "no-sat-gw",
+          "toId": "no-crew",
+          "fromLabel": "卫星通信地面站",
+          "toLabel": "机组",
+          "payload": "签派与技术支持会商摘要、卫星链路回传的运行指令与技术建议",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "no-maint-to-tech",
       "flowLabel": "控制流",
       "name": "机务至航司技术支援",
-      "edges": [["no-maint", "no-airline-tech"]]
+      "edges": [["no-maint", "no-airline-tech"]],
+      "transfers": [
+        {
+          "fromId": "no-maint",
+          "toId": "no-airline-tech",
+          "fromLabel": "机务",
+          "toLabel": "航司技术支援",
+          "payload": "故障现象记录、排故数据包、航材与检查结果、远程支援协作请求",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "no-tech-to-safety",
       "flowLabel": "控制流",
       "name": "技术支援至航安归档",
-      "edges": [["no-airline-tech", "no-safety"]]
+      "edges": [["no-airline-tech", "no-safety"]],
+      "transfers": [
+        {
+          "fromId": "no-airline-tech",
+          "toId": "no-safety",
+          "fromLabel": "航司技术支援",
+          "toLabel": "航安部门",
+          "payload": "技术分析结论、事件报送要点、安全建议与归档要素",
+          "kind": "control"
+        }
+      ]
     }
   ]
 }

@@ -38,6 +38,8 @@ export const MSG_CAMERA_HOME = 'CAMERA_HOME';
 export const MSG_RUN_NARRATIVE = 'RUN_NARRATIVE';
 /** 父 → 子：聚焦指定单元（相机飞行；unitId 为 plane 时回 home） */
 export const MSG_FOCUS_UNIT = 'FOCUS_UNIT';
+/** 父 → 子：按 relationId 聚焦整条链路（包络边端点节点当前位置） */
+export const MSG_FOCUS_RELATION = 'FOCUS_RELATION';
 
 /**
  * @typedef {Object} LoadScenarioPayload

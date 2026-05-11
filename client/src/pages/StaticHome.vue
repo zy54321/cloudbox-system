@@ -252,40 +252,19 @@
               </div>
             </template>
             <template v-else-if="activeTab === 'modules'">
-              <div class="cb-item cb-item--module">
-                <h4><span style="color:#ffd54a;">1，数据采集系统：</span></h4>
-                <p>记录民用航空器飞行数据和舱音数据。</p>
-                <p><span class="cb-link" @click="openModuleHighlight(0)">点击查看详细信息</span></p>
-              </div>
-              <div class="cb-item cb-item--module">
-                <h4><span style="color:#ffd54a;">2，通感算一体机载感知预警系统：</span></h4>
-                <p>融合通信和感知能力，获得航空器位置和轨迹信息。</p>
-                <p><span class="cb-link" @click="openModuleHighlight(1)">点击查看详细信息</span></p>
-              </div>
-              <div class="cb-item cb-item--module">
-                <h4><span style="color:#ffd54a;">3，HTS/5G ATG 通信系统：</span></h4>
-                <p>实现飞机数据和地面的双向同步传输。</p>
-                <p><span class="cb-link" @click="openModuleHighlight(2)">点击查看详细信息</span></p>
-              </div>
-              <div class="cb-item cb-item--module">
-                <h4><span style="color:#ffd54a;">4，地面飞行场景实时重构系统：</span></h4>
-                <p>识别潜在安全隐患，为突发紧急场景下地面实时获取航空器安全态势提供数据分析手段。</p>
-                <p><span class="cb-link" @click="openModuleHighlight(3)">点击查看详细信息</span></p>
-              </div>
-              <div class="cb-item cb-item--module">
-                <h4><span style="color:#ffd54a;">5，地面运营控制中心应急专家组系统：</span></h4>
-                <p>专家组讨论直接制定应急处置方案，并提出相关意见。</p>
-                <p><span class="cb-link" @click="openModuleHighlight(4)">点击查看详细信息</span></p>
-              </div>
-              <div class="cb-item cb-item--module">
-                <h4><span style="color:#ffd54a;">6，体系应急决策推演系统：</span></h4>
-                <p>基于航空器风险状态生成动态决策方案，模拟处置过程并提供推演结果。</p>
-                <p><span class="cb-link" @click="openModuleHighlight(5)">点击查看详细信息</span></p>
-              </div>
-              <div class="cb-item cb-item--module">
-                <h4><span style="color:#ffd54a;">7，应急处置系统：</span></h4>
-                <p>协调机组、航司、空管、机场等应急部门，实现紧急事态的下达和通知。</p>
-                <p><span class="cb-link" @click="openModuleHighlight(6)">点击查看详细信息</span></p>
+              <div
+                v-for="(module, index) in MODULE_DESCRIPTIONS"
+                :key="module.title"
+                class="cb-item cb-item--module"
+                :class="{ 'cb-item--module-selected': selectedModuleIndex === index }"
+                role="button"
+                tabindex="0"
+                @click="openModuleHighlight(index)"
+                @keydown.enter.prevent="openModuleHighlight(index)"
+                @keydown.space.prevent="openModuleHighlight(index)"
+              >
+                <h4><span style="color:#ffd54a;">{{ module.title }}：</span></h4>
+                <p>{{ module.content }}</p>
               </div>
             </template>
           </div>
@@ -503,7 +482,7 @@ const POPUP_CAMERA_HEIGHT_THRESHOLD = 500000;
 /** 跟随飞机 popup：仅在为 true 时允许显示（由「飞机」视角、阶段按钮或「沿线飞行」打开） */
 const planeFollowPopupAllowed = ref(false);
 
-/** 运行模块七大模块标题与说明（点击「点击查看详细信息」时高亮飞机并显示此内容） */
+/** 运行模块七大模块标题与说明（点击模块卡片时高亮地图并显示此内容） */
 const MODULE_DESCRIPTIONS = [
   { title: '1，数据采集系统', content: '记录民用航空器飞行数据和舱音数据。' },
   { title: '2，通感算一体机载感知预警系统', content: '融合通信和感知能力，获得航空器位置和轨迹信息。' },
@@ -740,7 +719,7 @@ async function playAllRelationsSequence() {
         skipFinalRelationCameraView: i < n - 1
       });
       if (token !== _relationSequenceToken) return;
-      await wait(320);
+      await wait(1400);
     }
     if (token !== _relationSequenceToken) return;
     openStaticArchitectureImageViewer();
@@ -1466,6 +1445,25 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 运行模块 tab：整条卡片可点，与其它 tab 的基本单元条目区分样式 */
+.cb-item.cb-item--module {
+  cursor: pointer;
+}
+.cb-item.cb-item--module:hover {
+  background: rgba(0, 80, 140, 0.18);
+}
+.cb-item.cb-item--module:focus-visible {
+  outline: 1px solid rgba(255, 213, 74, 0.8);
+  outline-offset: 2px;
+}
+.cb-item.cb-item--module-selected {
+  background: rgba(0, 80, 140, 0.25);
+  border-left: 3px solid #ffd54a;
+  padding-left: 10px;
+  margin-left: -10px;
+  border-radius: 4px;
+}
+
 /* 交互关系 tab：选中项高亮，便于识别当前显示的链路 */
 .cb-item.cb-item--relation-selected {
   background: rgba(0, 80, 140, 0.25);

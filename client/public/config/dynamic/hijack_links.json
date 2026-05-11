@@ -7,6 +7,24 @@
       "edges": [
         ["yes-hijack-flight-ctrl", "yes-hijack-tongan"],
         ["yes-hijack-cloud-cvr", "yes-hijack-tongan"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-hijack-flight-ctrl",
+          "toId": "yes-hijack-tongan",
+          "fromLabel": "飞行控制系统",
+          "toLabel": "机载通感算一体设备",
+          "payload": "飞控权限异常、舵面/模式状态摘要、异常时间线、与航迹一致性校核结果",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-hijack-cloud-cvr",
+          "toId": "yes-hijack-tongan",
+          "fromLabel": "机载云匣子",
+          "toLabel": "机载通感算一体设备",
+          "payload": "安全事件触发信息、舱音/关键数据切片摘要、飞机位置与链路质量",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -16,6 +34,24 @@
       "edges": [
         ["yes-hijack-tongan", "yes-hijack-expert"],
         ["yes-hijack-tongan", "yes-hijack-flight-ctrl"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-hijack-tongan",
+          "toId": "yes-hijack-expert",
+          "fromLabel": "机载通感算一体设备",
+          "toLabel": "地面运营控制中心专家组",
+          "payload": "劫持告警、威胁等级、飞机位置、驾驶舱语音异常摘要、多源一致性标记",
+          "kind": "data"
+        },
+        {
+          "fromId": "yes-hijack-tongan",
+          "toId": "yes-hijack-flight-ctrl",
+          "fromLabel": "机载通感算一体设备",
+          "toLabel": "飞行控制系统",
+          "payload": "飞控异常状态回写、建议保护策略摘要、人机警告与限制参数",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -26,13 +62,49 @@
         ["yes-hijack-safety-cmd", "yes-hijack-sim"],
         ["yes-hijack-sim", "yes-hijack-mil-atc-dept"],
         ["yes-hijack-mil-atc-dept", "yes-hijack-civil-atc"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-hijack-safety-cmd",
+          "toId": "yes-hijack-sim",
+          "fromLabel": "地面安全指挥中心",
+          "toLabel": "体系应急决策推演系统",
+          "payload": "安全事件确认信息、指挥目标、约束条件与推演输入包",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-hijack-sim",
+          "toId": "yes-hijack-mil-atc-dept",
+          "fromLabel": "体系应急决策推演系统",
+          "toLabel": "军方空管部门",
+          "payload": "应急指挥方案、军域空管协同要点、资源与时间窗建议",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-hijack-mil-atc-dept",
+          "toId": "yes-hijack-civil-atc",
+          "fromLabel": "军方空管部门",
+          "toLabel": "民航空管",
+          "payload": "空域管制要求、军民航协同指令、流量与避让边界",
+          "kind": "control"
+        }
       ]
     },
     {
       "id": "hijack_yes_control_01_emergency_to_command",
       "flowLabel": "控制流",
       "name": "T+15.0s 应急调度至安指",
-      "edges": [["yes-hijack-emergency", "yes-hijack-safety-cmd"]]
+      "edges": [["yes-hijack-emergency", "yes-hijack-safety-cmd"]],
+      "transfers": [
+        {
+          "fromId": "yes-hijack-emergency",
+          "toId": "yes-hijack-safety-cmd",
+          "fromLabel": "应急处置系统",
+          "toLabel": "地面安全指挥中心",
+          "payload": "应急力量状态、处置资源可用性、行动准备反馈、升级请求",
+          "kind": "control"
+        }
+      ]
     },
     {
       "id": "hijack_yes_control_02_intercept",
@@ -41,6 +113,24 @@
       "edges": [
         ["yes-hijack-safety-cmd", "yes-hijack-mil-atc"],
         ["yes-hijack-mil-atc", "yes-hijack-intercept"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-hijack-safety-cmd",
+          "toId": "yes-hijack-mil-atc",
+          "fromLabel": "地面安全指挥中心",
+          "toLabel": "军方空管",
+          "payload": "拦截任务指令下发、目标优先级、协同规则与交战/识别约束摘要",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-hijack-mil-atc",
+          "toId": "yes-hijack-intercept",
+          "fromLabel": "军方空管",
+          "toLabel": "拦截机组",
+          "payload": "拦截任务指令、目标航迹、识别信息、协同规则",
+          "kind": "control"
+        }
       ]
     },
     {
@@ -50,6 +140,24 @@
       "edges": [
         ["yes-hijack-expert", "yes-hijack-civil-atc"],
         ["yes-hijack-civil-atc", "yes-hijack-nearby"]
+      ],
+      "transfers": [
+        {
+          "fromId": "yes-hijack-expert",
+          "toId": "yes-hijack-civil-atc",
+          "fromLabel": "地面运营控制中心专家组",
+          "toLabel": "民航空管",
+          "payload": "威胁空域范围、风险评估结论、避让优先级与通信要点",
+          "kind": "control"
+        },
+        {
+          "fromId": "yes-hijack-civil-atc",
+          "toId": "yes-hijack-nearby",
+          "fromLabel": "民航空管",
+          "toLabel": "周边航班",
+          "payload": "周边航班避让指令、改航建议、间隔与高度约束",
+          "kind": "control"
+        }
       ]
     },
     {
@@ -59,6 +167,24 @@
       "edges": [
         ["no-hijack-crew", "no-hijack-atc"],
         ["no-hijack-squawk-7500", "no-hijack-atc"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-hijack-crew",
+          "toId": "no-hijack-atc",
+          "fromLabel": "机组",
+          "toLabel": "空管",
+          "payload": "非法干扰/劫机语义的应急通报、意图与航迹、通信确认",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-hijack-squawk-7500",
+          "toId": "no-hijack-atc",
+          "fromLabel": "应答机7500",
+          "toLabel": "空管",
+          "payload": "7500 代码状态、二次雷达识别关联、告警时间戳",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -68,6 +194,24 @@
       "edges": [
         ["no-hijack-atc", "no-hijack-caac-police"],
         ["no-hijack-caac-police", "no-hijack-mil-atc-cmd"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-hijack-atc",
+          "toId": "no-hijack-caac-police",
+          "fromLabel": "空管",
+          "toLabel": "民航局公安局",
+          "payload": "特情航班动态、空域态势、机组最后已知通信摘要",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-hijack-caac-police",
+          "toId": "no-hijack-mil-atc-cmd",
+          "fromLabel": "民航局公安局",
+          "toLabel": "军方空管指挥所",
+          "payload": "警情升级包、协查需求、军地联动接口与保密要求",
+          "kind": "data"
+        }
       ]
     },
     {
@@ -77,19 +221,57 @@
       "edges": [
         ["no-hijack-caac-hall", "no-hijack-gov-sec"],
         ["no-hijack-caac-office", "no-hijack-gov-sec"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-hijack-caac-hall",
+          "toId": "no-hijack-gov-sec",
+          "fromLabel": "民航局应急指挥大厅",
+          "toLabel": "公安部/国安部/军方",
+          "payload": "应急指挥大厅态势汇总、报送时限、跨部门席位需求",
+          "kind": "data"
+        },
+        {
+          "fromId": "no-hijack-caac-office",
+          "toId": "no-hijack-gov-sec",
+          "fromLabel": "民航局应急办",
+          "toLabel": "公安部/国安部/军方",
+          "payload": "应急办协调函、法律依据与资源申请、联络矩阵",
+          "kind": "data"
+        }
       ]
     },
     {
       "id": "hijack_no_info_03_atc_situation_to_hall",
       "flowLabel": "信息流",
       "name": "态势同步：空管至民航局应急指挥大厅",
-      "edges": [["no-hijack-atc", "no-hijack-caac-hall"]]
+      "edges": [["no-hijack-atc", "no-hijack-caac-hall"]],
+      "transfers": [
+        {
+          "fromId": "no-hijack-atc",
+          "toId": "no-hijack-caac-hall",
+          "fromLabel": "空管",
+          "toLabel": "民航局应急指挥大厅",
+          "payload": "实时空域态势、航班标牌与移交记录、军民协同要点",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "hijack_no_info_04_atc_to_cmd_center",
       "flowLabel": "信息流",
       "name": "空管至空管指挥中心",
-      "edges": [["no-hijack-atc", "no-hijack-atc-cmd-ctr"]]
+      "edges": [["no-hijack-atc", "no-hijack-atc-cmd-ctr"]],
+      "transfers": [
+        {
+          "fromId": "no-hijack-atc",
+          "toId": "no-hijack-atc-cmd-ctr",
+          "fromLabel": "空管",
+          "toLabel": "空管指挥中心",
+          "payload": "特情流量管制策略、扇区负荷、跨区协调需求",
+          "kind": "data"
+        }
+      ]
     },
     {
       "id": "hijack_no_control_00_mil_civil_flights",
@@ -98,13 +280,41 @@
       "edges": [
         ["no-hijack-mil-atc", "no-hijack-civil-atc"],
         ["no-hijack-civil-atc", "no-hijack-nearby"]
+      ],
+      "transfers": [
+        {
+          "fromId": "no-hijack-mil-atc",
+          "toId": "no-hijack-civil-atc",
+          "fromLabel": "军方空管",
+          "toLabel": "民航空管",
+          "payload": "军民航协同管制指令、禁航/限制区边界、流量冻结要求",
+          "kind": "control"
+        },
+        {
+          "fromId": "no-hijack-civil-atc",
+          "toId": "no-hijack-nearby",
+          "fromLabel": "民航空管",
+          "toLabel": "周边航班",
+          "payload": "避让与改航指令、禁入区域、通信守听要求",
+          "kind": "control"
+        }
       ]
     },
     {
       "id": "hijack_no_control_01_mil_divert",
       "flowLabel": "控制流",
       "name": "T+10.0min 军空管至指定迫降机场",
-      "edges": [["no-hijack-mil-atc", "no-hijack-divert"]]
+      "edges": [["no-hijack-mil-atc", "no-hijack-divert"]],
+      "transfers": [
+        {
+          "fromId": "no-hijack-mil-atc",
+          "toId": "no-hijack-divert",
+          "fromLabel": "军方空管",
+          "toLabel": "指定迫降机场",
+          "payload": "迫降场指令、场面救援等级、进近与进位约束",
+          "kind": "control"
+        }
+      ]
     }
   ]
 }
